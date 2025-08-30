@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Freebets – Étape 1 : Tableau de cotes & TRJ</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Freebets – Étape 1 : Saisie des cotes & calcul du TRJ
+      <span class="pill" title="TRJ = 1 / (1/cote1 + 1/coteN + 1/cote2)">Formule TRJ</span>
+    </h1>
+    <div class="actions">
+      <button id="addMatchBtn">+ Ajouter un match</button>
+      <button id="addBookBtn" class="ghost">+ Ajouter un bookmaker à tous</button>
+      <button id="saveBtn" class="ghost">💾 Sauvegarder</button>
+      <button id="loadBtn" class="ghost">📂 Charger</button>
+      <button id="resetBtn" class="ghost">↺ Réinitialiser</button>
+      <button id="exportBtn" class="ghost">⬇️ Export JSON</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+    </div>
+  </header>
+
+  <main>
+    <p class="hint">
+      Saisissez les cotes (décimales). La dernière colonne calcule le <strong>TRJ</strong> du bookmaker pour ce match.
+      Cliquez dans un champ pour sélectionner tout le contenu. Les données sont aussi conservées en local.
+    </p>
+    <section id="matches" class="grid"></section>
+  </main>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
