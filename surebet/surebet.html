@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Surebet calculator</title>
+
+	<link rel="stylesheet" href="../styles.css" />
+	<link rel="stylesheet" href="surebet.css" />
+</head>
+
+<body>
+	<main class="wrap">
+		<header class="toolbar">
+			<h1 class="title">Surebet calculator</h1>
+			<div class="actions" style="display:flex; gap:8px;">
+				<button id="add-col" class="btn btn-secondary">+ Ajouter une colonne de cote</button>
+				<button id="add-row" class="btn btn-primary">+ Ajouter une ligne</button>
+			</div>
+		</header>
+
+		<section class="card">
+			<div id="surebet-grid" class="sb-grid" data-odds-cols="3" aria-label="Tableau surebet">
+				<!-- EN-TÊTES -->
+				<div class="cell head sticky">Cotes</div>
+				<div class="cell head colhead" data-oddshead data-col="1">
+					<span class="col-label">A</span>
+					<button class="icon-btn xs danger js-del-col" title="Supprimer cette colonne">🗑️</button>
+				</div>
+				<div class="cell head colhead" data-oddshead data-col="2">
+					<span class="col-label">B</span>
+					<button class="icon-btn xs danger js-del-col" title="Supprimer cette colonne">🗑️</button>
+				</div>
+				<div class="cell head colhead" data-oddshead data-col="3">
+					<span class="col-label">C</span>
+					<button class="icon-btn xs danger js-del-col" title="Supprimer cette colonne">🗑️</button>
+				</div>
+				<div class="cell head">Cote totale</div>
+				<div class="cell head">Mises</div>
+				<div class="cell head">Distribution</div>
+				<div class="cell head">Fixe</div>
+				<div class="cell head">Profits</div>
+				<div class="cell head right">Actions</div>
+
+				<!-- LIGNE 1 -->
+				<div class="cell rowhead sticky" data-rowlabel>1</div>
+				<div class="cell" data-odds></div>
+				<div class="cell" data-odds></div>
+				<div class="cell" data-odds></div>
+				<div class="cell" data-total>—</div>
+				<div class="cell" data-stake></div>
+				<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution ligne 1"></div>
+				<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe ligne 1">
+				</div>
+				<div class="cell right" data-profit>—</div>
+				<div class="cell right"><button class="icon-btn danger js-del-row"
+						aria-label="Supprimer la ligne">🗑️</button></div>
+
+				<!-- LIGNE 2 -->
+				<div class="cell rowhead sticky" data-rowlabel>2</div>
+				<div class="cell" data-odds></div>
+				<div class="cell" data-odds></div>
+				<div class="cell" data-odds></div>
+				<div class="cell" data-total>—</div>
+				<div class="cell" data-stake></div>
+				<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution ligne 2"></div>
+				<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe ligne 2">
+				</div>
+				<div class="cell right" data-profit>—</div>
+				<div class="cell right"><button class="icon-btn danger js-del-row"
+						aria-label="Supprimer la ligne">🗑️</button></div>
+
+				<!-- DIVISEUR -->
+				<div class="divider" role="separator" aria-hidden="true"></div>
+
+				<!-- LIGNE TOTALE -->
+				<div class="cell rowhead sticky total-label">Total</div>
+				<div class="cell total-span" colspan>TRJ</div>
+				<div class="cell total-span" colspan></div>
+				<div class="cell total-span" colspan></div>
+				<div class="cell" data-total>TRJ : —</div>
+				<div class="cell" data-stake></div>
+				<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution total"></div>
+				<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe total">
+				</div>
+				<div class="cell right" data-profit>—</div>
+				<div class="cell right"></div> <!-- pas de suppression sur la ligne totale -->
+			</div>
+
+			<p class="text-muted" style="margin-top:12px;">
+				UI uniquement. Champs numériques au format 0,00 avec +/- (pas de calculs).
+			</p>
+		</section>
+	</main>
+
+	<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+	<script src="surebet.js"></script>
+</body>
+
+</html>

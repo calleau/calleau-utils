@@ -1,32 +1,333 @@
+/* =========================================================
+   Variables globales
+   ========================================================= */
 :root {
-  --bg:#0f1220; --panel:#151a2e; --muted:#7d86a3; --text:#e9ecf6; --accent:#5ac8fa; --good:#29cc6a; --bad:#ff6b6b;
-  --border:#23284a; --highlight:#2a315a;
+	/* Couleurs */
+	--surface: #0f1115;
+	--surface-2: #151923;
+	--surface-3: #1b1f2a;
+
+	--text: #e7ecf2;
+	--muted: #9aa7b4;
+
+	--divider: #263246;
+
+	--accent-50: #0b2d33;
+	--accent-100: #0f3d45;
+	--accent-600: #57cfe2;
+	--accent-700: #74d7e6;
+
+	--danger-bg: #2b1114;
+	--danger-border: #7c232d;
+	--danger-text: #ffd9de;
+
+	/* Espacements */
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 24px;
+	--space-6: 32px;
+
+	/* Radius */
+	--radius: 14px;
+
+	/* Ombres */
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, .25);
+	--shadow-md: 0 6px 20px rgba(0, 0, 0, .3);
+	--shadow-lg: 0 10px 30px rgba(0, 0, 0, .35);
+
+	/* Typographie */
+	--font-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
-*{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial}
-header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}
-header h1{font-size:18px;margin:0;font-weight:650}
-header .actions{display:flex;gap:8px;flex-wrap:wrap}
-button, .btn{background:var(--accent);color:#041018;border:0;padding:10px 12px;border-radius:12px;font-weight:650;cursor:pointer}
-button.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
-button:disabled{opacity:.6;cursor:not-allowed}
-main{padding:20px;max-width:1200px;margin:0 auto;}
-.grid{display:grid;gap:16px}
-@media(min-width:900px){.grid{grid-template-columns:1fr 1fr}}
-.match{background:var(--panel);border:1px solid var(--border);border-radius:16px;overflow:hidden}
-.match header{background:transparent;border:0;padding:14px 16px}
-.match-title{display:flex;gap:10px;align-items:center}
-.match-title input[type="text"]{background:transparent;border:1px dashed var(--border);color:var(--text);padding:6px 8px;border-radius:8px;min-width:0}
-table{width:100%;border-collapse:collapse}
-th,td{padding:10px 8px;border-top:1px solid var(--border);text-align:center}
-th{position:sticky;top:0;background:#12162a;z-index:1}
-td.label, th.label{text-align:left}
-input.odds{width:90px;text-align:center;background:#0f1430;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px}
-input.odds:focus{outline:none;border-color:#3c477a;background:#0b1030}
-.trj{font-weight:700}
-.trj.good{color:var(--good)}
-.trj.bad{color:var(--bad)}
-.row-actions{display:flex;justify-content:flex-end;padding:10px 16px;gap:8px}
-.hint{color:var(--muted);font-size:12px}
-.pill{display:inline-block;font-size:12px;border:1px solid var(--border);padding:2px 8px;border-radius:999px;margin-left:6px;color:var(--muted)}
-.best{background:var(--highlight);border-radius:8px}
+
+/* =========================================================
+   Reset / Base
+   ========================================================= */
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+}
+
+body {
+	font-family: var(--font-sans);
+	background: var(--surface);
+	color: var(--text);
+	line-height: 1.5;
+}
+
+/* Liens */
+a {
+	color: var(--accent-600);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+/* =========================================================
+   Layout
+   ========================================================= */
+.wrap {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: var(--space-4);
+}
+
+.toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	margin-bottom: var(--space-4);
+	flex-wrap: wrap;
+}
+
+.title {
+	margin: 0;
+	font-weight: 700;
+	font-size: 1.6rem;
+}
+
+.card {
+	background: var(--surface-2);
+	border: 1px solid var(--divider);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-lg);
+	padding: var(--space-4);
+}
+
+/* =========================================================
+   Typographie
+   ========================================================= */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	margin: 0 0 var(--space-3) 0;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+p {
+	margin: 0 0 var(--space-3) 0;
+}
+
+.text-muted {
+	color: var(--muted);
+}
+
+/* =========================================================
+   Boutons
+   ========================================================= */
+.btn {
+	appearance: none;
+	border-radius: 12px;
+	padding: 10px 14px;
+	font: 600 15px/1.1 var(--font-sans);
+	cursor: pointer;
+	border: 1px solid transparent;
+	transition: filter .15s ease, transform .02s ease;
+}
+
+.btn:active {
+	transform: translateY(1px);
+}
+
+.btn-primary {
+	background: var(--accent-600);
+	color: #062027;
+	border-color: var(--accent-600);
+	box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+	filter: brightness(1.07);
+}
+
+.btn-secondary {
+	background: transparent;
+	color: var(--accent-700);
+	border-color: var(--accent-700);
+}
+
+.btn-secondary:hover {
+	filter: brightness(1.1);
+}
+
+.btn-danger {
+	background: var(--danger-bg);
+	color: var(--danger-text);
+	border-color: var(--danger-border);
+}
+
+.btn-danger:hover {
+	filter: brightness(1.05);
+}
+
+.btn-ghost {
+	background: transparent;
+	border: 1px solid var(--divider);
+	color: var(--text);
+}
+
+.btn-ghost:hover {
+	background: var(--surface-3);
+}
+
+.icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 10px;
+	border: 1px solid var(--divider);
+	background: var(--surface-2);
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.icon-btn:hover {
+	color: #fff;
+	border-color: #8a96a9;
+}
+
+.icon-btn.danger {
+	border-color: var(--danger-border);
+	background: var(--danger-bg);
+	color: var(--danger-text);
+}
+
+/* =========================================================
+   Form Controls
+   ========================================================= */
+input,
+select,
+textarea {
+	font-family: var(--font-sans);
+	font-size: 15px;
+	border-radius: 8px;
+	border: 1px solid var(--divider);
+	padding: 8px 10px;
+	background: var(--surface);
+	color: var(--text);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 2px solid var(--accent-600);
+	outline-offset: 2px;
+}
+
+.check,
+.radio {
+	width: 20px;
+	height: 20px;
+	accent-color: var(--accent-600);
+}
+
+/* Champ numérique + steppers */
+.num {
+	--h: 40px;
+	display: flex;
+	align-items: center;
+	height: var(--h);
+	background: var(--surface);
+	border: 1px solid var(--divider);
+	border-radius: 10px;
+	overflow: hidden;
+	box-shadow: var(--shadow-sm);
+}
+
+.num input {
+	width: 110px;
+	height: 100%;
+	padding: 0 10px;
+	background: transparent;
+	border: 0;
+	outline: 0;
+	color: var(--text);
+	font-size: 15px;
+	font-variant-numeric: tabular-nums;
+}
+
+.num .steppers {
+	display: flex;
+	flex-direction: column;
+	width: 42px;
+	height: 100%;
+	border-left: 1px solid var(--divider);
+	background: var(--surface-2);
+}
+
+.step {
+	appearance: none;
+	border: 0;
+	height: 50%;
+	cursor: pointer;
+	font-weight: 800;
+	font-size: 16px;
+	color: var(--accent-700);
+	background: var(--accent-50);
+}
+
+.step:hover {
+	background: var(--accent-100);
+}
+
+/* =========================================================
+   Utilitaires
+   ========================================================= */
+.right {
+	justify-content: flex-end;
+}
+
+.sticky {
+	position: sticky;
+	left: 0;
+	background: var(--surface-2);
+	z-index: 1;
+}
+
+.mt-1 {
+	margin-top: var(--space-1);
+}
+
+.mt-2 {
+	margin-top: var(--space-2);
+}
+
+.mt-3 {
+	margin-top: var(--space-3);
+}
+
+.mt-4 {
+	margin-top: var(--space-4);
+}
+
+.mb-1 {
+	margin-bottom: var(--space-1);
+}
+
+.mb-2 {
+	margin-bottom: var(--space-2);
+}
+
+.mb-3 {
+	margin-bottom: var(--space-3);
+}
+
+.mb-4 {
+	margin-bottom: var(--space-4);
+}

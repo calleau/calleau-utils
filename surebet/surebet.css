@@ -1,0 +1,72 @@
+/* Grille principale (+ colonne Actions) */
+.sb-grid {
+	display: grid;
+	grid-auto-rows: 56px;
+	border: 1px solid var(--divider);
+	border-radius: var(--radius);
+	overflow: hidden;
+	background: var(--surface-2);
+	grid-template-columns:
+		90px
+		/* N° / Total */
+		repeat(3, minmax(160px, 1fr))
+		/* Cotes A.. */
+		160px
+		/* Cote totale */
+		160px
+		/* Mises */
+		140px
+		/* Distribution */
+		110px
+		/* Fixe */
+		160px
+		/* Profits */
+		100px;
+	/* Actions */
+}
+
+.cell {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 0 12px;
+	border-bottom: 1px solid var(--divider);
+	border-right: 1px solid var(--divider);
+}
+
+.cell.head {
+	background: var(--surface);
+	font-weight: 600;
+}
+
+.cell:last-child,
+.cell.head:last-child {
+	border-right: 0;
+}
+
+.rowhead {
+	color: var(--muted);
+	font-weight: 600;
+}
+
+.total-label {
+	color: var(--text);
+	font-weight: 700;
+}
+
+.divider {
+	grid-column: 1 / -1;
+	height: 2px;
+	background: var(--divider);
+}
+
+/* En-tête de colonne de cote avec petite corbeille */
+.colhead {
+	justify-content: space-between;
+}
+
+.icon-btn.xs {
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+}
