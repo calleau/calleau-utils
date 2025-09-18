@@ -18,7 +18,7 @@ function normalize(val) {
 function letterFor(idx) { return String.fromCharCode(64 + idx); }
 
 /* Champ numérique + steppers */
-function buildNumberField(ph = "0,00") {
+function buildNumberField(ph = "0,00", defaultValue = "") {
 	const $el = $(`
     <div class="num">
       <input type="text" inputmode="decimal" placeholder="${ph}" autocomplete="off" spellcheck="false" />
@@ -29,6 +29,7 @@ function buildNumberField(ph = "0,00") {
     </div>
   `);
 	const $input = $el.find("input");
+	if (defaultValue !== "") $input.val(defaultValue.replace(".", ","));
 	$input.on("input", function () {
 		let v = this.value.replace(/[^\d.,]/g, "");
 		const parts = v.replace(",", ".").split(".");
@@ -68,8 +69,16 @@ function hydrate() {
 		if (!$(this).children().length) $(this).append(buildNumberField());
 	});
 	$grid.find("[data-stake]").each(function () {
-		if (!$(this).children().length) $(this).append(buildNumberField());
+		// Si c'est la mise du total, mettre 10 par défaut
+		if (!$(this).children().length) {
+			const isTotal = $(this).closest(".sb-grid").length && $(this).prevAll(".total-label").length > 0;
+			$(this).append(buildNumberField("0,00", isTotal ? "10" : ""));
+		}
 	});
+	// Cocher toutes les cases de distribution par défaut
+	$grid.find('.check.dist').prop('checked', true);
+	// Cocher le radio "Fixe" sur la ligne totale par défaut
+	$grid.find('.total-label').nextAll().find('.radio.fixe').first().prop('checked', true);
 }
 
 /* ---- Re-numérotation des en-têtes A, B, C… et data-col ---- */
@@ -186,7 +195,7 @@ function addIssue() {
 	}
 	frag.append(`<div class="cell" data-total>—</div>`);
 	frag.append($("<div class='cell' data-stake></div>").append(buildNumberField()));
-	frag.append(`<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue ${nextIndex}"></div>`);
+	frag.append(`<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue ${nextIndex}" checked></div>`);
 	frag.append(`<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe issue ${nextIndex}"></div>`);
 	frag.append(`<div class="cell right" data-profit>—</div>`);
 	frag.append(`
