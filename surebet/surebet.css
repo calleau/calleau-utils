@@ -1,3 +1,7 @@
+:root {
+	--nb-cotes: 2;
+}
+
 /* Grille principale (+ colonne Actions) */
 .sb-grid {
 	display: grid;
@@ -7,21 +11,21 @@
 	overflow: hidden;
 	background: var(--surface-2);
 	grid-template-columns:
-		90px
+		auto
 		/* N° / Total */
-		repeat(3, minmax(160px, 1fr))
+		repeat(var(--nb-cotes), fit-content(180px))
 		/* Cotes A.. */
-		160px
+		auto
 		/* Cote totale */
-		160px
+		auto
 		/* Mises */
-		140px
+		auto
 		/* Distribution */
-		110px
+		auto
 		/* Fixe */
-		160px
+		auto
 		/* Profits */
-		100px;
+		auto;
 	/* Actions */
 }
 
@@ -63,10 +67,4 @@
 /* En-tête de colonne de cote avec petite corbeille */
 .colhead {
 	justify-content: space-between;
-}
-
-.icon-btn.xs {
-	width: 28px;
-	height: 28px;
-	border-radius: 8px;
 }

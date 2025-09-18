@@ -2,6 +2,9 @@
 const STEP = 0.01;
 const DEC = 2;
 
+let nb_odds = 0;
+let nb_issues = 0; // anciennement nb_lines
+
 /* ---------- Helpers ---------- */
 function toFixed2(n) { return Number(n).toFixed(DEC); }
 function normalize(val) {
@@ -36,6 +39,9 @@ function buildNumberField(ph = "0,00") {
 		const f = normalize(this.value);
 		this.value = f ? f.replace(".", ",") : "";
 	});
+	$input.on("focus", function () {
+		this.select();
+	});
 	$el.on("click", ".plus", function () {
 		const base = Number(($input.val() || "0").replace(",", "."));
 		const next = (Number.isNaN(base) ? 0 : base) + STEP;
@@ -52,12 +58,7 @@ function buildNumberField(ph = "0,00") {
 /* ---- Grid template selon nb de colonnes de cotes ---- */
 function applyGridTemplate($grid) {
 	const n = Number($grid.attr("data-odds-cols"));
-	const tpl = `
-    90px
-    repeat(${n}, minmax(160px,1fr))
-    160px 160px 140px 110px 160px 100px
-  `;
-	$grid.css("grid-template-columns", tpl);
+	$grid[0].style.setProperty('--nb-cotes', n);
 }
 
 /* ---- Hydratation des cellules en champs ---- */
@@ -87,30 +88,52 @@ function addOddsColumn() {
 	$grid.attr("data-odds-cols", String(next));
 	applyGridTemplate($grid);
 
-	// En-tête avec corbeille
+	// En-tête avec corbeille (identique à la colonne A du HTML)
 	const $heads = $grid.find("[data-oddshead]");
 	const $newHead = $(`
-    <div class="cell head colhead" data-oddshead data-col="${next}">
-      <span class="col-label">${letterFor(next)}</span>
-      <button class="icon-btn xs danger js-del-col" title="Supprimer cette colonne">🗑️</button>
-    </div>`);
-	$heads.last().after($newHead);
+		<div class="cell head colhead" data-oddshead data-col="${next}">
+			<span class="col-label">${letterFor(next)}</span>
+			<button class="btn-icon btn btn-danger js-del-col" title="Supprimer cette colonne">
+				<i data-lucide="trash-2" class="icon"></i>
+			</button>
+		</div>
+	`);
+	// Si aucune colonne de cote n'existe, insérer après la première cellule d'en-tête ("Cotes")
+	if ($heads.length === 0) {
+		$("#surebet-grid .cell.head.sticky").after($newHead);
+	} else {
+		$heads.last().after($newHead);
+	}
 
-	// Lignes de données
-	$grid.find("[data-rowlabel]").each(function () {
-		let $ptr = $(this).next(), lastOdds = null;
-		while ($ptr.length && !$ptr.is("[data-rowlabel], .divider, .total-label")) {
-			if ($ptr.is("[data-odds]")) lastOdds = $ptr;
-			$ptr = $ptr.next();
+	// Issues de données : insérer la nouvelle cellule de cote juste avant la cellule "Cote totale" (data-total)
+	$grid.find("[data-issuelabel]").each(function () {
+		const $issueLabel = $(this);
+		const $coteTotale = $issueLabel.nextAll("[data-total]").first();
+		const $newOddsCell = $("<div class='cell' data-odds></div>").append(buildNumberField());
+		if ($coteTotale.length) {
+			$coteTotale.before($newOddsCell);
 		}
-		if (lastOdds) lastOdds.after($("<div class='cell' data-odds></div>").append(buildNumberField()));
 	});
 
 	// Ligne Totale : placeholder pour aligner TRJ
 	const $totalLabel = $grid.find(".total-label");
-	let $t = $totalLabel.next();
-	while ($t.length && !$t.is("[data-total]")) $t = $t.next();
-	$t.before(`<div class="cell total-span" colspan></div>`);
+	let $t = $totalLabel.next(), spans = [];
+	while ($t.length && !$t.is("[data-total]")) {
+		if ($t.is(".total-span")) spans.push($t);
+		$t = $t.next();
+	}
+	// Si aucune colonne de cote n'existe, insérer juste après .total-label, sinon après le dernier .total-span
+	if (spans.length === 0) {
+		$totalLabel.after(`<div class="cell total-span" colspan></div>`);
+	} else {
+		spans[spans.length - 1].after(`<div class="cell total-span" colspan></div>`);
+	}
+	nb_odds++;
+
+	// Met à jour les icônes Lucide pour la nouvelle colonne
+	if (window.lucide) {
+		lucide.createIcons();
+	}
 }
 
 function removeOddsColumnAt(index1) { // index1 = 1-based
@@ -121,11 +144,11 @@ function removeOddsColumnAt(index1) { // index1 = 1-based
 	// Supprime l'en-tête ciblé
 	$grid.find(`[data-oddshead][data-col='${index1}']`).remove();
 
-	// Pour chaque ligne, retire la N-ième cellule data-odds
-	$grid.find("[data-rowlabel]").each(function () {
-		// Collecte les cellules de cote de la ligne
+	// Pour chaque issue, retire la N-ième cellule data-odds
+	$grid.find("[data-issuelabel]").each(function () {
+		// Collecte les cellules de cote de l'issue
 		let $ptr = $(this).next(), odds = [];
-		while ($ptr.length && !$ptr.is("[data-rowlabel], .divider, .total-label")) {
+		while ($ptr.length && !$ptr.is("[data-issuelabel], .divider, .total-label")) {
 			if ($ptr.is("[data-odds]")) odds.push($ptr);
 			$ptr = $ptr.next();
 		}
@@ -147,46 +170,63 @@ function removeOddsColumnAt(index1) { // index1 = 1-based
 	$grid.attr("data-odds-cols", String(count - 1));
 	applyGridTemplate($grid);
 	renumberColumnHeaders();
+	nb_odds--;
 }
 
-/* ---- Ajouter / Supprimer ligne ---- */
-function addRow() {
+/* ---- Ajouter / Supprimer issue ---- */
+function addIssue() {
 	const $grid = $("#surebet-grid");
 	const nOdds = Number($grid.attr("data-odds-cols"));
-	const nextIndex = $grid.find("[data-rowlabel]").length + 1;
+	const nextIndex = $grid.find("[data-issuelabel]").length + 1;
 
 	const frag = $(document.createDocumentFragment());
-	frag.append(`<div class="cell rowhead sticky" data-rowlabel>${nextIndex}</div>`);
-	for (let i = 0; i < nOdds; i++) frag.append($("<div class='cell' data-odds></div>").append(buildNumberField()));
+	frag.append(`<div class="cell rowhead sticky" data-issuelabel>${nextIndex}</div>`);
+	for (let i = 0; i < nOdds; i++) {
+		frag.append($("<div class='cell' data-odds></div>").append(buildNumberField()));
+	}
 	frag.append(`<div class="cell" data-total>—</div>`);
 	frag.append($("<div class='cell' data-stake></div>").append(buildNumberField()));
-	frag.append(`<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution ligne ${nextIndex}"></div>`);
-	frag.append(`<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe ligne ${nextIndex}"></div>`);
+	frag.append(`<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue ${nextIndex}"></div>`);
+	frag.append(`<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe issue ${nextIndex}"></div>`);
 	frag.append(`<div class="cell right" data-profit>—</div>`);
-	frag.append(`<div class="cell right"><button class="icon-btn danger js-del-row" aria-label="Supprimer la ligne">🗑️</button></div>`);
+	frag.append(`
+		<div class="cell right">
+			<button class="btn-icon btn btn-danger js-del-issue" title="Supprimer l'issue">
+				<i data-lucide="trash-2" class="icon"></i>
+			</button>
+		</div>
+	`);
 
 	$grid.find(".divider").before(frag);
+
+	nb_issues++;
+
+	// Met à jour les icônes Lucide pour la nouvelle ligne
+	if (window.lucide) {
+		lucide.createIcons();
+	}
 }
 
-function deleteRow($rowLabelCell) {
+function deleteIssue($issueLabelCell) { // anciennement deleteRow
 	const $grid = $("#surebet-grid");
-	const minRows = 1;
-	const totalRows = $grid.find("[data-rowlabel]").length;
-	if (totalRows <= minRows) return;
+	const minIssues = 1;
+	const totalIssues = $grid.find("[data-issuelabel]").length;
+	if (totalIssues <= minIssues) return;
 
-	// Supprime toutes les cellules jusqu'à la prochaine rowlabel/divider/total-label
-	let $ptr = $rowLabelCell;
+	// Supprime toutes les cellules jusqu'à la prochaine issuelabel/divider/total-label
+	let $ptr = $issueLabelCell;
 	const toRemove = [$ptr.get(0)];
 	$ptr = $ptr.next();
-	while ($ptr.length && !$ptr.is("[data-rowlabel], .divider, .total-label")) {
+	while ($ptr.length && !$ptr.is("[data-issuelabel], .divider, .total-label")) {
 		toRemove.push($ptr.get(0));
 		$ptr = $ptr.next();
 	}
 	$(toRemove).remove();
 
-	// Re-numérote les étiquettes de ligne
+	// Re-numérote les étiquettes d'issue
 	let idx = 1;
-	$grid.find("[data-rowlabel]").each(function () { $(this).text(idx++); });
+	$grid.find("[data-issuelabel]").each(function () { $(this).text(idx++); });
+	nb_issues--;
 }
 
 /* ---- Init ---- */
@@ -195,13 +235,16 @@ $(function () {
 	hydrate();
 	renumberColumnHeaders();
 
-	$("#add-col").on("click", addOddsColumn);
-	$("#add-row").on("click", addRow);
+	// Ajoute une colonne de cote par défaut au chargement
+	addOddsColumn();
 
-	// Délégation suppression ligne
-	$("#surebet-grid").on("click", ".js-del-row", function () {
-		const $label = $(this).closest(".cell").prevAll("[data-rowlabel]").first();
-		deleteRow($label);
+	$("#add-col").on("click", addOddsColumn);
+	$("#add-row").on("click", addIssue); // anciennement addRow
+
+	// Délégation suppression issue
+	$("#surebet-grid").on("click", ".js-del-issue", function () {
+		const $label = $(this).closest(".cell").prevAll("[data-issuelabel]").first();
+		deleteIssue($label);
 	});
 
 	// Délégation suppression colonne (depuis l'en-tête)
@@ -209,4 +252,9 @@ $(function () {
 		const idx = Number($(this).closest("[data-oddshead]").attr("data-col"));
 		removeOddsColumnAt(idx);
 	});
+
+	if (window.lucide) {
+		lucide.createIcons();
+	}
 });
+

@@ -1,44 +1,49 @@
 /* =========================================================
-   Variables globales
+   Variables de thème
    ========================================================= */
-:root {
-	/* Couleurs */
-	--surface: #0f1115;
-	--surface-2: #151923;
-	--surface-3: #1b1f2a;
 
-	--text: #e7ecf2;
-	--muted: #9aa7b4;
+/* Thème clair (par défaut) */
+:root[data-theme="light"] {
+	--color-bg: #f7f8fa;
+	--color-surface: #ffffff;
+	--color-surface-2: #f1f3f7;
+	--color-surface-3: #e9ecf1;
 
-	--divider: #263246;
+	--color-text: #131722;
+	--color-muted: #5a6475;
 
-	--accent-50: #0b2d33;
-	--accent-100: #0f3d45;
-	--accent-600: #57cfe2;
-	--accent-700: #74d7e6;
+	--color-divider: #d1d9e6;
 
-	--danger-bg: #2b1114;
-	--danger-border: #7c232d;
-	--danger-text: #ffd9de;
+	--color-accent-50: #e8fbff;
+	--color-accent-100: #d2f6ff;
+	--color-accent-600: #4fc9dc;
+	--color-accent-700: #35aec2;
 
-	/* Espacements */
-	--space-1: 4px;
-	--space-2: 8px;
-	--space-3: 12px;
-	--space-4: 16px;
-	--space-5: 24px;
-	--space-6: 32px;
+	--color-danger-bg: #ffe9eb;
+	--color-danger-border: #e05a5a;
+	--color-danger-text: #7c232d;
+}
 
-	/* Radius */
-	--radius: 14px;
+/* Thème sombre */
+:root[data-theme="dark"] {
+	--color-bg: #0f1115;
+	--color-surface: #151923;
+	--color-surface-2: #1b1f2a;
+	--color-surface-3: #202531;
 
-	/* Ombres */
-	--shadow-sm: 0 2px 8px rgba(0, 0, 0, .25);
-	--shadow-md: 0 6px 20px rgba(0, 0, 0, .3);
-	--shadow-lg: 0 10px 30px rgba(0, 0, 0, .35);
+	--color-text: #e7ecf2;
+	--color-muted: #9aa7b4;
 
-	/* Typographie */
-	--font-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+	--color-divider: #263246;
+
+	--color-accent-50: #0b2d33;
+	--color-accent-100: #0f3d45;
+	--color-accent-600: #57cfe2;
+	--color-accent-700: #74d7e6;
+
+	--color-danger-bg: #2b1114;
+	--color-danger-border: #7c232d;
+	--color-danger-text: #ffd9de;
 }
 
 /* =========================================================
@@ -56,15 +61,15 @@ body {
 }
 
 body {
-	font-family: var(--font-sans);
-	background: var(--surface);
-	color: var(--text);
+	font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+	background: var(--color-bg);
+	color: var(--color-text);
 	line-height: 1.5;
 }
 
 /* Liens */
 a {
-	color: var(--accent-600);
+	color: var(--color-accent-600);
 	text-decoration: none;
 }
 
@@ -76,32 +81,40 @@ a:hover {
    Layout
    ========================================================= */
 .wrap {
-	max-width: 1200px;
+	max-width: 80vw;
 	margin: 0 auto;
-	padding: var(--space-4);
+	padding-top: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
 }
 
 .toolbar {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: var(--space-3);
-	margin-bottom: var(--space-4);
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.actions {
+	display: flex;
+	gap: 1rem;
 	flex-wrap: wrap;
 }
 
 .title {
 	margin: 0;
 	font-weight: 700;
-	font-size: 1.6rem;
+	font-size: 2rem;
 }
 
 .card {
-	background: var(--surface-2);
-	border: 1px solid var(--divider);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-lg);
-	padding: var(--space-4);
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, .1);
+	padding: 1rem;
 }
 
 /* =========================================================
@@ -113,17 +126,17 @@ h3,
 h4,
 h5,
 h6 {
-	margin: 0 0 var(--space-3) 0;
+	margin: 0 0 12px 0;
 	font-weight: 700;
 	line-height: 1.2;
 }
 
 p {
-	margin: 0 0 var(--space-3) 0;
+	margin: 0 0 12px 0;
 }
 
 .text-muted {
-	color: var(--muted);
+	color: var(--color-muted);
 }
 
 /* =========================================================
@@ -133,7 +146,7 @@ p {
 	appearance: none;
 	border-radius: 12px;
 	padding: 10px 14px;
-	font: 600 15px/1.1 var(--font-sans);
+	font: 600 15px/1.1 Inter, sans-serif;
 	cursor: pointer;
 	border: 1px solid transparent;
 	transition: filter .15s ease, transform .02s ease;
@@ -144,10 +157,10 @@ p {
 }
 
 .btn-primary {
-	background: var(--accent-600);
-	color: #062027;
-	border-color: var(--accent-600);
-	box-shadow: var(--shadow-sm);
+	background: var(--color-accent-600);
+	color: #fff;
+	border-color: var(--color-accent-600);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
 }
 
 .btn-primary:hover {
@@ -156,8 +169,8 @@ p {
 
 .btn-secondary {
 	background: transparent;
-	color: var(--accent-700);
-	border-color: var(--accent-700);
+	color: var(--color-accent-700);
+	border-color: var(--color-accent-700);
 }
 
 .btn-secondary:hover {
@@ -165,9 +178,13 @@ p {
 }
 
 .btn-danger {
-	background: var(--danger-bg);
-	color: var(--danger-text);
-	border-color: var(--danger-border);
+	background: var(--color-danger-bg);
+	color: var(--color-danger-text);
+	border: 2px solid var(--color-danger-border);
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .btn-danger:hover {
@@ -176,36 +193,18 @@ p {
 
 .btn-ghost {
 	background: transparent;
-	border: 1px solid var(--divider);
-	color: var(--text);
+	border: 1px solid var(--color-divider);
+	color: var(--color-text);
 }
 
 .btn-ghost:hover {
-	background: var(--surface-3);
+	background: var(--color-surface-2);
 }
 
-.icon-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 36px;
-	height: 36px;
-	border-radius: 10px;
-	border: 1px solid var(--divider);
-	background: var(--surface-2);
-	color: var(--muted);
-	cursor: pointer;
-}
-
-.icon-btn:hover {
-	color: #fff;
-	border-color: #8a96a9;
-}
-
-.icon-btn.danger {
-	border-color: var(--danger-border);
-	background: var(--danger-bg);
-	color: var(--danger-text);
+.btn-icon{
+	width: 2.2rem;
+	height: 2.2rem;
+	border-radius: 8px;
 }
 
 /* =========================================================
@@ -214,19 +213,19 @@ p {
 input,
 select,
 textarea {
-	font-family: var(--font-sans);
+	font-family: Inter, sans-serif;
 	font-size: 15px;
 	border-radius: 8px;
-	border: 1px solid var(--divider);
+	border: 1px solid var(--color-divider);
 	padding: 8px 10px;
-	background: var(--surface);
-	color: var(--text);
+	background: var(--color-surface);
+	color: var(--color-text);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-	outline: 2px solid var(--accent-600);
+	outline: 2px solid var(--color-accent-600);
 	outline-offset: 2px;
 }
 
@@ -234,7 +233,7 @@ textarea:focus {
 .radio {
 	width: 20px;
 	height: 20px;
-	accent-color: var(--accent-600);
+	accent-color: var(--color-accent-600);
 }
 
 /* Champ numérique + steppers */
@@ -243,23 +242,24 @@ textarea:focus {
 	display: flex;
 	align-items: center;
 	height: var(--h);
-	background: var(--surface);
-	border: 1px solid var(--divider);
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
 	border-radius: 10px;
 	overflow: hidden;
-	box-shadow: var(--shadow-sm);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
 }
 
 .num input {
-	width: 110px;
+	width: 5rem;
 	height: 100%;
 	padding: 0 10px;
 	background: transparent;
 	border: 0;
 	outline: 0;
-	color: var(--text);
+	color: var(--color-text);
 	font-size: 15px;
 	font-variant-numeric: tabular-nums;
+	text-align: right;
 }
 
 .num .steppers {
@@ -267,8 +267,8 @@ textarea:focus {
 	flex-direction: column;
 	width: 42px;
 	height: 100%;
-	border-left: 1px solid var(--divider);
-	background: var(--surface-2);
+	border-left: 1px solid var(--color-divider);
+	background: var(--color-surface-2);
 }
 
 .step {
@@ -278,56 +278,10 @@ textarea:focus {
 	cursor: pointer;
 	font-weight: 800;
 	font-size: 16px;
-	color: var(--accent-700);
-	background: var(--accent-50);
+	color: var(--color-accent-700);
+	background: var(--color-accent-50);
 }
 
 .step:hover {
-	background: var(--accent-100);
-}
-
-/* =========================================================
-   Utilitaires
-   ========================================================= */
-.right {
-	justify-content: flex-end;
-}
-
-.sticky {
-	position: sticky;
-	left: 0;
-	background: var(--surface-2);
-	z-index: 1;
-}
-
-.mt-1 {
-	margin-top: var(--space-1);
-}
-
-.mt-2 {
-	margin-top: var(--space-2);
-}
-
-.mt-3 {
-	margin-top: var(--space-3);
-}
-
-.mt-4 {
-	margin-top: var(--space-4);
-}
-
-.mb-1 {
-	margin-bottom: var(--space-1);
-}
-
-.mb-2 {
-	margin-bottom: var(--space-2);
-}
-
-.mb-3 {
-	margin-bottom: var(--space-3);
-}
-
-.mb-4 {
-	margin-bottom: var(--space-4);
+	background: var(--color-accent-100);
 }
