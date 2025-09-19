@@ -24,44 +24,16 @@
 		<section class="card">
 			<div id="surebet-grid" class="sb-grid" data-odds-cols="0" aria-label="Tableau surebet">
 				<!-- EN-TÊTES -->
-				<div class="cell head sticky">Cotes</div>
+				<div class="cell head sticky" data-oddslabelhead>Cotes</div>
 				<!-- Pas de colonne de cote par défaut -->
-				<div class="cell head">Cote totale</div>
-				<div class="cell head">Mises</div>
-				<div class="cell head">Distribution</div>
-				<div class="cell head">Fixe</div>
-				<div class="cell head">Profits</div>
-				<div class="cell head right">Actions</div>
+				<div class="cell head" data-oddstotalhead>Cote totale</div>
+				<div class="cell head" data-stakehead>Mises</div>
+				<div class="cell head" data-distributionhead>Distribution</div>
+				<div class="cell head" data-fixehead>Fixe</div>
+				<div class="cell head" data-profithead>Profits</div>
+				<div class="cell head right" data-actionshead>Actions</div>
 
-				<!-- ISSUE 1 -->
-				<div class="cell rowhead sticky" data-issuelabel>1</div>
-				<!-- Pas de colonne de cote par défaut -->
-				<div class="cell" data-total>—</div>
-				<div class="cell" data-stake></div>
-				<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue 1" checked></div>
-				<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe issue 1">
-				</div>
-				<div class="cell right" data-profit>—</div>
-				<div class="cell right">
-					<button class="btn-icon btn btn-danger js-del-issue" title="Supprimer l'issue">
-						<i data-lucide="trash-2" class="icon"></i>
-					</button>
-				</div>
-
-				<!-- ISSUE 2 -->
-				<div class="cell rowhead sticky" data-issuelabel>2</div>
-				<!-- Pas de colonne de cote par défaut -->
-				<div class="cell" data-total>—</div>
-				<div class="cell" data-stake></div>
-				<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue 2" checked></div>
-				<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe issue 2">
-				</div>
-				<div class="cell right" data-profit>—</div>
-				<div class="cell right">
-					<button class="btn-icon btn btn-danger js-del-issue" title="Supprimer l'issue">
-						<i data-lucide="trash-2" class="icon"></i>
-					</button>
-				</div>
+				<!-- ISSUES -->
 
 				<!-- DIVISEUR -->
 				<div class="divider" role="separator" aria-hidden="true"></div>
@@ -69,7 +41,7 @@
 				<!-- LIGNE TOTALE -->
 				<div class="cell rowhead sticky total-label">Total</div>
 				<!-- Pas de colonne de cote par défaut -->
-				<div class="cell" data-total>TRJ : —</div>
+				<div class="cell" data-last-odds-total>TRJ : —</div>
 				<div class="cell" data-stake>
 					<!-- Mise à 10 par défaut, sera hydratée par JS aussi -->
 				</div>

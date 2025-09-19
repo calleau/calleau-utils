@@ -5,6 +5,10 @@ const DEC = 2;
 let nb_odds = 0;
 let nb_issues = 0; // anciennement nb_lines
 
+let issueCounter = 1; // Pour générer I01, I02, ...
+let colCounter = 1;   // Pour générer C01, C02, ...
+const colIds = [];    // Liste ordonnée des IDs de colonnes (ex: ["C01", "C02", ...])
+
 /* ---------- Helpers ---------- */
 function toFixed2(n) { return Number(n).toFixed(DEC); }
 function normalize(val) {
@@ -16,18 +20,30 @@ function normalize(val) {
 	return Number.isNaN(num) ? "" : toFixed2(num);
 }
 function letterFor(idx) { return String.fromCharCode(64 + idx); }
+function nextIssueId() {
+	let currStrIssueCounter = String(issueCounter++);
+	if(issueCounter < 10) currStrIssueCounter = "0" + currStrIssueCounter;
+	return "I" + currStrIssueCounter;
+}
+function nextColId() {
+	let currStrOddsCounter = String(colCounter++);
+	if(colCounter < 10) currStrOddsCounter = "0" + currStrOddsCounter;
+	currStrOddsCounter = "C" + currStrOddsCounter;
+	colIds.push(currStrOddsCounter);
+	return currStrOddsCounter;
+}
 
 /* Champ numérique + steppers */
 function buildNumberField(ph = "0,00", defaultValue = "") {
 	const $el = $(`
-    <div class="num">
-      <input type="text" inputmode="decimal" placeholder="${ph}" autocomplete="off" spellcheck="false" />
-      <div class="steppers">
-        <button type="button" class="step plus" aria-label="Augmenter">+</button>
-        <button type="button" class="step minus" aria-label="Diminuer">−</button>
-      </div>
-    </div>
-  `);
+	<div class="num">
+		<input type="text" inputmode="decimal" placeholder="${ph}" autocomplete="off" spellcheck="false" />
+		<div class="steppers">
+			<button type="button" class="step plus" aria-label="Augmenter">+</button>
+			<button type="button" class="step minus" aria-label="Diminuer">−</button>
+		</div>
+	</div>
+	`);
 	const $input = $el.find("input");
 	if (defaultValue !== "") $input.val(defaultValue.replace(".", ","));
 	$input.on("input", function () {
@@ -97,49 +113,40 @@ function addOddsColumn() {
 	$grid.attr("data-odds-cols", String(next));
 	applyGridTemplate($grid);
 
-	// En-tête avec corbeille (identique à la colonne A du HTML)
-	const $heads = $grid.find("[data-oddshead]");
+	// Génère un nouvel ID de colonne
+	const colId = nextColId();
+
+	// En-tête avec corbeille
 	const $newHead = $(`
-		<div class="cell head colhead" data-oddshead data-col="${next}">
+		<div class="cell head colhead" data-oddshead data-col="${next}" data-colid="${colId}">
 			<span class="col-label">${letterFor(next)}</span>
+			<span class="col-id">${colId}</span>
 			<button class="btn-icon btn btn-danger js-del-col" title="Supprimer cette colonne">
 				<i data-lucide="trash-2" class="icon"></i>
 			</button>
 		</div>
 	`);
-	// Si aucune colonne de cote n'existe, insérer après la première cellule d'en-tête ("Cotes")
-	if ($heads.length === 0) {
-		$("#surebet-grid .cell.head.sticky").after($newHead);
-	} else {
-		$heads.last().after($newHead);
-	}
+	const $headerBefore = $grid.find("[data-oddstotalhead]").last();
+	$headerBefore.before($newHead);
 
-	// Issues de données : insérer la nouvelle cellule de cote juste avant la cellule "Cote totale" (data-total)
+	// Pour chaque issue, insérer la nouvelle cellule de cote avec ID unique
 	$grid.find("[data-issuelabel]").each(function () {
 		const $issueLabel = $(this);
-		const $coteTotale = $issueLabel.nextAll("[data-total]").first();
-		const $newOddsCell = $("<div class='cell' data-odds></div>").append(buildNumberField());
+		const issueId = $issueLabel.attr("data-issueid");
+		const $coteTotale = $issueLabel.nextAll("[data-odds-total]").first();
+		const $newOddsCell = $(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}"></div>`)
+			.append(buildNumberField());
 		if ($coteTotale.length) {
 			$coteTotale.before($newOddsCell);
 		}
 	});
 
 	// Ligne Totale : placeholder pour aligner TRJ
-	const $totalLabel = $grid.find(".total-label");
-	let $t = $totalLabel.next(), spans = [];
-	while ($t.length && !$t.is("[data-total]")) {
-		if ($t.is(".total-span")) spans.push($t);
-		$t = $t.next();
-	}
-	// Si aucune colonne de cote n'existe, insérer juste après .total-label, sinon après le dernier .total-span
-	if (spans.length === 0) {
-		$totalLabel.after(`<div class="cell total-span" colspan></div>`);
-	} else {
-		spans[spans.length - 1].after(`<div class="cell total-span" colspan></div>`);
-	}
+	const $totalBefore = $grid.find("[data-last-odds-total]").last();
+	$totalBefore.before(`<div class="cell total-span" colspan data-colid="${colId}"></div>`);
+
 	nb_odds++;
 
-	// Met à jour les icônes Lucide pour la nouvelle colonne
 	if (window.lucide) {
 		lucide.createIcons();
 	}
@@ -148,52 +155,52 @@ function addOddsColumn() {
 function removeOddsColumnAt(index1) { // index1 = 1-based
 	const $grid = $("#surebet-grid");
 	let count = Number($grid.attr("data-odds-cols"));
-	if (count <= 1) return; // minimum 1 colonne
+	if (count <= 1) return;
+
+	// Trouver l'ID de colonne à supprimer
+	const $colHead = $grid.find(`[data-oddshead][data-col='${index1}']`);
+	const colId = $colHead.attr("data-colid");
 
 	// Supprime l'en-tête ciblé
-	$grid.find(`[data-oddshead][data-col='${index1}']`).remove();
+	$colHead.remove();
 
-	// Pour chaque issue, retire la N-ième cellule data-odds
-	$grid.find("[data-issuelabel]").each(function () {
-		// Collecte les cellules de cote de l'issue
-		let $ptr = $(this).next(), odds = [];
-		while ($ptr.length && !$ptr.is("[data-issuelabel], .divider, .total-label")) {
-			if ($ptr.is("[data-odds]")) odds.push($ptr);
-			$ptr = $ptr.next();
-		}
-		const $toRemove = odds[index1 - 1];
-		if ($toRemove) $toRemove.remove();
-	});
+	// Supprime toutes les cellules de cette colonne dans chaque issue
+	$grid.find(`[data-odds][data-colid='${colId}']`).remove();
 
-	// Ligne Totale : retirer le N-ième placeholder avant [data-total]
-	const $totalLabel = $grid.find(".total-label");
-	let $t = $totalLabel.next(), spans = [];
-	while ($t.length && !$t.is("[data-total]")) {
-		if ($t.is(".total-span")) spans.push($t);
-		$t = $t.next();
-	}
-	const $spanToRemove = spans[index1 - 1];
-	if ($spanToRemove) $spanToRemove.remove();
+	// Supprime le placeholder de la ligne totale pour cette colonne
+	$grid.find(`.total-span[data-colid='${colId}']`).remove();
+
+	// Retire l'id de la colonne du tableau colIds
+	const idx = colIds.indexOf(colId);
+	if (idx !== -1) colIds.splice(idx, 1);
 
 	// MAJ compte + template + relabel
 	$grid.attr("data-odds-cols", String(count - 1));
 	applyGridTemplate($grid);
 	renumberColumnHeaders();
 	nb_odds--;
+
+	// Recalcule toutes les cotes totales après suppression de colonne
+	$grid.find("[data-issuelabel]").each(function () {
+		updateOddsTotalForIssue($(this));
+	});
 }
 
-/* ---- Ajouter / Supprimer issue ---- */
 function addIssue() {
 	const $grid = $("#surebet-grid");
 	const nOdds = Number($grid.attr("data-odds-cols"));
 	const nextIndex = $grid.find("[data-issuelabel]").length + 1;
+	const issueId = nextIssueId();
 
 	const frag = $(document.createDocumentFragment());
-	frag.append(`<div class="cell rowhead sticky" data-issuelabel>${nextIndex}</div>`);
-	for (let i = 0; i < nOdds; i++) {
-		frag.append($("<div class='cell' data-odds></div>").append(buildNumberField()));
+	frag.append(`<div class="cell rowhead sticky" data-issuelabel data-issueid="${issueId}">${nextIndex}</div>`);
+	// Pour chaque colonne existante, ajoute une cellule de cote avec ID unique
+	for (let i = 0; i < colIds.length; i++) {
+		const colId = colIds[i];
+		frag.append($(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}"></div>`)
+			.append(buildNumberField("0,00", i === 0 ? String(nextIndex)+",00" : "")));
 	}
-	frag.append(`<div class="cell" data-total>—</div>`);
+	frag.append(`<div class="cell" data-odds-total>—</div>`);
 	frag.append($("<div class='cell' data-stake></div>").append(buildNumberField()));
 	frag.append(`<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue ${nextIndex}" checked></div>`);
 	frag.append(`<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe issue ${nextIndex}"></div>`);
@@ -210,10 +217,12 @@ function addIssue() {
 
 	nb_issues++;
 
-	// Met à jour les icônes Lucide pour la nouvelle ligne
 	if (window.lucide) {
 		lucide.createIcons();
 	}
+
+	const $rowLabel = $grid.find("[data-issuelabel]").last();
+	updateOddsTotalForIssue($rowLabel);
 }
 
 function deleteIssue($issueLabelCell) { // anciennement deleteRow
@@ -238,6 +247,41 @@ function deleteIssue($issueLabelCell) { // anciennement deleteRow
 	nb_issues--;
 }
 
+function updateOddsTotalForIssue($rowLabel) {
+	// Utilise les IDs pour sélectionner les cellules de cote de la ligne
+	const issueId = $rowLabel.attr("data-issueid");
+	let odds = [], hasValue = false;
+	for (const colId of colIds) {
+		const $cell = $(`[data-odds][data-issueid='${issueId}'][data-colid='${colId}']`);
+		if ($cell.length) {
+			const val = $cell.find("input").val();
+			if (val && val.trim() !== "") hasValue = true;
+			const num = Number(String(val).replace(",", "."));
+			odds.push(Number.isNaN(num) ? 1 : num || 1);
+		}
+	}
+	const $oddsTotal = $rowLabel.nextAll("[data-odds-total]").first();
+	if ($oddsTotal.length) {
+		if (!hasValue) {
+			$oddsTotal.text("—");
+		} else {
+			const product = odds.reduce((acc, v) => acc * v, 1);
+			$oddsTotal.text(product.toFixed(DEC));
+		}
+	}
+}
+
+function bindOddsInputs() {
+	const $grid = $("#surebet-grid");
+	// Délégation sur tous les champs de cote
+	$grid.on("input", "[data-odds] input", function () {
+		const $cell = $(this).closest("[data-odds]");
+		const issueId = $cell.attr("data-issueid");
+		const $rowLabel = $grid.find(`[data-issuelabel][data-issueid='${issueId}']`);
+		updateOddsTotalForIssue($rowLabel);
+	});
+}
+
 /* ---- Init ---- */
 $(function () {
 	applyGridTemplate($("#surebet-grid"));
@@ -246,6 +290,10 @@ $(function () {
 
 	// Ajoute une colonne de cote par défaut au chargement
 	addOddsColumn();
+	addIssue(); // Ajoute une issue par défaut au chargement
+	addIssue();
+
+	bindOddsInputs();
 
 	$("#add-col").on("click", addOddsColumn);
 	$("#add-row").on("click", addIssue); // anciennement addRow
