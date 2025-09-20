@@ -7,10 +7,23 @@ let nb_issues = 0; // anciennement nb_lines
 
 let issueCounter = 1; // Pour générer I01, I02, ...
 let colCounter = 1;   // Pour générer C01, C02, ...
-const colIds = [];    // Liste ordonnée des IDs de colonnes (ex: ["C01", "C02", ...])
+const colIds = [];    // Liste ordonnée des IDs de colonnes (ex: ["C01", "C02, ...])
+
+
+/**
+ * Il faut que cela équilibre les mises, en fonction de quelle ligne est considérée comme "fixe", pour essayer d'avoir un profit égal sur toutes les lignes. Et ça doit se faire dès qu'une cotes est mise à jour, que la ligne "fixe" est changée ou que la mise de la ligne fixe est modifiée.
+ */
 
 /* ---------- Helpers ---------- */
+
+/**
+ * Arrondit un nombre à 2 décimales (ou DEC).
+ */
 function toFixed2(n) { return Number(n).toFixed(DEC); }
+
+/**
+ * Normalise une chaîne de caractères en nombre décimal (format français/anglais).
+ */
 function normalize(val) {
 	if (val === "" || val == null) return "";
 	const safe = String(val).replace(/[^\d.,]/g, "");
@@ -19,12 +32,24 @@ function normalize(val) {
 	const num = Number(joined);
 	return Number.isNaN(num) ? "" : toFixed2(num);
 }
+
+/**
+ * Retourne la lettre correspondant à l'index (1 => A, 2 => B, ...).
+ */
 function letterFor(idx) { return String.fromCharCode(64 + idx); }
+
+/**
+ * Génère un nouvel identifiant unique pour une issue (ex: I01, I02, ...).
+ */
 function nextIssueId() {
 	let currStrIssueCounter = String(issueCounter++);
 	if(issueCounter < 10) currStrIssueCounter = "0" + currStrIssueCounter;
 	return "I" + currStrIssueCounter;
 }
+
+/**
+ * Génère un nouvel identifiant unique pour une colonne (ex: C01, C02, ...).
+ */
 function nextColId() {
 	let currStrOddsCounter = String(colCounter++);
 	if(colCounter < 10) currStrOddsCounter = "0" + currStrOddsCounter;
@@ -33,8 +58,10 @@ function nextColId() {
 	return currStrOddsCounter;
 }
 
-/* Champ numérique + steppers */
-function buildNumberField(ph = "0,00", defaultValue = "") {
+/**
+ * Construit un champ numérique avec steppers, valeur par défaut et minimum.
+ */
+function buildNumberField(ph = "0,00", defaultValue = "", min = null) {
 	const $el = $(`
 	<div class="num">
 		<input type="text" inputmode="decimal" placeholder="${ph}" autocomplete="off" spellcheck="false" />
@@ -46,49 +73,71 @@ function buildNumberField(ph = "0,00", defaultValue = "") {
 	`);
 	const $input = $el.find("input");
 	if (defaultValue !== "") $input.val(defaultValue.replace(".", ","));
+
+	// Gestion de la saisie et du minimum
 	$input.on("input", function () {
 		let v = this.value.replace(/[^\d.,]/g, "");
 		const parts = v.replace(",", ".").split(".");
 		if (parts.length > 2) v = parts[0] + "." + parts.slice(1).join("");
 		this.value = v;
+		// Correction valeur min
+		let num = Number(this.value.replace(",", "."));
+		if (min !== null && !isNaN(num) && num < min) {
+			this.value = toFixed2(min).replace(".", ",");
+		}
+		$input.trigger("cote:changed");
 	});
 	$input.on("blur", function () {
 		const f = normalize(this.value);
-		this.value = f ? f.replace(".", ",") : "";
+		let val = f ? f.replace(".", ",") : "";
+		let num = Number(val.replace(",", "."));
+		if (min !== null && !isNaN(num) && num < min) {
+			val = toFixed2(min).replace(".", ",");
+		}
+		this.value = val;
+		$input.trigger("cote:changed");
 	});
 	$input.on("focus", function () {
 		this.select();
 	});
 	$el.on("click", ".plus", function () {
-		const base = Number(($input.val() || "0").replace(",", "."));
-		const next = (Number.isNaN(base) ? 0 : base) + STEP;
-		$input.val(toFixed2(next).replace(".", ",")).trigger("blur");
+		let base = Number(($input.val() || "0").replace(",", "."));
+		if (isNaN(base)) base = 0;
+		let next = base + STEP;
+		if (min !== null && next < min) next = min;
+		$input.val(toFixed2(next).replace(".", ",")).trigger("blur").trigger("cote:changed");
 	});
 	$el.on("click", ".minus", function () {
-		const base = Number(($input.val() || "0").replace(",", "."));
-		const next = (Number.isNaN(base) ? 0 : base) - STEP;
-		$input.val(toFixed2(next).replace(".", ",")).trigger("blur");
+		let base = Number(($input.val() || "0").replace(",", "."));
+		if (isNaN(base)) base = 0;
+		let next = base - STEP;
+		if (min !== null && next < min) next = min;
+		$input.val(toFixed2(next).replace(".", ",")).trigger("blur").trigger("cote:changed");
 	});
 	return $el;
 }
 
-/* ---- Grid template selon nb de colonnes de cotes ---- */
+/**
+ * Applique le nombre de colonnes de cotes à la grille CSS.
+ */
 function applyGridTemplate($grid) {
 	const n = Number($grid.attr("data-odds-cols"));
 	$grid[0].style.setProperty('--nb-cotes', n);
 }
 
-/* ---- Hydratation des cellules en champs ---- */
+/**
+ * Transforme les cellules vides en champs numériques interactifs.
+ */
 function hydrate() {
 	const $grid = $("#surebet-grid");
 	$grid.find("[data-odds]").each(function () {
-		if (!$(this).children().length) $(this).append(buildNumberField());
+		if (!$(this).children().length) $(this).append(buildNumberField("0,00", "", 1.00));
 	});
 	$grid.find("[data-stake]").each(function () {
 		// Si c'est la mise du total, mettre 10 par défaut
 		if (!$(this).children().length) {
 			const isTotal = $(this).closest(".sb-grid").length && $(this).prevAll(".total-label").length > 0;
-			$(this).append(buildNumberField("0,00", isTotal ? "10" : ""));
+			$(this).append(buildNumberField("0,00", isTotal ? "10,00" : "", 0.01));
 		}
 	});
 	// Cocher toutes les cases de distribution par défaut
@@ -97,7 +146,9 @@ function hydrate() {
 	$grid.find('.total-label').nextAll().find('.radio.fixe').first().prop('checked', true);
 }
 
-/* ---- Re-numérotation des en-têtes A, B, C… et data-col ---- */
+/**
+ * Met à jour les labels et data-col des en-têtes de colonnes de cotes.
+ */
 function renumberColumnHeaders() {
 	$("#surebet-grid").find("[data-oddshead]").each(function (i) {
 		const idx = i + 1;
@@ -106,7 +157,9 @@ function renumberColumnHeaders() {
 	});
 }
 
-/* ---- Ajouter / Supprimer colonne de cote ---- */
+/**
+ * Ajoute une colonne de cote à la grille, avec identifiant unique.
+ */
 function addOddsColumn() {
 	const $grid = $("#surebet-grid");
 	let next = Number($grid.attr("data-odds-cols")) + 1;
@@ -135,7 +188,7 @@ function addOddsColumn() {
 		const issueId = $issueLabel.attr("data-issueid");
 		const $coteTotale = $issueLabel.nextAll("[data-odds-total]").first();
 		const $newOddsCell = $(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}"></div>`)
-			.append(buildNumberField());
+			.append(buildNumberField("0,00", "", 1.00));
 		if ($coteTotale.length) {
 			$coteTotale.before($newOddsCell);
 		}
@@ -152,6 +205,9 @@ function addOddsColumn() {
 	}
 }
 
+/**
+ * Supprime une colonne de cote (par son index 1-based), retire les cellules et met à jour les identifiants.
+ */
 function removeOddsColumnAt(index1) { // index1 = 1-based
 	const $grid = $("#surebet-grid");
 	let count = Number($grid.attr("data-odds-cols"));
@@ -186,6 +242,9 @@ function removeOddsColumnAt(index1) { // index1 = 1-based
 	});
 }
 
+/**
+ * Ajoute une nouvelle ligne d'issue avec identifiant unique et cellules de cotes.
+ */
 function addIssue() {
 	const $grid = $("#surebet-grid");
 	const nOdds = Number($grid.attr("data-odds-cols"));
@@ -198,12 +257,12 @@ function addIssue() {
 	for (let i = 0; i < colIds.length; i++) {
 		const colId = colIds[i];
 		frag.append($(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}"></div>`)
-			.append(buildNumberField("0,00", i === 0 ? String(nextIndex)+",00" : "")));
+			.append(buildNumberField("0,00", i === 0 ? String(nextIndex)+",00" : "", 1.00)));
 	}
 	frag.append(`<div class="cell" data-odds-total>—</div>`);
-	frag.append($("<div class='cell' data-stake></div>").append(buildNumberField()));
-	frag.append(`<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue ${nextIndex}" checked></div>`);
+	frag.append($("<div class='cell' data-stake></div>").append(buildNumberField("0,00", "", 0.01)));
 	frag.append(`<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe issue ${nextIndex}"></div>`);
+	frag.append(`<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue ${nextIndex}" checked></div>`);
 	frag.append(`<div class="cell right" data-profit>—</div>`);
 	frag.append(`
 		<div class="cell right">
@@ -225,6 +284,9 @@ function addIssue() {
 	updateOddsTotalForIssue($rowLabel);
 }
 
+/**
+ * Supprime une ligne d'issue et ses cellules associées.
+ */
 function deleteIssue($issueLabelCell) { // anciennement deleteRow
 	const $grid = $("#surebet-grid");
 	const minIssues = 1;
@@ -247,8 +309,11 @@ function deleteIssue($issueLabelCell) { // anciennement deleteRow
 	nb_issues--;
 }
 
+/**
+ * Calcule et met à jour la cote totale pour une ligne d'issue.
+ * Déclenche aussi le recalcul du TRJ et du profit.
+ */
 function updateOddsTotalForIssue($rowLabel) {
-	// Utilise les IDs pour sélectionner les cellules de cote de la ligne
 	const issueId = $rowLabel.attr("data-issueid");
 	let odds = [], hasValue = false;
 	for (const colId of colIds) {
@@ -261,28 +326,103 @@ function updateOddsTotalForIssue($rowLabel) {
 		}
 	}
 	const $oddsTotal = $rowLabel.nextAll("[data-odds-total]").first();
+	let product = 1;
 	if ($oddsTotal.length) {
 		if (!hasValue) {
 			$oddsTotal.text("—");
 		} else {
-			const product = odds.reduce((acc, v) => acc * v, 1);
-			$oddsTotal.text(product.toFixed(DEC));
+			product = odds.reduce((acc, v) => acc * v, 1);
+			$oddsTotal.text(product.toFixed(DEC).replace(".", ",")); // Affichage français
+		}
+	}
+	updateTRJ();
+	updateProfitForIssue($rowLabel, product, hasValue);
+}
+
+/**
+ * Calcule et met à jour le profit pour une ligne d'issue.
+ * @param $rowLabel - le label de la ligne (issue)
+ * @param oddsTotal - la cote totale calculée pour la ligne
+ * @param hasValue - booléen indiquant si la ligne a au moins une cote renseignée
+ */
+function updateProfitForIssue($rowLabel, oddsTotal, hasValue) {
+	const $stakeCell = $rowLabel.nextAll("[data-stake]").first();
+	const $profitCell = $rowLabel.nextAll("[data-profit]").first();
+	let stake = 0;
+	if ($stakeCell.length) {
+		const val = $stakeCell.find("input").val();
+		stake = Number(String(val).replace(",", "."));
+	}
+	if ($profitCell.length) {
+		if (!hasValue || !stake) {
+			$profitCell.text("—");
+		} else {
+			const profit = oddsTotal * stake;
+			$profitCell.text(profit.toFixed(DEC).replace(".", ","));
 		}
 	}
 }
 
+/**
+ * Met à jour tous les profits de toutes les lignes d'issues.
+ */
+function updateAllProfits() {
+	const $grid = $("#surebet-grid");
+	$grid.find("[data-issuelabel]").each(function () {
+		updateOddsTotalForIssue($(this));
+	});
+}
+
+/**
+ * Calcule et met à jour le TRJ (Taux de Retour Joueur) sur la ligne totale.
+ */
+function updateTRJ() {
+	const $grid = $("#surebet-grid");
+	let sum = 0;
+	let count = 0;
+	$grid.find("[data-odds-total]").each(function () {
+		const txt = $(this).text().replace(",", ".");
+		const val = parseFloat(txt);
+		if (!isNaN(val) && val > 0) {
+			sum += 1 / val;
+			count++;
+		}
+	});
+	let trj = count > 0 ? (1 / sum) : 0;
+	const $trjCell = $grid.find("[data-last-odds-total]");
+	if ($trjCell.length) {
+		if (count === 0) {
+			$trjCell.text("TRJ : —");
+		} else {
+			$trjCell.text("TRJ : " + (trj * 100).toFixed(2).replace(".", ",") + " %");
+		}
+	}
+}
+
+/**
+ * Lie les événements de changement sur les champs de cotes et de mises pour recalculer automatiquement les cotes totales et profits.
+ */
 function bindOddsInputs() {
 	const $grid = $("#surebet-grid");
 	// Délégation sur tous les champs de cote
-	$grid.on("input", "[data-odds] input", function () {
+	$grid.on("input cote:changed", "[data-odds] input", function () {
 		const $cell = $(this).closest("[data-odds]");
 		const issueId = $cell.attr("data-issueid");
 		const $rowLabel = $grid.find(`[data-issuelabel][data-issueid='${issueId}']`);
 		updateOddsTotalForIssue($rowLabel);
 	});
+	// Délégation sur tous les champs de mise
+	$grid.on("input cote:changed", "[data-stake] input", function () {
+		const $cell = $(this).closest("[data-stake]");
+		const $rowLabel = $cell.prevAll("[data-issuelabel]").first();
+		// On recalcule le profit pour la ligne (la cote totale est déjà à jour)
+		updateOddsTotalForIssue($rowLabel);
+	});
 }
 
-/* ---- Init ---- */
+/**
+ * Initialisation du module surebet au chargement de la page.
+ */
 $(function () {
 	applyGridTemplate($("#surebet-grid"));
 	hydrate();

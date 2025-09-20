@@ -28,8 +28,8 @@
 				<!-- Pas de colonne de cote par défaut -->
 				<div class="cell head" data-oddstotalhead>Cote totale</div>
 				<div class="cell head" data-stakehead>Mises</div>
-				<div class="cell head" data-distributionhead>Distribution</div>
 				<div class="cell head" data-fixehead>Fixe</div>
+				<div class="cell head" data-distributionhead>Distribution</div>
 				<div class="cell head" data-profithead>Profits</div>
 				<div class="cell head right" data-actionshead>Actions</div>
 
@@ -45,10 +45,13 @@
 				<div class="cell" data-stake>
 					<!-- Mise à 10 par défaut, sera hydratée par JS aussi -->
 				</div>
-				<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution total" checked></div>
-				<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe total" checked>
+				<div class="cell">
+					<input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe total" checked>
 				</div>
-				<div class="cell right" data-profit>—</div>
+				<div class="cell">
+					<input type="checkbox" class="check dist" aria-label="Distribution total" checked>
+				</div>
+				<div class="cell right" data-profit></div>
 				<div class="cell right"></div> <!-- pas de suppression sur la ligne totale -->
 			</div>
 		</section>
