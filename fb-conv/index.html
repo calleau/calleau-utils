@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Freebet Optimizer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0a0f; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    input::placeholder { color: #475569; opacity: 1; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    const OUTCOME_LABELS = ["1", "N", "2"];
+    const OUTCOME_COLORS = ["#4ade80", "#facc15", "#60a5fa"];
+
+    const BOOKMAKER_DEFS = [
+      { id: 1, name: "PMU",     color: "#2ecc71" },
+      { id: 2, name: "Betclic", color: "#ff6b00" },
+      { id: 3, name: "Unibet",  color: "#00a651" },
+      { id: 4, name: "Winamax", color: "#e84040" },
+      { id: 5, name: "PSEL",    color: "#003f8a" },
+    ];
+
+    function makeDefaultBookmakers(numMatches) {
+      return BOOKMAKER_DEFS.map((def) => ({
+        ...def,
+        freebetAmount: "",
+        freebetActive: true,
+        matches: Array(numMatches).fill(null).map(() => ["", "", ""]),
+      }));
+    }
+
+    function subsets(n, k) {
+      const result = [];
+      function bt(start, current) {
+        if (current.length === k) { result.push([...current]); return; }
+        for (let i = start; i < n; i++) { current.push(i); bt(i + 1, current); current.pop(); }
+      }
+      bt(0, []);
+      return result;
+    }
+
+    function generateCombinations(k) {
+      const combos = [];
+      const total = Math.pow(3, k);
+      for (let i = 0; i < total; i++) {
+        const combo = [];
+        let n = i;
+        for (let m = 0; m < k; m++) { combo.push(n % 3); n = Math.floor(n / 3); }
+        combos.push(combo);
+      }
+      return combos;
+    }
+
+    function getBestOdds(activeBookmakers, matchIndices, combo) {
+      // activeBookmakers is already sorted by priority (index 0 = highest priority)
+      let best = 0, bestBk = null;
+      activeBookmakers.forEach((bk, priorityIdx) => {
+        const valid = combo.every((outcome, pos) => {
+          const val = bk.matches[matchIndices[pos]]?.[outcome];
+          return val !== "" && val !== null && !isNaN(parseFloat(val));
+        });
+        if (!valid) return;
+        const odds = combo.reduce((prod, outcome, pos) =>
+          prod * parseFloat(bk.matches[matchIndices[pos]][outcome]), 1);
+        // Strictly better odds, OR equal odds with higher priority (lower index)
+        if (odds > best + 0.0001) { best = odds; bestBk = bk; }
+        else if (Math.abs(odds - best) <= 0.0001 && bestBk === null) { best = odds; bestBk = bk; }
+        // Equal odds: first encountered = higher priority (array is sorted by priority)
+      });
+      if (!bestBk) return null;
+      return { odds: best, bk: bestBk };
+    }
+
+    function computeConversion(activeBookmakers, matchIndices, freebetType) {
+      const k = matchIndices.length;
+      const combos = generateCombinations(k);
+      let sumInv = 0, valid = true;
+      const details = combos.map((combo) => {
+        const result = getBestOdds(activeBookmakers, matchIndices, combo);
+        if (!result) { valid = false; return { combo, odds: null, bk: null, payout: null }; }
+        const { odds, bk } = result;
+        const payout = freebetType === "full" ? odds : odds - 1;
+        if (payout <= 0) valid = false;
+        else sumInv += 1 / payout;
+        return { combo, odds, bk, payout };
+      });
+      if (!valid || sumInv === 0) return { rate: null, details };
+      return { rate: 1 / sumInv, details };
+    }
+
+    function FreebetOptimizer() {
+      const [totalMatches, setTotalMatches] = useState(3);
+      const [comboSize, setComboSize]       = useState(3);
+      const [bookmakers, setBookmakers]     = useState(() => makeDefaultBookmakers(3));
+      const [freebetType, setFreebetType]   = useState("profit");
+      const [matchNames, setMatchNames]     = useState(["Match 1", "Match 2", "Match 3"]);
+      const [selectedTab, setSelectedTab]   = useState("plan");
+      const [stakeMode, setStakeMode]       = useState("standard");
+      const [standardStake, setStandardStake] = useState(100);
+      const [maxStake, setMaxStake]           = useState("");  // "" = no cap
+
+      const effectiveComboSize = Math.min(comboSize, totalMatches);
+      const activeBookmakers = useMemo(() => bookmakers.filter((bk) => bk.freebetActive), [bookmakers]);
+
+      const totalStakeAmount = useMemo(() => {
+        if (stakeMode === "standard") return standardStake;
+        const raw = bookmakers.reduce((sum, bk) => {
+          if (!bk.freebetActive) return sum;
+          const v = parseFloat(bk.freebetAmount);
+          return sum + (isNaN(v) ? 0 : v);
+        }, 0);
+        const cap = parseFloat(maxStake);
+        return (!isNaN(cap) && cap > 0 && cap < raw) ? cap : raw;
+      }, [stakeMode, standardStake, maxStake, bookmakers]);
+
+      // Raw total before cap (for display)
+      const rawPersiteTotal = useMemo(() => {
+        if (stakeMode !== "persite") return 0;
+        return bookmakers.reduce((sum, bk) => {
+          if (!bk.freebetActive) return sum;
+          const v = parseFloat(bk.freebetAmount);
+          return sum + (isNaN(v) ? 0 : v);
+        }, 0);
+      }, [stakeMode, bookmakers]);
+
+      const isCapped = useMemo(() => {
+        if (stakeMode !== "persite") return false;
+        const cap = parseFloat(maxStake);
+        return !isNaN(cap) && cap > 0 && cap < rawPersiteTotal;
+      }, [stakeMode, maxStake, rawPersiteTotal]);
+
+      const allSubsets = useMemo(() => subsets(totalMatches, effectiveComboSize), [totalMatches, effectiveComboSize]);
+
+      const optimization = useMemo(() => {
+        if (activeBookmakers.length === 0) return { best: null, ranking: [] };
+        let best = null;
+        const ranking = [];
+        allSubsets.forEach((matchIndices) => {
+          const { rate, details } = computeConversion(activeBookmakers, matchIndices, freebetType);
+          if (rate === null) return;
+          const result = { matchIndices, rate, details };
+          if (!best || rate > best.rate) best = result;
+          ranking.push(result);
+        });
+        ranking.sort((a, b) => b.rate - a.rate);
+        return { best, ranking };
+      }, [allSubsets, activeBookmakers, freebetType]);
+
+      const bestPlan = optimization.best;
+
+      const stakes = useMemo(() => {
+        if (!bestPlan || totalStakeAmount === 0) return [];
+        const gain = totalStakeAmount * bestPlan.rate;
+        return bestPlan.details.map(({ payout }) => (payout > 0 ? gain / payout : 0));
+      }, [bestPlan, totalStakeAmount]);
+
+      const bySite = useMemo(() => {
+        if (!bestPlan) return [];
+        const map = {};
+        bestPlan.details.forEach(({ combo, odds, bk }, i) => {
+          if (!bk) return;
+          if (!map[bk.id]) map[bk.id] = { bk, combos: [], totalStake: 0 };
+          map[bk.id].combos.push({ combo, odds, stake: stakes[i], idx: i });
+          map[bk.id].totalStake += stakes[i] || 0;
+        });
+        return Object.values(map).sort((a, b) => b.combos.length - a.combos.length);
+      }, [bestPlan, stakes]);
+
+      const updateOdds = (bkId, matchIdx, outcomeIdx, value) =>
+        setBookmakers((prev) => prev.map((bk) => {
+          if (bk.id !== bkId) return bk;
+          const matches = bk.matches.map((m, mi) =>
+            mi === matchIdx ? m.map((o, oi) => (oi === outcomeIdx ? value : o)) : m);
+          return { ...bk, matches };
+        }));
+
+      const updateBkField = (bkId, field, value) =>
+        setBookmakers((prev) => prev.map((bk) => bk.id === bkId ? { ...bk, [field]: value } : bk));
+
+      const toggleActive = (bkId) =>
+        setBookmakers((prev) => prev.map((bk) => bk.id === bkId ? { ...bk, freebetActive: !bk.freebetActive } : bk));
+
+      const movePriority = (bkId, dir) => {
+        setBookmakers((prev) => {
+          const idx = prev.findIndex(b => b.id === bkId);
+          const newIdx = idx + dir;
+          if (newIdx < 0 || newIdx >= prev.length) return prev;
+          const next = [...prev];
+          [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+          return next;
+        });
+      };
+
+      const updateTotalMatches = (n) => {
+        setTotalMatches(n);
+        setBookmakers((prev) => prev.map((bk) => {
+          const matches = [...bk.matches];
+          while (matches.length < n) matches.push(["", "", ""]);
+          return { ...bk, matches: matches.slice(0, n) };
+        }));
+        setMatchNames((prev) => {
+          const names = [...prev];
+          while (names.length < n) names.push(`Match ${names.length + 1}`);
+          return names.slice(0, n);
+        });
+        if (comboSize > n) setComboSize(n);
+      };
+
+      const pct = (r) => `${(r * 100).toFixed(1)}%`;
+      const numSubsets = allSubsets.length;
+      const numCombosPerSubset = Math.pow(3, effectiveComboSize);
+      const validSubsets = optimization.ranking.length;
+      const isMatchFilled = (bk, mi) => bk.matches[mi]?.every((v) => v !== "" && !isNaN(parseFloat(v)));
+      const matchHasAnyData = (mi) => bookmakers.some((bk) => bk.freebetActive && isMatchFilled(bk, mi));
+      const hasResult = bestPlan && totalStakeAmount > 0;
+
+      const btnStyle = (active, ac) => ({
+        padding: "6px 13px", borderRadius: 6, border: "1px solid",
+        borderColor: active ? ac[0] : "#1e293b",
+        background: active ? ac[1] : "transparent",
+        color: active ? ac[0] : "#64748b",
+        cursor: "pointer", fontSize: 14, fontFamily: "inherit", fontWeight: 600,
+      });
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#0a0a0f", color: "#e2e8f0", fontFamily: "'DM Mono','Fira Code',monospace" }}>
+
+          {/* Header */}
+          <div style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)", borderBottom: "1px solid #1e293b", padding: "28px 40px 22px" }}>
+            <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+              <div style={{ fontSize: 10, letterSpacing: 4, color: "#6366f1", textTransform: "uppercase", marginBottom: 4 }}>Freebet Optimizer</div>
+              <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, letterSpacing: -1, color: "#f1f5f9" }}>
+                Conversion <span style={{ color: "#818cf8" }}>Multi-Sites</span>
+              </h1>
+              <p style={{ color: "#64748b", fontSize: 12, margin: "6px 0 0" }}>
+                Renseigne tes freebets par site · Active / désactive chaque site · Le calculateur optimise la répartition
+              </p>
+            </div>
+          </div>
+
+          <div style={{ maxWidth: 1300, margin: "0 auto", padding: "28px 40px" }}>
+
+            {/* Config bar */}
+            <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 28, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 12, overflow: "hidden", alignItems: "stretch" }}>
+              <div style={{ padding: "16px 24px", borderRight: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ fontSize: 10, color: "#6366f1", letterSpacing: 2, textTransform: "uppercase" }}>① Matchs configurés</label>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[2,3,4,5,6,7].map((n) => (
+                    <button key={n} onClick={() => updateTotalMatches(n)} style={btnStyle(totalMatches===n, ["#818cf8","#1e1b4b"])}>{n}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", padding:"0 16px", color:"#334155", fontSize:20 }}>→</div>
+              <div style={{ padding: "16px 24px", borderRight: "1px solid #1e293b", display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ fontSize: 10, color: "#4ade80", letterSpacing: 2, textTransform: "uppercase" }}>② Matchs en combiné</label>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[2,3,4,5].filter((n) => n <= totalMatches).map((n) => (
+                    <button key={n} onClick={() => setComboSize(n)} style={btnStyle(effectiveComboSize===n, ["#4ade80","#052e16"])}>{n}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", padding:"0 16px", color:"#334155", fontSize:20 }}>→</div>
+              <div style={{ padding: "16px 20px", borderRight: "1px solid #1e293b", display:"flex", flexDirection:"column", gap:4, justifyContent:"center" }}>
+                <div style={{ fontSize:11, color:"#475569" }}><span style={{ color:"#818cf8", fontWeight:700 }}>{numSubsets}</span> sélections possibles</div>
+                <div style={{ fontSize:11, color:"#475569" }}><span style={{ color: validSubsets>0?"#4ade80":"#ef4444", fontWeight:700 }}>{validSubsets}</span> exploitables</div>
+                <div style={{ fontSize:11, color:"#475569" }}><span style={{ color:"#facc15", fontWeight:700 }}>{numCombosPerSubset}</span> paris / sélection</div>
+              </div>
+              <div style={{ padding:"16px 24px", display:"flex", gap:16, alignItems:"flex-end" }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  <label style={{ fontSize:10, color:"#64748b", letterSpacing:2, textTransform:"uppercase" }}>Type freebet</label>
+                  <div style={{ display:"flex", gap:4 }}>
+                    {[["profit","Profit seul"],["full","Mise incluse"]].map(([v,l]) => (
+                      <button key={v} onClick={() => setFreebetType(v)} style={{ padding:"6px 10px", borderRadius:6, border:"1px solid", borderColor: freebetType===v?"#6366f1":"#1e293b", background: freebetType===v?"#1e1b4b":"transparent", color: freebetType===v?"#818cf8":"#64748b", cursor:"pointer", fontSize:11, fontFamily:"inherit" }}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Freebets per site + stake mode */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+                <div style={{ fontSize:10, letterSpacing:3, color:"#475569", textTransform:"uppercase" }}>Freebets disponibles par site</div>
+
+                {/* Stake mode toggle */}
+                <div style={{ display: "flex", background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, overflow: "hidden", alignItems: "stretch" }}>
+                  <button onClick={() => setStakeMode("standard")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 18px", border: "none", cursor: "pointer", background: stakeMode === "standard" ? "#1e1b4b" : "transparent", borderRight: "1px solid #1e293b" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: "2px solid", borderColor: stakeMode === "standard" ? "#818cf8" : "#475569", background: stakeMode === "standard" ? "#818cf8" : "transparent", flexShrink: 0 }}/>
+                        <span style={{ fontSize: 12, fontFamily: "inherit", fontWeight: 700, color: stakeMode === "standard" ? "#818cf8" : "#475569" }}>Mise standard</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: stakeMode === "standard" ? "#6366f1" : "#334155", paddingLeft: 18 }}>Montant total fixe réparti</span>
+                    </div>
+                    {stakeMode === "standard" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 6 }}>
+                        <input type="number" min="1" step="1" value={standardStake} onClick={(e) => e.stopPropagation()} onChange={(e) => setStandardStake(parseFloat(e.target.value) || 0)}
+                          style={{ background: "#0f172a", border: "1px solid #6366f1", borderRadius: 6, color: "#818cf8", padding: "4px 8px", fontSize: 15, fontFamily: "inherit", width: 72, outline: "none", textAlign: "right", fontWeight: 700 }} />
+                        <span style={{ color: "#6366f1", fontSize: 13, fontWeight: 700 }}>€</span>
+                      </div>
+                    )}
+                  </button>
+                  <button onClick={() => setStakeMode("persite")} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", border: "none", cursor: "pointer", background: stakeMode === "persite" ? "#052e16" : "transparent" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: "2px solid", borderColor: stakeMode === "persite" ? "#4ade80" : "#475569", background: stakeMode === "persite" ? "#4ade80" : "transparent", flexShrink: 0 }}/>
+                        <span style={{ fontSize: 12, fontFamily: "inherit", fontWeight: 700, color: stakeMode === "persite" ? "#4ade80" : "#475569" }}>Freebets réels</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: stakeMode === "persite" ? "#16a34a" : "#334155", paddingLeft: 18 }}>Montants saisis par site</span>
+                    </div>
+                    {stakeMode === "persite" && totalStakeAmount > 0 && (
+                      <div style={{ marginLeft: 6, padding: "4px 10px", background: isCapped ? "#1c1917" : "#166534", border: `1px solid ${isCapped ? "#facc15" : "#4ade80"}`, borderRadius: 6, color: isCapped ? "#facc15" : "#4ade80", fontSize: 14, fontWeight: 700 }}>
+                        {totalStakeAmount.toFixed(0)}€{isCapped && <span style={{ fontSize: 10, fontWeight: 400 }}> / {rawPersiteTotal.toFixed(0)}€</span>}
+                      </div>
+                    )}
+                    {stakeMode === "persite" && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, marginLeft: 8, borderLeft: "1px solid #1e293b", paddingLeft: 14 }} onClick={e => e.stopPropagation()}>
+                        <span style={{ fontSize: 9, color: "#64748b", textTransform: "uppercase", letterSpacing: 1 }}>Plafond max</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <input
+                            type="number" min="1" step="1"
+                            value={maxStake}
+                            placeholder="illimité"
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setMaxStake(e.target.value)}
+                            style={{ background: "#0f172a", border: `1px solid ${isCapped ? "#facc15" : "#334155"}`, borderRadius: 6, color: isCapped ? "#facc15" : "#94a3b8", padding: "4px 8px", fontSize: 13, fontFamily: "inherit", width: 80, outline: "none", textAlign: "right", fontWeight: isCapped ? 700 : 400 }}
+                          />
+                          <span style={{ color: isCapped ? "#facc15" : "#475569", fontSize: 12 }}>€</span>
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Priority order */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize:9, letterSpacing:2, color:"#334155", textTransform:"uppercase", marginBottom:8 }}>
+                  Ordre de priorité en cas d'égalité de cote
+                </div>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+                  {bookmakers.map((bk, idx) => (
+                    <div key={bk.id} style={{ display:"flex", alignItems:"center", gap:4, background:"#0f172a", border:`1px solid ${bk.freebetActive ? bk.color+"44" : "#1e293b"}`, borderRadius:8, padding:"5px 8px 5px 10px", opacity: bk.freebetActive ? 1 : 0.4 }}>
+                      <span style={{ fontSize:10, color:"#334155", fontWeight:700, marginRight:2, minWidth:14 }}>#{idx+1}</span>
+                      <span style={{ fontSize:12, fontWeight:700, color: bk.freebetActive ? bk.color : "#475569" }}>{bk.name}</span>
+                      <div style={{ display:"flex", flexDirection:"column", marginLeft:4, gap:1 }}>
+                        <button onClick={() => movePriority(bk.id, -1)} disabled={idx===0} style={{ background:"transparent", border:"none", color: idx===0 ? "#1e293b" : "#475569", cursor: idx===0 ? "default" : "pointer", fontSize:10, padding:"0 2px", lineHeight:1, fontFamily:"inherit" }}>▲</button>
+                        <button onClick={() => movePriority(bk.id, +1)} disabled={idx===bookmakers.length-1} style={{ background:"transparent", border:"none", color: idx===bookmakers.length-1 ? "#1e293b" : "#475569", cursor: idx===bookmakers.length-1 ? "default" : "pointer", fontSize:10, padding:"0 2px", lineHeight:1, fontFamily:"inherit" }}>▼</button>
+                      </div>
+                    </div>
+                  ))}
+                  <span style={{ fontSize:10, color:"#334155", marginLeft:4 }}>← priorité haute · basse →</span>
+                </div>
+              </div>
+
+              {/* Site cards */}
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {bookmakers.map((bk) => {
+                  const active = bk.freebetActive;
+                  const amount = parseFloat(bk.freebetAmount);
+                  const hasAmount = !isNaN(amount) && amount > 0;
+                  const siteData = bySite.find(s => s.bk.id === bk.id);
+                  const requiredStake = siteData ? siteData.totalStake : 0;
+                  const showCompare = stakeMode === "persite" && hasAmount && requiredStake > 0 && active;
+                  const diff = showCompare ? requiredStake - amount : null;
+                  const compareColor = diff === null ? "#64748b" : Math.abs(diff) < 0.01 ? "#4ade80" : diff > 0 ? "#ef4444" : "#facc15";
+                  return (
+                    <div key={bk.id} style={{ background: active ? "#0f172a" : "#080810", border: `1px solid ${active ? bk.color + "44" : "#1a1a2e"}`, borderRadius: 12, padding: "14px 18px", minWidth: 160, position: "relative", overflow: "hidden", opacity: active ? 1 : 0.5 }}>
+                      <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background: active ? bk.color : "#1e293b" }} />
+                      <div style={{ color: active ? bk.color : "#475569", fontWeight:700, fontSize:14, marginBottom:10 }}>{bk.name}</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, opacity: stakeMode === "standard" ? 0.4 : 1 }}>
+                        <input type="number" min="0" step="1" value={bk.freebetAmount} placeholder="0" disabled={stakeMode === "standard"} onChange={(e) => updateBkField(bk.id, "freebetAmount", e.target.value)}
+                          style={{ background: "#1e293b", border: `1px solid ${active && hasAmount && stakeMode === "persite" ? bk.color+"55" : "#334155"}`, borderRadius: 6, color: active && hasAmount ? "#f1f5f9" : "#64748b", padding: "6px 10px", fontSize: 15, fontFamily: "inherit", width: 90, outline: "none", textAlign: "right", fontWeight: 700 }} />
+                        <span style={{ color:"#475569", fontSize:13 }}>€</span>
+                      </div>
+                      {showCompare && (
+                        <div style={{ fontSize: 10, color: compareColor, marginBottom: 8, padding: "3px 8px", background: compareColor + "15", borderRadius: 4, border: `1px solid ${compareColor}33` }}>
+                          {Math.abs(diff) < 0.01 ? "✓ Montant exact" : diff > 0 ? `⚠ +${diff.toFixed(2)}€ manquant` : `ℹ ${Math.abs(diff).toFixed(2)}€ non utilisé`}
+                        </div>
+                      )}
+                      <button onClick={() => toggleActive(bk.id)} style={{ width: "100%", padding: "6px 0", borderRadius: 6, border: "1px solid", borderColor: active ? bk.color : "#334155", background: active ? bk.color+"22" : "transparent", color: active ? bk.color : "#475569", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+                        {active ? "✓ Inclus" : "✗ Exclu"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Summary bar */}
+              <div style={{ marginTop: 14, padding: "12px 18px", background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize:11, color:"#475569" }}>Sites actifs :</span>
+                  {bookmakers.filter(b=>b.freebetActive).map((bk,i,arr) => (
+                    <span key={bk.id}>
+                      <span style={{ color:bk.color, fontWeight:700, fontSize:11 }}>{bk.name}</span>
+                      {i<arr.length-1 && <span style={{ color:"#334155" }}> · </span>}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ marginLeft:"auto", display:"flex", gap:20, alignItems:"center" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                    <span style={{ fontSize:10, color:"#64748b", textTransform: "uppercase", letterSpacing: 1 }}>{stakeMode === "standard" ? "Mise standard" : isCapped ? "Mis plafonné" : "Freebet total actif"}</span>
+                    <span style={{ fontSize:16, fontWeight:700, color: totalStakeAmount>0? (isCapped ? "#facc15" : "#f1f5f9") :"#334155" }}>
+                      {totalStakeAmount > 0 ? `${totalStakeAmount.toFixed(2)}€` : "—"}
+                      {isCapped && <span style={{ fontSize:11, color:"#64748b", fontWeight:400 }}> / {rawPersiteTotal.toFixed(2)}€</span>}
+                    </span>
+                  </div>
+                  {hasResult && <>
+                    <div style={{ color:"#334155", fontSize:20 }}>→</div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                      <span style={{ fontSize:10, color:"#4ade80", textTransform: "uppercase", letterSpacing: 1 }}>Cash garanti</span>
+                      <span style={{ fontSize:16, fontWeight:700, color:"#4ade80" }}>{(totalStakeAmount * bestPlan.rate).toFixed(2)}€</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                      <span style={{ fontSize:10, color:"#64748b", textTransform: "uppercase", letterSpacing: 1 }}>Taux</span>
+                      <span style={{ fontSize:16, fontWeight:700, color:"#4ade80" }}>{pct(bestPlan.rate)}</span>
+                    </div>
+                  </>}
+                </div>
+              </div>
+            </div>
+
+            {/* Best result banner */}
+            {hasResult ? (
+              <div style={{ background:"linear-gradient(135deg,#052e16,#0a1f0a)", border:"1px solid #166534", borderRadius:12, padding:"18px 28px", marginBottom:28, display:"flex", alignItems:"center", gap:32, flexWrap:"wrap" }}>
+                <div>
+                  <div style={{ fontSize:10, letterSpacing:3, color:"#4ade80", textTransform:"uppercase", marginBottom:8 }}>★ Sélection optimale</div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                    {bestPlan.matchIndices.map((mi) => (
+                      <div key={mi} style={{ background:"#166534", border:"1px solid #4ade80", color:"#4ade80", borderRadius:8, padding:"5px 14px", fontSize:13, fontWeight:700 }}>{matchNames[mi]||`Match ${mi+1}`}</div>
+                    ))}
+                    {Array.from({length:totalMatches},(_,i)=>i).filter((i)=>!bestPlan.matchIndices.includes(i)).map((mi)=>(
+                      <div key={mi} style={{ border:"1px solid #1e293b", color:"#334155", borderRadius:8, padding:"5px 14px", fontSize:13, textDecoration:"line-through" }}>{matchNames[mi]||`Match ${mi+1}`}</div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:32, marginLeft:"auto" }}>
+                  <div>
+                    <div style={{ fontSize:10, color:"#4ade80", letterSpacing:2, textTransform:"uppercase" }}>Taux conversion</div>
+                    <div style={{ fontSize:34, fontWeight:700, color:"#4ade80", letterSpacing:-1 }}>{pct(bestPlan.rate)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:"#64748b", letterSpacing:2, textTransform:"uppercase" }}>Cash garanti</div>
+                    <div style={{ fontSize:34, fontWeight:700, color:"#f1f5f9", letterSpacing:-1 }}>{(totalStakeAmount * bestPlan.rate).toFixed(2)}€</div>
+                  </div>
+                  {optimization.ranking.length > 1 && (
+                    <div>
+                      <div style={{ fontSize:10, color:"#64748b", letterSpacing:2, textTransform:"uppercase" }}>Gain vs pire</div>
+                      <div style={{ fontSize:34, fontWeight:700, color:"#818cf8", letterSpacing:-1 }}>+{(totalStakeAmount*(optimization.ranking[0].rate-optimization.ranking[optimization.ranking.length-1].rate)).toFixed(2)}€</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ background:"#0f172a", border:"1px dashed #334155", borderRadius:12, padding:"28px", marginBottom:28, textAlign:"center" }}>
+                <div style={{ fontSize:24, marginBottom:8 }}>📋</div>
+                <div style={{ color:"#475569", fontSize:13 }}>
+                  {activeBookmakers.length===0 ? "Active au moins un site pour calculer le plan."
+                    : stakeMode==="persite" && totalStakeAmount===0 ? "Renseigne le montant de freebet d'au moins un site actif."
+                    : "Saisis les cotes pour obtenir le plan de paris optimal."}
+                </div>
+              </div>
+            )}
+
+            {/* Odds grid */}
+            <div style={{ marginBottom:28 }}>
+              <div style={{ fontSize:10, letterSpacing:3, color:"#475569", textTransform:"uppercase", marginBottom:14 }}>Cotes par site et par match</div>
+
+              {/* Match name editors */}
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+                {Array(totalMatches).fill(0).map((_,mi)=>{
+                  const isSelected = bestPlan?.matchIndices.includes(mi);
+                  const hasSomeData = matchHasAnyData(mi);
+                  return (
+                    <div key={mi} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                      <span style={{ fontSize:10, color: isSelected?"#4ade80": hasSomeData?"#94a3b8":"#334155" }}>M{mi+1}</span>
+                      <input value={matchNames[mi]||`Match ${mi+1}`} onChange={(e)=>{ const n=[...matchNames]; n[mi]=e.target.value; setMatchNames(n); }}
+                        style={{ background: isSelected?"#0d1f0d":"#0f172a", border:`1px solid ${isSelected?"#166534": hasSomeData?"#334155":"#1a1a2e"}`, borderRadius:6, color: isSelected?"#4ade80": hasSomeData?"#94a3b8":"#475569", padding:"4px 10px", fontSize:11, fontFamily:"inherit", width:120, outline:"none", fontWeight: isSelected?700:400 }} />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Column headers */}
+              <div style={{ display:"grid", gridTemplateColumns:`140px repeat(${totalMatches},1fr)`, marginBottom:6, paddingLeft:18 }}>
+                <div/>
+                {Array(totalMatches).fill(0).map((_,mi)=>{
+                  const isSelected = bestPlan?.matchIndices.includes(mi);
+                  const hasSomeData = matchHasAnyData(mi);
+                  return (
+                    <div key={mi} style={{ textAlign:"center", fontSize:10, color: isSelected?"#4ade80": hasSomeData?"#64748b":"#2d3748", letterSpacing:1, textTransform:"uppercase", fontWeight: isSelected?700:400 }}>
+                      {(matchNames[mi]||`Match ${mi+1}`).slice(0,10)}{isSelected && <span style={{ marginLeft:4, fontSize:9 }}>✓</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Bookmaker rows */}
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {bookmakers.map((bk)=>{
+                  const active = bk.freebetActive;
+                  return (
+                    <div key={bk.id} style={{ background: active?"#0f172a":"#080810", border:`1px solid ${active?"#1e293b":"#111"}`, borderRadius:10, padding:"12px 16px", position:"relative", overflow:"hidden", display:"grid", gridTemplateColumns:`140px repeat(${totalMatches},1fr)`, alignItems:"center", gap:4, opacity: active?1:0.4 }}>
+                      <div style={{ position:"absolute", top:0, left:0, bottom:0, width:3, background: active?bk.color:"#1e293b" }} />
+                      <div style={{ paddingLeft:8, display:"flex", flexDirection:"column", gap:2 }}>
+                        <div style={{ color: active?bk.color:"#475569", fontWeight:700, fontSize:13 }}>{bk.name}</div>
+                        {(()=>{
+                          const siteData = bySite.find(s=>s.bk.id===bk.id);
+                          const req = siteData ? siteData.totalStake : 0;
+                          if (!active) return <div style={{ fontSize:10, color:"#334155" }}>exclu</div>;
+                          if (req === 0) return null;
+                          if (stakeMode === "persite") {
+                            const amt = parseFloat(bk.freebetAmount);
+                            const hasAmt = !isNaN(amt) && amt > 0;
+                            const diff = hasAmt ? req - amt : null;
+                            const c = diff===null?"#64748b": Math.abs(diff)<0.01?"#4ade80": diff>0?"#ef4444":"#facc15";
+                            return <div style={{ fontSize:10, color:c }}>{`misé ${req.toFixed(0)}€${hasAmt?" / "+amt.toFixed(0)+"€ dispo":""}`}{diff!==null&&diff>0&&" ⚠"}</div>;
+                          }
+                          return <div style={{ fontSize:10, color:"#64748b" }}>misé {req.toFixed(2)}€</div>;
+                        })()}
+                      </div>
+                      {Array(totalMatches).fill(0).map((_,mi)=>{
+                        const isSelected = bestPlan?.matchIndices.includes(mi);
+                        const filled = isMatchFilled(bk,mi);
+                        return (
+                          <div key={mi} style={{ display:"flex", gap:4, justifyContent:"center", background: active&&isSelected&&filled?"#0d1f0d":"transparent", border:`1px solid ${active&&isSelected&&filled?"#166534":"transparent"}`, borderRadius:6, padding:"4px 4px" }}>
+                            {[0,1,2].map((oi)=>{
+                              const val = bk.matches[mi]?.[oi]??"";
+                              const isEmpty = val==="";
+                              return (
+                                <div key={oi} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+                                  <span style={{ fontSize:9, color:!active?"#334155": OUTCOME_COLORS[oi], letterSpacing:1, opacity: !active ? 0.4 : 1 }}>{OUTCOME_LABELS[oi]}</span>
+                                  <input type="number" step="0.01" min="1" value={val} placeholder="—" disabled={!active}
+                                    onChange={(e)=>updateOdds(bk.id,mi,oi,e.target.value)}
+                                    onBlur={(e)=>{ const v=parseFloat(e.target.value); if(e.target.value!==""&&(isNaN(v)||v<1)) updateOdds(bk.id,mi,oi,""); }}
+                                    style={{ background: !active?"#0a0a0f": isEmpty?"#1a2332":"#1e293b", border:`1px solid ${!active?"#1e293b": isEmpty?OUTCOME_COLORS[oi]+"55": isSelected?OUTCOME_COLORS[oi]+"cc":OUTCOME_COLORS[oi]+"88"}`, borderRadius:5, color:!active?"#334155": isEmpty?"#64748b":"#f1f5f9", padding:"3px 2px", fontSize:12, fontFamily:"inherit", width:50, outline:"none", textAlign:"center" }} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop:8, fontSize:10, color:"#334155", display:"flex", gap:16, flexWrap:"wrap" }}>
+                <span>— = cote non renseignée (ignorée)</span>
+                <span style={{ color:"#4ade80" }}>✓ = match retenu dans la sélection optimale</span>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display:"flex", gap:0, marginBottom:20, borderBottom:"1px solid #1e293b" }}>
+              {[["plan","Plan de paris optimal"],["ranking",`Classement (${validSubsets} sélections valides)`],["all","Tableau complet"]].map(([tab,label])=>(
+                <button key={tab} onClick={()=>setSelectedTab(tab)} style={{ padding:"10px 22px", background:"transparent", border:"none", borderBottom: selectedTab===tab?"2px solid #6366f1":"2px solid transparent", color: selectedTab===tab?"#818cf8":"#475569", cursor:"pointer", fontSize:12, fontFamily:"inherit", fontWeight: selectedTab===tab?700:400, marginBottom:-1 }}>{label}</button>
+              ))}
+            </div>
+
+            {/* Tab: Plan */}
+            {selectedTab==="plan" && (
+              hasResult ? (
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
+                  {bySite.map(({ bk, combos, totalStake: siteStake })=>{
+                    const available = stakeMode==="persite" ? parseFloat(bk.freebetAmount) : null;
+                    const hasAvail = available!==null && !isNaN(available) && available>0;
+                    const diff = hasAvail ? siteStake-available : null;
+                    const statusColor = diff===null?"#64748b": Math.abs(diff)<0.01?"#4ade80": diff>0?"#ef4444":"#facc15";
+                    return (
+                      <div key={bk.id} style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:12, overflow:"hidden" }}>
+                        <div style={{ background:`${bk.color}18`, borderBottom:"1px solid #1e293b", padding:"11px 16px" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                            <div style={{ color:bk.color, fontWeight:700, fontSize:14 }}>{bk.name}</div>
+                            <div style={{ fontSize:11, color:"#64748b" }}>{combos.length} paris</div>
+                          </div>
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            {hasAvail && (
+                              <div style={{ flex:1, background:"#1e293b", borderRadius:4, height:5, overflow:"hidden" }}>
+                                <div style={{ width:`${Math.min((siteStake/available)*100,100)}%`, height:"100%", background:statusColor, borderRadius:4 }}/>
+                              </div>
+                            )}
+                            <div style={{ fontSize:12, color:statusColor, fontWeight:700, whiteSpace:"nowrap", marginLeft:"auto" }}>
+                              {siteStake.toFixed(2)}€{hasAvail && <span style={{ color:"#475569", fontWeight:400 }}> / {available.toFixed(2)}€</span>}
+                            </div>
+                          </div>
+                          {diff!==null && Math.abs(diff)>0.01 && (
+                            <div style={{ fontSize:10, color:diff>0?"#ef4444":"#facc15", marginTop:4 }}>
+                              {diff>0 ? `⚠ ${diff.toFixed(2)}€ manquant` : `ℹ ${Math.abs(diff).toFixed(2)}€ non utilisé`}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ padding:"10px 14px", display:"flex", flexDirection:"column", gap:5, maxHeight:380, overflowY:"auto" }}>
+                          {combos.map(({combo,odds,stake,idx})=>(
+                            <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 10px", background:"#1e293b", borderRadius:8, fontSize:12 }}>
+                              <div style={{ display:"flex", gap:4 }}>
+                                {combo.map((o,i)=>(
+                                  <span key={i} style={{ background:`${OUTCOME_COLORS[o]}22`, color:OUTCOME_COLORS[o], padding:"2px 7px", borderRadius:4, fontWeight:600, letterSpacing:1, fontSize:11 }}>{OUTCOME_LABELS[o]}</span>
+                                ))}
+                              </div>
+                              <div style={{ display:"flex", gap:10 }}>
+                                <span style={{ color:"#334155" }}>×{odds.toFixed(2)}</span>
+                                <span style={{ color:"#f1f5f9", fontWeight:600 }}>{stake.toFixed(2)}€</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ color:"#334155", fontSize:13, padding:"20px 0" }}>
+                  {activeBookmakers.length===0?"Active au moins un site.": stakeMode==="persite"&&totalStakeAmount===0?"Renseigne le montant de freebet d'au moins un site actif.":"Saisis les cotes pour calculer le plan."}
+                </div>
+              )
+            )}
+
+            {/* Tab: Ranking */}
+            {selectedTab==="ranking" && (
+              validSubsets>0 ? (
+                <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:12, overflow:"hidden" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"44px 1fr 110px 120px 110px", padding:"10px 20px", borderBottom:"1px solid #1e293b", fontSize:10, color:"#475569", letterSpacing:2, textTransform:"uppercase" }}>
+                    <div>#</div><div>Matchs sélectionnés</div><div>Taux conv.</div><div>Cash garanti</div><div>Δ vs optimal</div>
+                  </div>
+                  {optimization.ranking.map(({matchIndices,rate},i)=>{
+                    const gain = totalStakeAmount*rate;
+                    const delta = totalStakeAmount*(rate-optimization.ranking[0].rate);
+                    const isFirst = i===0;
+                    return (
+                      <div key={i} style={{ display:"grid", gridTemplateColumns:"44px 1fr 110px 120px 110px", padding:"9px 20px", borderBottom: i<optimization.ranking.length-1?"1px solid #0a0a0f":"none", background: isFirst?"#0d1f0d": i%2===0?"transparent":"#080810", fontSize:12, alignItems:"center" }}>
+                        <div style={{ color:isFirst?"#4ade80":"#334155", fontWeight:isFirst?700:400 }}>{isFirst?"★":i+1}</div>
+                        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                          {matchIndices.map((mi)=>(
+                            <span key={mi} style={{ background:isFirst?"#166534":"#1e293b", color:isFirst?"#4ade80":"#94a3b8", padding:"2px 9px", borderRadius:6, fontSize:11, fontWeight:isFirst?700:400 }}>{matchNames[mi]||`M${mi+1}`}</span>
+                          ))}
+                        </div>
+                        <div style={{ color:isFirst?"#4ade80":"#94a3b8", fontWeight:isFirst?700:400 }}>{pct(rate)}</div>
+                        <div style={{ color:isFirst?"#4ade80":"#f1f5f9", fontWeight:isFirst?700:400 }}>{totalStakeAmount>0?`${gain.toFixed(2)}€`:pct(rate)}</div>
+                        <div style={{ color:i===0?"#334155":"#ef4444", fontSize:11 }}>{i===0?"—":totalStakeAmount>0?`−${Math.abs(delta).toFixed(2)}€`:""}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ color:"#334155", fontSize:13, padding:"20px 0" }}>Aucune sélection valide pour l'instant.</div>
+              )
+            )}
+
+            {/* Tab: Full table */}
+            {selectedTab==="all" && bestPlan && totalStakeAmount>0 && (
+              <div>
+                <div style={{ marginBottom:10, fontSize:12, color:"#64748b" }}>
+                  {bestPlan.details.length} paris · {bestPlan.matchIndices.map((mi)=>matchNames[mi]||`M${mi+1}`).join(" · ")}
+                </div>
+                <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:12, overflow:"hidden" }}>
+                  <div style={{ display:"grid", gridTemplateColumns:`44px repeat(${effectiveComboSize},56px) 1fr 90px 90px 90px`, padding:"10px 16px", borderBottom:"1px solid #1e293b", fontSize:10, color:"#475569", letterSpacing:2, textTransform:"uppercase" }}>
+                    <div>#</div>
+                    {bestPlan.matchIndices.map((mi)=><div key={mi}>{(matchNames[mi]||`M${mi+1}`).slice(0,7)}</div>)}
+                    <div>Site</div><div>Cote</div><div>Mise €</div><div>Gain €</div>
+                  </div>
+                  {bestPlan.details.map(({combo,odds,bk},i)=>{
+                    const stake=stakes[i];
+                    const gain=stake*(freebetType==="full"?odds:odds-1);
+                    return (
+                      <div key={i} style={{ display:"grid", gridTemplateColumns:`44px repeat(${effectiveComboSize},56px) 1fr 90px 90px 90px`, padding:"7px 16px", borderBottom: i<bestPlan.details.length-1?"1px solid #0a0a0f":"none", background: i%2===0?"transparent":"#080810", fontSize:12, alignItems:"center" }}>
+                        <div style={{ color:"#334155" }}>#{String(i+1).padStart(2,"0")}</div>
+                        {combo.map((o,pos)=>(<div key={pos}><span style={{ color:OUTCOME_COLORS[o], fontWeight:700, fontSize:13 }}>{OUTCOME_LABELS[o]}</span></div>))}
+                        <div style={{ color:bk?.color, fontWeight:600 }}>{bk?.name}</div>
+                        <div style={{ color:"#64748b" }}>{odds?.toFixed(2)}</div>
+                        <div style={{ color:"#f1f5f9" }}>{stake.toFixed(2)}</div>
+                        <div style={{ color:"#4ade80", fontWeight:600 }}>{gain.toFixed(2)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop:28, padding:"14px 20px", background:"#0f172a", border:"1px solid #1e293b", borderRadius:10 }}>
+              <p style={{ margin:0, fontSize:11, color:"#475569", lineHeight:1.7 }}>
+                <span style={{ color:"#6366f1" }}>ℹ Méthode</span> — En mode <strong style={{ color:"#818cf8" }}>Mise standard</strong>, le montant saisi est réparti sur tous les paris.
+                En mode <strong style={{ color:"#4ade80" }}>Freebets réels</strong>, le total est la somme des freebets des sites actifs.
+                Les mises sont proportionnelles : <strong style={{ color:"#94a3b8" }}>mise_c = (total × taux) / cote_paiement_c</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<FreebetOptimizer />);
+  </script>
+</body>
+</html>
