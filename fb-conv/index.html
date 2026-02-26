@@ -42,6 +42,7 @@
         freebetAmount: "",
         freebetActive: true,
         matches: Array(numMatches).fill(null).map(() => ["", "", ""]),
+        guaranteedMatches: Array(numMatches).fill(null).map(() => ["", ""]), // [g1, g2]
       }));
     }
 
@@ -67,38 +68,53 @@
       return combos;
     }
 
-    function getBestOdds(activeBookmakers, matchIndices, combo) {
-      // activeBookmakers is already sorted by priority (index 0 = highest priority)
-      let best = 0, bestBk = null;
-      activeBookmakers.forEach((bk, priorityIdx) => {
+    function getBestOdds(activeBookmakers, matchIndices, combo, useGuaranteed = false) {
+      let best = 0, bestBk = null, bestUsedG = [];
+      activeBookmakers.forEach((bk) => {
+        const usedG = [];
         const valid = combo.every((outcome, pos) => {
-          const val = bk.matches[matchIndices[pos]]?.[outcome];
+          const mi = matchIndices[pos];
+          if (useGuaranteed && (outcome === 0 || outcome === 2)) {
+            const gIdx = outcome === 0 ? 0 : 1;
+            const gVal = bk.guaranteedMatches?.[mi]?.[gIdx];
+            if (gVal !== "" && gVal !== undefined && !isNaN(parseFloat(gVal))) {
+              usedG.push({ pos, mi, outcome, gIdx });
+              return true;
+            }
+          }
+          const val = bk.matches[mi]?.[outcome];
           return val !== "" && val !== null && !isNaN(parseFloat(val));
         });
         if (!valid) return;
-        const odds = combo.reduce((prod, outcome, pos) =>
-          prod * parseFloat(bk.matches[matchIndices[pos]][outcome]), 1);
-        // Strictly better odds, OR equal odds with higher priority (lower index)
-        if (odds > best + 0.0001) { best = odds; bestBk = bk; }
-        else if (Math.abs(odds - best) <= 0.0001 && bestBk === null) { best = odds; bestBk = bk; }
-        // Equal odds: first encountered = higher priority (array is sorted by priority)
+        const odds = combo.reduce((prod, outcome, pos) => {
+          const mi = matchIndices[pos];
+          if (useGuaranteed && (outcome === 0 || outcome === 2)) {
+            const gIdx = outcome === 0 ? 0 : 1;
+            const gVal = bk.guaranteedMatches?.[mi]?.[gIdx];
+            if (gVal !== "" && gVal !== undefined && !isNaN(parseFloat(gVal)))
+              return prod * parseFloat(gVal);
+          }
+          return prod * parseFloat(bk.matches[mi][outcome]);
+        }, 1);
+        if (odds > best + 0.0001) { best = odds; bestBk = bk; bestUsedG = usedG; }
+        else if (Math.abs(odds - best) <= 0.0001 && bestBk === null) { best = odds; bestBk = bk; bestUsedG = usedG; }
       });
       if (!bestBk) return null;
-      return { odds: best, bk: bestBk };
+      return { odds: best, bk: bestBk, usedGuaranteed: bestUsedG };
     }
 
-    function computeConversion(activeBookmakers, matchIndices, freebetType) {
+    function computeConversion(activeBookmakers, matchIndices, freebetType, useGuaranteed = false) {
       const k = matchIndices.length;
       const combos = generateCombinations(k);
       let sumInv = 0, valid = true;
       const details = combos.map((combo) => {
-        const result = getBestOdds(activeBookmakers, matchIndices, combo);
-        if (!result) { valid = false; return { combo, odds: null, bk: null, payout: null }; }
-        const { odds, bk } = result;
+        const result = getBestOdds(activeBookmakers, matchIndices, combo, useGuaranteed);
+        if (!result) { valid = false; return { combo, odds: null, bk: null, payout: null, usedGuaranteed: [] }; }
+        const { odds, bk, usedGuaranteed } = result;
         const payout = freebetType === "full" ? odds : odds - 1;
         if (payout <= 0) valid = false;
         else sumInv += 1 / payout;
-        return { combo, odds, bk, payout };
+        return { combo, odds, bk, payout, usedGuaranteed };
       });
       if (!valid || sumInv === 0) return { rate: null, details };
       return { rate: 1 / sumInv, details };
@@ -150,36 +166,35 @@
 
       // Frozen plan — only updated on manual "Calculer" click
       const [frozenPlan, setFrozenPlan] = useState(null);
+      const [frozenPlanGuaranteed, setFrozenPlanGuaranteed] = useState(null);
       const [showResetConfirm, setShowResetConfirm] = useState(false);
-      const [calcSnapshot, setCalcSnapshot] = useState(null); // snapshot of inputs at last calc
+      const [calcSnapshot, setCalcSnapshot] = useState(null);
+      const [showGuaranteed, setShowGuaranteed] = useState(false);
+      const [displayMode, setDisplayMode] = useState("standard"); // "standard" | "guaranteed" // snapshot of inputs at last calc
 
       function makeSnapshot() {
         return JSON.stringify({
           bookmakers: bookmakers.map(bk => ({
             id: bk.id, freebetActive: bk.freebetActive,
-            matches: bk.matches
+            matches: bk.matches,
+            guaranteedMatches: bk.guaranteedMatches,
           })),
           freebetType, effectiveComboSize, totalMatches,
         });
       }
 
-      // Can calculate if state differs from last snapshot AND enough odds are filled
-      const canCalculate = useMemo(() => {
-        const hasOdds = bookmakers.some(bk =>
-          bk.freebetActive &&
-          bk.matches.some(m => m.every(v => v !== "" && !isNaN(parseFloat(v))))
-        );
-        if (!hasOdds) return false;
-        if (calcSnapshot === null) return true; // never calculated
-        return makeSnapshot() !== calcSnapshot;
-      }, [bookmakers, freebetType, effectiveComboSize, totalMatches, calcSnapshot]);
+      // Check if any guaranteed odds are filled
+      const hasGuaranteedData = useMemo(() =>
+        bookmakers.some(bk => bk.freebetActive &&
+          bk.guaranteedMatches?.some(m => m.some(v => v !== "" && !isNaN(parseFloat(v))))
+        ), [bookmakers]);
 
-      function runOptimization() {
+      function runOptimization(useGuaranteed = false) {
         if (activeBookmakers.length === 0) return { best: null, ranking: [] };
         let best = null;
         const ranking = [];
         allSubsets.forEach((matchIndices) => {
-          const { rate, details } = computeConversion(activeBookmakers, matchIndices, freebetType);
+          const { rate, details } = computeConversion(activeBookmakers, matchIndices, freebetType, useGuaranteed);
           if (rate === null) return;
           const result = { matchIndices, rate, details };
           if (!best || rate > best.rate) best = result;
@@ -189,38 +204,59 @@
         return { best, ranking };
       }
 
+      const canCalculate = useMemo(() => {
+        const hasOdds = bookmakers.some(bk =>
+          bk.freebetActive &&
+          bk.matches.some(m => m.every(v => v !== "" && !isNaN(parseFloat(v))))
+        );
+        if (!hasOdds) return false;
+        if (calcSnapshot === null) return true;
+        return makeSnapshot() !== calcSnapshot;
+      }, [bookmakers, freebetType, effectiveComboSize, totalMatches, calcSnapshot]);
+
       const handleCalculer = () => {
         setCalcSnapshot(makeSnapshot());
-        setFrozenPlan(runOptimization());
+        const std  = runOptimization(false);
+        const guar = hasGuaranteedData ? runOptimization(true) : null;
+        setFrozenPlan(std);
+        setFrozenPlanGuaranteed(guar);
+        if (guar?.best && std?.best && guar.best.rate > std.best.rate) setDisplayMode("guaranteed");
+        else setDisplayMode("standard");
         setPlacedBets({});
         setShowResetConfirm(false);
       };
 
       const handleRecalcUnplaced = () => {
-        if (!frozenPlan?.best) return;
-        const matchIndices = frozenPlan.best.matchIndices;
-        const { rate, details } = computeConversion(activeBookmakers, matchIndices, freebetType);
+        const activePlan = displayMode === "guaranteed" ? frozenPlanGuaranteed : frozenPlan;
+        if (!activePlan?.best) return;
+        const matchIndices = activePlan.best.matchIndices;
+        const useG = displayMode === "guaranteed";
+        const { rate, details } = computeConversion(activeBookmakers, matchIndices, freebetType, useG);
         if (rate === null) return;
         const newBest = { matchIndices, rate, details };
         const ranking = [];
         allSubsets.forEach((mi) => {
-          const r = computeConversion(activeBookmakers, mi, freebetType);
+          const r = computeConversion(activeBookmakers, mi, freebetType, useG);
           if (r.rate !== null) ranking.push({ matchIndices: mi, rate: r.rate, details: r.details });
         });
         ranking.sort((a, b) => b.rate - a.rate);
-        setFrozenPlan({ best: newBest, ranking });
+        if (useG) setFrozenPlanGuaranteed({ best: newBest, ranking });
+        else setFrozenPlan({ best: newBest, ranking });
         setCalcSnapshot(makeSnapshot());
         setShowResetConfirm(false);
       };
 
       const handleRecalcReset = () => {
         setCalcSnapshot(makeSnapshot());
-        setFrozenPlan(runOptimization());
+        const std  = runOptimization(false);
+        const guar = hasGuaranteedData ? runOptimization(true) : null;
+        setFrozenPlan(std);
+        setFrozenPlanGuaranteed(guar);
         setPlacedBets({});
         setShowResetConfirm(false);
       };
 
-      const optimization = frozenPlan ?? { best: null, ranking: [] };
+      const optimization = (displayMode === "guaranteed" && frozenPlanGuaranteed ? frozenPlanGuaranteed : frozenPlan) ?? { best: null, ranking: [] };
 
       const bestPlan = optimization.best;
 
@@ -270,6 +306,15 @@
         }));
       };
 
+      const updateGuaranteedOdds = (bkId, matchIdx, gIdx, value) => {
+        setBookmakers((prev) => prev.map((bk) => {
+          if (bk.id !== bkId) return bk;
+          const guaranteedMatches = (bk.guaranteedMatches || []).map((m, mi) =>
+            mi === matchIdx ? m.map((v, gi) => (gi === gIdx ? value : v)) : m);
+          return { ...bk, guaranteedMatches };
+        }));
+      };
+
       const updateBkField = (bkId, field, value) =>
         setBookmakers((prev) => prev.map((bk) => bk.id === bkId ? { ...bk, [field]: value } : bk));
 
@@ -306,11 +351,17 @@
       };
 
       const fillTestValues = () => {
-
-        setBookmakers(prev => prev.map(bk => ({
-          ...bk,
-          matches: bk.matches.map(() => [0,1,2].map(() => (2.7 + Math.random() * 0.3).toFixed(2)))
-        })));
+        setBookmakers(prev => prev.map(bk => {
+          const matches = bk.matches.map(() => [0,1,2].map(() => (2.7 + Math.random() * 0.3).toFixed(2)));
+          const guaranteedMatches = matches.map(m => bk.id === 4
+            ? ["", ""]  // Winamax: base odds already guaranteed
+            : [
+                (parseFloat(m[0]) - Math.random() * 0.2).toFixed(2),
+                (parseFloat(m[2]) - Math.random() * 0.2).toFixed(2),
+              ]
+          );
+          return { ...bk, matches, guaranteedMatches };
+        }));
       };
 
       const updateTotalMatches = (n) => {
@@ -319,7 +370,9 @@
         setBookmakers((prev) => prev.map((bk) => {
           const matches = [...bk.matches];
           while (matches.length < n) matches.push(["", "", ""]);
-          return { ...bk, matches: matches.slice(0, n) };
+          const guaranteedMatches = [...(bk.guaranteedMatches || [])];
+          while (guaranteedMatches.length < n) guaranteedMatches.push(["", ""]);
+          return { ...bk, matches: matches.slice(0, n), guaranteedMatches: guaranteedMatches.slice(0, n) };
         }));
         setMatchNames((prev) => {
           const names = [...prev];
@@ -334,6 +387,7 @@
       const numCombosPerSubset = Math.pow(3, effectiveComboSize);
       const validSubsets = optimization.ranking.length;
       const isMatchFilled = (bk, mi) => bk.matches[mi]?.every((v) => v !== "" && !isNaN(parseFloat(v)));
+      const isMatchFilledG = (bk, mi) => bk.guaranteedMatches?.[mi]?.some((v) => v !== "" && !isNaN(parseFloat(v)));
       const matchHasAnyData = (mi) => bookmakers.some((bk) => bk.freebetActive && isMatchFilled(bk, mi));
       const hasResult = bestPlan && totalStakeAmount > 0;
 
@@ -396,6 +450,12 @@
                       <button key={v} onClick={() => { setFreebetType(v); }} style={{ padding:"6px 10px", borderRadius:6, border:"1px solid", borderColor: freebetType===v?"#6366f1":"#1e293b", background: freebetType===v?"#1e1b4b":"transparent", color: freebetType===v?"#818cf8":"#64748b", cursor:"pointer", fontSize:11, fontFamily:"inherit" }}>{l}</button>
                     ))}
                   </div>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6, borderLeft:"1px solid #1e293b", paddingLeft:16 }}>
+                  <label style={{ fontSize:10, color:"#64748b", letterSpacing:2, textTransform:"uppercase" }}>Garanties</label>
+                  <button onClick={() => setShowGuaranteed(v => !v)} style={{ padding:"6px 10px", borderRadius:6, border:"1px solid", borderColor: showGuaranteed?"#f97316":"#1e293b", background: showGuaranteed?"#1c0d00":"transparent", color: showGuaranteed?"#f97316":"#64748b", cursor:"pointer", fontSize:11, fontFamily:"inherit", fontWeight: showGuaranteed?700:400 }}>
+                    🔒 {showGuaranteed ? "Activées" : "Désactivées"}
+                  </button>
                 </div>
               </div>
             </div>
@@ -544,37 +604,69 @@
             </div>
 
             {/* Best result banner */}
-            {hasResult ? (
-              <div style={{ background:"linear-gradient(135deg,#052e16,#0a1f0a)", border:"1px solid #166534", borderRadius:12, padding:"18px 28px", marginBottom:28, display:"flex", alignItems:"center", gap:32, flexWrap:"wrap" }}>
-                <div>
-                  <div style={{ fontSize:10, letterSpacing:3, color:"#4ade80", textTransform:"uppercase", marginBottom:8 }}>★ Sélection optimale</div>
-                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                    {bestPlan.matchIndices.map((mi) => (
-                      <div key={mi} style={{ background:"#166534", border:"1px solid #4ade80", color:"#4ade80", borderRadius:8, padding:"5px 14px", fontSize:13, fontWeight:700 }}>{matchNames[mi]||`Match ${mi+1}`}</div>
-                    ))}
-                    {Array.from({length:totalMatches},(_,i)=>i).filter((i)=>!bestPlan.matchIndices.includes(i)).map((mi)=>(
-                      <div key={mi} style={{ border:"1px solid #1e293b", color:"#334155", borderRadius:8, padding:"5px 14px", fontSize:13, textDecoration:"line-through" }}>{matchNames[mi]||`Match ${mi+1}`}</div>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ display:"flex", gap:32, marginLeft:"auto" }}>
-                  <div>
-                    <div style={{ fontSize:10, color:"#4ade80", letterSpacing:2, textTransform:"uppercase" }}>Taux conversion</div>
-                    <div style={{ fontSize:34, fontWeight:700, color:"#4ade80", letterSpacing:-1 }}>{pct(bestPlan.rate)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, color:"#64748b", letterSpacing:2, textTransform:"uppercase" }}>Cash garanti</div>
-                    <div style={{ fontSize:34, fontWeight:700, color:"#f1f5f9", letterSpacing:-1 }}>{(totalStakeAmount * bestPlan.rate).toFixed(2)}€</div>
-                  </div>
-                  {optimization.ranking.length > 1 && (
-                    <div>
-                      <div style={{ fontSize:10, color:"#64748b", letterSpacing:2, textTransform:"uppercase" }}>Gain vs pire</div>
-                      <div style={{ fontSize:34, fontWeight:700, color:"#818cf8", letterSpacing:-1 }}>+{(totalStakeAmount*(optimization.ranking[0].rate-optimization.ranking[optimization.ranking.length-1].rate)).toFixed(2)}€</div>
+            {hasResult ? (() => {
+              const stdPlan  = frozenPlan?.best;
+              const guarPlan = frozenPlanGuaranteed?.best;
+              const showBoth = showGuaranteed && stdPlan && guarPlan;
+              return (
+                <div style={{ marginBottom:28 }}>
+                  {/* Mode toggle when both plans available */}
+                  {showBoth && (
+                    <div style={{ display:"flex", gap:0, marginBottom:12, background:"#0f172a", border:"1px solid #1e293b", borderRadius:10, overflow:"hidden", alignSelf:"flex-start", width:"fit-content" }}>
+                      {[["standard","Standard","#4ade80"],["guaranteed","🔒 Avec garanties","#f97316"]].map(([mode,label,col])=>(
+                        <button key={mode} onClick={()=>setDisplayMode(mode)} style={{ padding:"8px 20px", border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700,
+                          background: displayMode===mode?(mode==="standard"?"#052e16":"#1c0d00"):"transparent",
+                          color: displayMode===mode?col:"#475569",
+                          borderRight: mode==="standard"?"1px solid #1e293b":"none" }}>
+                          {label}
+                          {showBoth && <span style={{ marginLeft:8, fontSize:11, fontWeight:400, color: displayMode===mode?col+"aa":"#334155" }}>
+                            {pct(mode==="standard"?stdPlan.rate:guarPlan.rate)}
+                          </span>}
+                        </button>
+                      ))}
+                      {guarPlan.rate > stdPlan.rate && (
+                        <div style={{ padding:"0 12px", display:"flex", alignItems:"center", borderLeft:"1px solid #1e293b" }}>
+                          <span style={{ fontSize:10, color:"#f97316" }}>+{pct(guarPlan.rate - stdPlan.rate)} avec garanties</span>
+                        </div>
+                      )}
                     </div>
                   )}
+                  <div style={{ background: displayMode==="guaranteed"?"linear-gradient(135deg,#1c0d00,#0f0804)":"linear-gradient(135deg,#052e16,#0a1f0a)",
+                    border:`1px solid ${displayMode==="guaranteed"?"#7c2d12":"#166534"}`,
+                    borderRadius:12, padding:"18px 28px", display:"flex", alignItems:"center", gap:32, flexWrap:"wrap" }}>
+                    <div>
+                      <div style={{ fontSize:10, letterSpacing:3, color: displayMode==="guaranteed"?"#f97316":"#4ade80", textTransform:"uppercase", marginBottom:8 }}>
+                        ★ Sélection optimale{displayMode==="guaranteed"?" · Cotes garanties":""}
+                      </div>
+                      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                        {bestPlan.matchIndices.map((mi) => (
+                          <div key={mi} style={{ background: displayMode==="guaranteed"?"#3b1206":"#166534", border:`1px solid ${displayMode==="guaranteed"?"#f97316":"#4ade80"}`, color: displayMode==="guaranteed"?"#f97316":"#4ade80", borderRadius:8, padding:"5px 14px", fontSize:13, fontWeight:700 }}>{matchNames[mi]||`Match ${mi+1}`}</div>
+                        ))}
+                        {Array.from({length:totalMatches},(_,i)=>i).filter((i)=>!bestPlan.matchIndices.includes(i)).map((mi)=>(
+                          <div key={mi} style={{ border:"1px solid #1e293b", color:"#334155", borderRadius:8, padding:"5px 14px", fontSize:13, textDecoration:"line-through" }}>{matchNames[mi]||`Match ${mi+1}`}</div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", gap:32, marginLeft:"auto" }}>
+                      <div>
+                        <div style={{ fontSize:10, color: displayMode==="guaranteed"?"#f97316":"#4ade80", letterSpacing:2, textTransform:"uppercase" }}>Taux conversion</div>
+                        <div style={{ fontSize:34, fontWeight:700, color: displayMode==="guaranteed"?"#f97316":"#4ade80", letterSpacing:-1 }}>{pct(bestPlan.rate)}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize:10, color:"#64748b", letterSpacing:2, textTransform:"uppercase" }}>Cash garanti</div>
+                        <div style={{ fontSize:34, fontWeight:700, color:"#f1f5f9", letterSpacing:-1 }}>{(totalStakeAmount * bestPlan.rate).toFixed(2)}€</div>
+                      </div>
+                      {optimization.ranking.length > 1 && (
+                        <div>
+                          <div style={{ fontSize:10, color:"#64748b", letterSpacing:2, textTransform:"uppercase" }}>Gain vs pire</div>
+                          <div style={{ fontSize:34, fontWeight:700, color:"#818cf8", letterSpacing:-1 }}>+{(totalStakeAmount*(optimization.ranking[0].rate-optimization.ranking[optimization.ranking.length-1].rate)).toFixed(2)}€</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ) : (
+              );
+            })() : (
               <div style={{ background:"#0f172a", border:"1px dashed #334155", borderRadius:12, padding:"28px", marginBottom:28, textAlign:"center" }}>
                 <div style={{ fontSize:24, marginBottom:8 }}>📋</div>
                 <div style={{ color:"#475569", fontSize:13 }}>
@@ -645,21 +737,45 @@
                       {Array(totalMatches).fill(0).map((_,mi)=>{
                         const isSelected = bestPlan?.matchIndices.includes(mi);
                         const filled = isMatchFilled(bk,mi);
+                        const filledG = isMatchFilledG(bk,mi);
                         return (
-                          <div key={mi} style={{ display:"flex", gap:4, justifyContent:"center", background: active&&isSelected&&filled?"#0d1f0d":"transparent", border:`1px solid ${active&&isSelected&&filled?"#166534":"transparent"}`, borderRadius:6, padding:"4px 4px" }}>
-                            {[0,1,2].map((oi)=>{
-                              const val = bk.matches[mi]?.[oi]??"";
-                              const isEmpty = val==="";
-                              return (
-                                <div key={oi} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
-                                  <span style={{ fontSize:9, color:!active?"#334155": OUTCOME_COLORS[oi], letterSpacing:1, opacity: !active ? 0.4 : 1 }}>{OUTCOME_LABELS[oi]}</span>
-                                  <input type="number" step="0.01" min="1" value={val} placeholder="—" disabled={!active}
-                                    onChange={(e)=>updateOdds(bk.id,mi,oi,e.target.value)}
-                                    onBlur={(e)=>{ const v=parseFloat(e.target.value); if(e.target.value!==""&&(isNaN(v)||v<1)) updateOdds(bk.id,mi,oi,""); }}
-                                    style={{ background: !active?"#0a0a0f": isEmpty?"#1a2332":"#1e293b", border:`1px solid ${!active?"#1e293b": isEmpty?OUTCOME_COLORS[oi]+"55": isSelected?OUTCOME_COLORS[oi]+"cc":OUTCOME_COLORS[oi]+"88"}`, borderRadius:5, color:!active?"#334155": isEmpty?"#64748b":"#f1f5f9", padding:"3px 2px", fontSize:12, fontFamily:"inherit", width:50, outline:"none", textAlign:"center" }} />
-                                </div>
-                              );
-                            })}
+                          <div key={mi} style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                            {/* Normal odds */}
+                            <div style={{ display:"flex", gap:4, justifyContent:"center", background: active&&isSelected&&filled?"#0d1f0d":"transparent", border:`1px solid ${active&&isSelected&&filled?"#166534":"transparent"}`, borderRadius:6, padding:"4px 4px" }}>
+                              {[0,1,2].map((oi)=>{
+                                const val = bk.matches[mi]?.[oi]??"";
+                                const isEmpty = val==="";
+                                return (
+                                  <div key={oi} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+                                    <span style={{ fontSize:9, color:!active?"#334155": OUTCOME_COLORS[oi], letterSpacing:1, opacity: !active ? 0.4 : 1 }}>{OUTCOME_LABELS[oi]}</span>
+                                    <input type="number" step="0.01" min="1" value={val} placeholder="—" disabled={!active}
+                                      onChange={(e)=>updateOdds(bk.id,mi,oi,e.target.value)}
+                                      onBlur={(e)=>{ const v=parseFloat(e.target.value); if(e.target.value!==""&&(isNaN(v)||v<1)) updateOdds(bk.id,mi,oi,""); }}
+                                      style={{ background: !active?"#0a0a0f": isEmpty?"#1a2332":"#1e293b", border:`1px solid ${!active?"#1e293b": isEmpty?OUTCOME_COLORS[oi]+"55": isSelected?OUTCOME_COLORS[oi]+"cc":OUTCOME_COLORS[oi]+"88"}`, borderRadius:5, color:!active?"#334155": isEmpty?"#64748b":"#f1f5f9", padding:"3px 2px", fontSize:12, fontFamily:"inherit", width:50, outline:"none", textAlign:"center" }} />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {/* Guaranteed odds (1G and 2G only) — not for Winamax */}
+                            {showGuaranteed && bk.id !== 4 && (
+                              <div style={{ display:"flex", gap:4, justifyContent:"center", background: active&&isSelected&&filledG?"#12080a":"transparent", border:`1px solid ${active&&isSelected&&filledG?"#7c2d12":"transparent"}`, borderRadius:6, padding:"3px 4px", opacity: active?1:0.3 }}>
+                                {[0,1].map((gIdx)=>{
+                                  const outcomeIdx = gIdx === 0 ? 0 : 2;
+                                  const gVal = bk.guaranteedMatches?.[mi]?.[gIdx] ?? "";
+                                  const isEmpty = gVal === "";
+                                  const label = gIdx === 0 ? "1G" : "2G";
+                                  return (
+                                    <div key={gIdx} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+                                      <span style={{ fontSize:9, color: isEmpty?"#4b2a12":"#f97316", letterSpacing:1 }}>{label}</span>
+                                      <input type="number" step="0.01" min="1" value={gVal} placeholder="—" disabled={!active}
+                                        onChange={(e)=>updateGuaranteedOdds(bk.id,mi,gIdx,e.target.value)}
+                                        onBlur={(e)=>{ const v=parseFloat(e.target.value); if(e.target.value!==""&&(isNaN(v)||v<1)) updateGuaranteedOdds(bk.id,mi,gIdx,""); }}
+                                        style={{ background: isEmpty?"#0f0804":"#1e1008", border:`1px solid ${isEmpty?"#4b2a12":"#f97316"}`, borderRadius:5, color: isEmpty?"#4b2a12":"#fdba74", padding:"3px 2px", fontSize:12, fontFamily:"inherit", width:50, outline:"none", textAlign:"center" }} />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -670,6 +786,7 @@
               <div style={{ marginTop:8, fontSize:10, color:"#334155", display:"flex", gap:16, flexWrap:"wrap" }}>
                 <span>— = cote non renseignée (ignorée)</span>
                 <span style={{ color:"#4ade80" }}>✓ = match retenu dans la sélection optimale</span>
+                <span style={{ color:"#f97316" }}>1G / 2G = cote garantie (si équipe mène de 2 buts)</span>
               </div>
             </div>
 
@@ -822,7 +939,7 @@
               const gainRef       = gainTarget ?? (totalStakeAmount * bestPlan.rate);
               const totalPlacedStake    = Object.entries(placedBets).reduce((s,[,{stake}])=>s+stake, 0);
               const totalRemainingStake = bestPlan.details.reduce((s,_,i)=> placedBets[i] ? s : s + effectiveStakes[i], 0);
-              const cols = `44px repeat(${effectiveComboSize},52px) 1fr 80px 110px 90px 90px`;
+              const cols = `44px repeat(${effectiveComboSize},52px) 1fr 80px 110px 90px ${displayMode==="guaranteed"?"120px ":""}90px`;
               return (
                 <div>
                   {/* Progress banner */}
@@ -869,30 +986,51 @@
                     <div style={{ display:"grid", gridTemplateColumns:cols, padding:"10px 16px", borderBottom:"1px solid #1e293b", fontSize:10, color:"#475569", letterSpacing:2, textTransform:"uppercase" }}>
                       <div>#</div>
                       {bestPlan.matchIndices.map((mi)=><div key={mi}>{(matchNames[mi]||`M${mi+1}`).slice(0,6)}</div>)}
-                      <div>Site</div><div>Cote</div><div>Mise €</div><div>Gain €</div><div>Statut</div>
+                      <div>Site</div><div>Cote</div><div>Mise €</div><div>Gain €</div>
+                      {displayMode==="guaranteed" && <div style={{ color:"#f97316" }}>Jackpot 🎰</div>}
+                      <div>Statut</div>
                     </div>
-                    {bestPlan.details.map(({combo,odds,bk},i)=>{
+                    {bestPlan.details.map(({combo,odds,bk,usedGuaranteed},i)=>{
                       const isPlaced      = !!placedBets[i];
-                      const displayOdds   = isPlaced ? placedBets[i].odds  : odds;
+                      const displayOdds   = isPlaced ? placedBets[i].odds : odds;
                       const stake         = effectiveStakes[i];
                       const origStake     = stakes[i];
                       const gain          = stake * (freebetType==="full" ? displayOdds : displayOdds-1);
                       const isRecalc      = !isPlaced && gainTarget !== null;
                       const stakeDiff     = isRecalc ? stake - origStake : 0;
+
+                      // Jackpot scenarios for guaranteed mode
+                      const jackpotScenarios = [];
+                      if (displayMode === "guaranteed" && usedGuaranteed?.length > 0) {
+                        usedGuaranteed.forEach(({ pos, outcome: gOutcome }) => {
+                          [0,1,2].filter(o => o !== gOutcome).forEach(finalOutcome => {
+                            const jackpotCombo = [...combo]; jackpotCombo[pos] = finalOutcome;
+                            const jackpotIdx = bestPlan.details.findIndex(d =>
+                              d.combo.length === combo.length && d.combo.every((v,j) => v === jackpotCombo[j])
+                            );
+                            if (jackpotIdx >= 0 && jackpotIdx !== i) {
+                              const jStake = effectiveStakes[jackpotIdx];
+                              const jOdds  = bestPlan.details[jackpotIdx].odds;
+                              const jGain  = jStake * (freebetType==="full" ? jOdds : jOdds-1);
+                              jackpotScenarios.push({ finalOutcome, total: gain + jGain });
+                            }
+                          });
+                        });
+                      }
+
                       return (
                         <div key={i} style={{ display:"grid", gridTemplateColumns:cols, padding:"7px 16px",
                           borderBottom: i<totalCount-1?"1px solid #0a0a0f":"none",
-                          background: isPlaced?"#061a0e": i%2===0?"transparent":"#080810",
+                          background: isPlaced?"#061a0e": jackpotScenarios.length>0?"#120900": i%2===0?"transparent":"#080810",
                           fontSize:12, alignItems:"center" }}>
-                          <div style={{ color: isPlaced?"#4ade80":"#334155" }}>#{String(i+1).padStart(2,"0")}</div>
+                          <div style={{ color: isPlaced?"#4ade80": jackpotScenarios.length>0?"#f97316":"#334155" }}>#{String(i+1).padStart(2,"0")}</div>
                           {combo.map((o,pos)=>(
                             <div key={pos}><span style={{ color:OUTCOME_COLORS[o], fontWeight:700, fontSize:13, opacity:isPlaced?0.5:1 }}>{OUTCOME_LABELS[o]}</span></div>
                           ))}
                           <div style={{ color: isPlaced?bk?.color+"77":bk?.color, fontWeight:600 }}>{bk?.name}</div>
                           <div style={{ color: isPlaced?"#334155":"#64748b" }}>{displayOdds?.toFixed(2)}</div>
-                          {/* Stake cell with recalc indicator */}
                           <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
-                            <span style={{ color: isPlaced?"#475569": isRecalc&&Math.abs(stakeDiff)>0.005?"#f1f5f9":"#f1f5f9", fontWeight:600, textDecoration:isPlaced?"line-through":"none" }}>
+                            <span style={{ color: isPlaced?"#475569":"#f1f5f9", fontWeight:600, textDecoration:isPlaced?"line-through":"none" }}>
                               {stake.toFixed(2)}€
                             </span>
                             {isRecalc && Math.abs(stakeDiff) > 0.005 && (
@@ -902,6 +1040,18 @@
                             )}
                           </div>
                           <div style={{ color:"#4ade80", fontWeight:600, opacity:isPlaced?0.5:1 }}>{gain.toFixed(2)}€</div>
+                          {displayMode==="guaranteed" && (
+                            <div>
+                              {jackpotScenarios.length > 0
+                                ? jackpotScenarios.map((js,k)=>(
+                                    <div key={k} style={{ fontSize:10, color:"#f97316", fontWeight:700 }}>
+                                      🎰 {js.total.toFixed(2)}€ si {OUTCOME_LABELS[js.finalOutcome]}
+                                    </div>
+                                  ))
+                                : <span style={{ fontSize:10, color:"#334155" }}>—</span>
+                              }
+                            </div>
+                          )}
                           <div>
                             <button onClick={()=>togglePlaced(i)} style={{ padding:"4px 10px", borderRadius:6, border:"1px solid", cursor:"pointer", fontSize:10, fontFamily:"inherit", fontWeight:700, whiteSpace:"nowrap",
                               borderColor: isPlaced?"#166534":"#334155",
