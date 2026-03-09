@@ -1,9 +1,12 @@
+/* Google Fonts — doit être en premier */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
 /* =========================================================
    Palette principale
    ========================================================= */
 :root {
 	--c-primary: #5C899D;
-	--c-primary-dark: #2E6377; /* version sombre pour le texte (contraste AA) */
+	--c-primary-dark: #2E6377;
 	--c-secondary: #FFFCEF;
 	--c-tertiary: #C07850;
 }
@@ -12,7 +15,6 @@
    Variables de thème
    ========================================================= */
 
-/* Thème clair (par défaut) */
 :root[data-theme="light"] {
 	--color-bg: #f7f8fa;
 	--color-surface: #ffffff;
@@ -21,7 +23,6 @@
 
 	--color-text: #131722;
 	--color-muted: #5a6475;
-
 	--color-divider: #d1d9e6;
 
 	--color-accent-50: #e8fbff;
@@ -29,12 +30,15 @@
 	--color-accent-600: #4fc9dc;
 	--color-accent-700: #35aec2;
 
+	--color-pos: #2a9d6a;
+	--color-neg: #c43a30;
+	--color-neut: var(--c-primary);
+
 	--color-danger-bg: #ffe9eb;
 	--color-danger-border: #e05a5a;
 	--color-danger-text: #7c232d;
 }
 
-/* Thème sombre */
 :root[data-theme="dark"] {
 	--color-bg: #0f1115;
 	--color-surface: #151923;
@@ -43,13 +47,16 @@
 
 	--color-text: #e7ecf2;
 	--color-muted: #9aa7b4;
-
 	--color-divider: #263246;
 
 	--color-accent-50: #0b2d33;
 	--color-accent-100: #0f3d45;
 	--color-accent-600: #57cfe2;
 	--color-accent-700: #74d7e6;
+
+	--color-pos: #3ecf8e;
+	--color-neg: #f06b62;
+	--color-neut: #7BAFC2;
 
 	--color-danger-bg: #2b1114;
 	--color-danger-border: #7c232d;
@@ -86,14 +93,13 @@ body {
 }
 
 body {
-	font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+	font-family: 'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif;
 	background: var(--color-bg);
 	color: var(--color-text);
 	line-height: 1.5;
 	font-size: 16px;
 }
 
-/* Liens */
 a {
 	color: var(--color-accent-600);
 	text-decoration: none;
@@ -109,7 +115,7 @@ a:hover {
 .wrap {
 	max-width: 80vw;
 	margin: 0 auto;
-	padding-top: 1rem;
+	padding: 1.5rem 0 4rem;
 	display: flex;
 	flex-direction: column;
 	gap: 1rem;
@@ -131,16 +137,19 @@ a:hover {
 
 .title {
 	margin: 0;
-	font-weight: 700;
-	font-size: 2rem;
+	font-family: 'Bebas Neue', sans-serif;
+	font-weight: 400;
+	font-size: 2.4rem;
+	letter-spacing: 0.05em;
+	line-height: 1;
 }
 
 .card {
 	background: var(--color-surface);
 	border: 1px solid var(--color-divider);
 	border-radius: 12px;
-	box-shadow: 0 8px 24px rgba(0, 0, 0, .1);
-	padding: 1rem;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, .07);
+	padding: 1.25rem;
 }
 
 /* =========================================================
@@ -161,9 +170,11 @@ p {
 	margin: 0 0 12px 0;
 }
 
-.text-muted {
-	color: var(--color-muted);
-}
+.text-muted  { color: var(--color-muted); }
+.pos         { color: var(--color-pos); }
+.neg         { color: var(--color-neg); }
+.neut        { color: var(--color-neut); }
+.strong      { font-weight: 700; }
 
 /* =========================================================
    Boutons
@@ -173,39 +184,33 @@ p {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	border-radius: 12px;
-	padding: 11px 16px;
-	font: 600 15px/1.1 Inter, sans-serif;
+	border-radius: 10px;
+	padding: 10px 16px;
+	font: 600 15px/1.1 'DM Sans', sans-serif;
 	cursor: pointer;
 	border: 1px solid transparent;
 	transition: filter .15s ease, transform .02s ease;
 	text-decoration: none;
 }
 
-.btn:active {
-	transform: translateY(1px);
-}
+.btn:active { transform: translateY(1px); }
 
 .btn-primary {
-	background: var(--color-accent-600);
+	background: var(--c-primary);
 	color: #fff;
-	border-color: var(--color-accent-600);
+	border-color: var(--c-primary);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
 }
 
-.btn-primary:hover {
-	filter: brightness(1.07);
-}
+.btn-primary:hover { filter: brightness(1.08); }
 
 .btn-secondary {
 	background: transparent;
-	color: var(--color-accent-700);
-	border-color: var(--color-accent-700);
+	color: var(--c-primary-dark);
+	border-color: var(--c-primary);
 }
 
-.btn-secondary:hover {
-	filter: brightness(1.1);
-}
+.btn-secondary:hover { filter: brightness(1.1); }
 
 .btn-danger {
 	background: var(--color-danger-bg);
@@ -217,9 +222,7 @@ p {
 	justify-content: center;
 }
 
-.btn-danger:hover {
-	filter: brightness(1.05);
-}
+.btn-danger:hover { filter: brightness(1.05); }
 
 .btn-ghost {
 	background: transparent;
@@ -227,9 +230,7 @@ p {
 	color: var(--color-text);
 }
 
-.btn-ghost:hover {
-	background: var(--color-surface-2);
-}
+.btn-ghost:hover { background: var(--color-surface-2); }
 
 .btn-icon {
 	width: 2.2rem;
@@ -243,30 +244,39 @@ p {
 input,
 select,
 textarea {
-	font-family: Inter, sans-serif;
-	font-size: 15px;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 14px;
 	border-radius: 8px;
 	border: 1px solid var(--color-divider);
 	padding: 8px 10px;
 	background: var(--color-surface);
 	color: var(--color-text);
+	transition: border-color 0.2s;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-	outline: 2px solid var(--color-accent-600);
-	outline-offset: 2px;
+	outline: none;
+	border-color: var(--c-primary);
+	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
 }
+
+/* Suppression des spinners natifs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
 
 .check,
 .radio {
 	width: 20px;
 	height: 20px;
-	accent-color: var(--color-accent-600);
+	accent-color: var(--c-primary);
 }
 
-/* Champ numérique + steppers */
+/* =========================================================
+   Champ numérique compact (.num + .step) — utilisé dans surebet
+   ========================================================= */
 .num {
 	--h: 40px;
 	display: flex;
@@ -276,7 +286,7 @@ textarea:focus {
 	border: 1px solid var(--color-divider);
 	border-radius: 10px;
 	overflow: hidden;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, .1);
 }
 
 .num input {
@@ -288,6 +298,7 @@ textarea:focus {
 	outline: 0;
 	color: var(--color-text);
 	font-size: 15px;
+	font-family: 'DM Mono', monospace;
 	font-variant-numeric: tabular-nums;
 	text-align: right;
 }
@@ -308,12 +319,81 @@ textarea:focus {
 	cursor: pointer;
 	font-weight: 800;
 	font-size: 16px;
-	color: var(--color-accent-700);
-	background: var(--color-accent-50);
+	color: var(--c-primary);
+	background: var(--color-surface-2);
 }
 
-.step:hover {
-	background: var(--color-accent-100);
+.step:hover { background: var(--color-surface-3); }
+
+/* =========================================================
+   Champ numérique avec boutons +/- inline — tableau bookmakers
+   ========================================================= */
+.numinput {
+	display: flex;
+	align-items: center;
+	background: var(--color-surface-2);
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	overflow: hidden;
+	height: 36px;
+	width: fit-content;
+	transition: border-color 0.2s;
+}
+
+.numinput:focus-within {
+	border-color: var(--c-primary);
+	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
+}
+
+.numinput input {
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	height: 100%;
+	width: 5.5rem;
+	padding: 0 6px;
+	text-align: right;
+	font-family: 'DM Mono', monospace;
+	font-size: 14px;
+	font-variant-numeric: tabular-nums;
+	box-shadow: none;
+}
+
+.numinput input:focus { box-shadow: none; border: none; }
+
+.numinput .unit {
+	font-size: 0.78rem;
+	color: var(--color-muted);
+	padding: 0 6px 0 0;
+	font-family: 'DM Mono', monospace;
+}
+
+.numinput .nbtn-wrap {
+	display: flex;
+	flex-direction: column;
+	border-left: 1px solid var(--color-divider);
+	height: 100%;
+}
+
+.nbtn {
+	appearance: none;
+	border: none;
+	background: var(--color-surface-3);
+	color: var(--color-muted);
+	cursor: pointer;
+	font-size: 0.5rem;
+	height: 50%;
+	width: 22px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background 0.15s, color 0.15s;
+	line-height: 1;
+}
+
+.nbtn:hover {
+	background: var(--c-primary);
+	color: #fff;
 }
 
 /* =========================================================
@@ -337,11 +417,8 @@ textarea:focus {
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.btn-theme-toggle:hover {
-	background: var(--color-surface-2, rgba(0, 0, 0, 0.06));
-}
+.btn-theme-toggle:hover { background: var(--color-surface-2, rgba(0, 0, 0, 0.06)); }
 
-/* Sur la homepage, les variables de thème classiques ne sont pas définies */
 .btn-theme-toggle.hp {
 	border-color: rgba(46, 99, 119, 0.25);
 	background: rgba(255, 252, 239, 0.9);
@@ -352,4 +429,246 @@ textarea:focus {
 	background: rgba(24, 19, 15, 0.9);
 	border-color: rgba(123, 175, 194, 0.25);
 	color: #ede8d4;
+}
+
+/* =========================================================
+   Cartes de métriques
+   ========================================================= */
+.metrics-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	gap: 1rem;
+}
+
+.metric-card {
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	padding: 1.1rem 1.25rem;
+}
+
+.metric-label {
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	margin-bottom: 0.4rem;
+}
+
+.metric-value {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 2.4rem;
+	letter-spacing: 0.02em;
+	line-height: 1;
+	color: var(--color-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.metric-value.pos { color: var(--color-pos); }
+.metric-value.neg { color: var(--color-neg); }
+
+/* =========================================================
+   Tableau bookmakers
+   ========================================================= */
+.bookies-table-container {
+	overflow-x: auto;
+}
+
+.bookies-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+}
+
+.bookies-table thead {
+	background: var(--color-surface-2);
+}
+
+.bookies-table th {
+	padding: 12px 14px;
+	text-align: left;
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	border-bottom: 2px solid var(--color-divider);
+	white-space: nowrap;
+}
+
+.bookies-table td {
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--color-divider);
+	vertical-align: middle;
+}
+
+.bookies-table tbody tr:last-child td { border-bottom: none; }
+
+.bookies-table tbody tr:hover { background: rgba(92, 137, 157, 0.03); }
+
+.bookies-table input[type="text"] {
+	width: 100%;
+	min-width: 100px;
+	background: var(--color-surface-2);
+}
+
+.bookie-num-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.78rem;
+	font-weight: 500;
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+/* Dot du type de bonus */
+.bonus-dot {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	transition: background 0.2s;
+}
+
+.bonus-select-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.bonus-dot[data-bonus="freebet_always"] { background: var(--c-primary); }
+.bonus-dot[data-bonus="freebet_lose"]   { background: var(--c-tertiary); }
+.bonus-dot[data-bonus="cash_always"]    { background: var(--color-pos); }
+.bonus-dot[data-bonus="cash_lose"]      { background: #7BA18A; }
+.bonus-dot[data-bonus="no_bonus"]       { background: var(--color-muted); }
+
+/* =========================================================
+   Tableau de résultats (breakdown)
+   ========================================================= */
+.breakdown {
+	overflow-x: auto;
+}
+
+.breakdown-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.875rem;
+}
+
+.breakdown-table thead {
+	background: var(--color-surface-2);
+}
+
+.breakdown-table th {
+	padding: 12px 16px;
+	text-align: left;
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	border-bottom: 2px solid var(--color-divider);
+	white-space: nowrap;
+}
+
+.th-outcome-title {
+	color: var(--color-text);
+	font-size: 0.85rem;
+	font-weight: 600;
+	text-transform: none;
+	letter-spacing: 0;
+	margin-bottom: 2px;
+}
+
+.th-outcome-sub {
+	font-size: 0.72rem;
+	font-weight: 400;
+	color: var(--color-muted);
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.breakdown-table td {
+	padding: 10px 16px;
+	border-bottom: 1px solid var(--color-divider);
+	vertical-align: top;
+}
+
+.breakdown-table tbody tr:last-child td { border-bottom: none; }
+
+.td-outcome.win  { background: rgba(42, 157, 106, 0.04); }
+.td-outcome.lose { background: rgba(196, 67, 48, 0.03); }
+
+.total-row td {
+	background: var(--color-surface-2);
+	border-top: 2px solid var(--color-divider);
+}
+
+.total-label .site-name {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1rem;
+	letter-spacing: 0.12em;
+	color: var(--c-primary);
+}
+
+.site-name {
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+.site-meta {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.75rem;
+	color: var(--color-muted);
+	margin-top: 2px;
+}
+
+.detail-line {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.75rem;
+	padding: 3px 0;
+}
+
+.total-line {
+	margin-top: 5px;
+	padding-top: 6px;
+	border-top: 1px solid var(--color-divider);
+}
+
+.detail-lbl {
+	font-size: 0.72rem;
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+.detail-val {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.8rem;
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.detail-val.strong { font-size: 0.85rem; font-weight: 700; }
+
+/* =========================================================
+   Messages d'erreur / tip
+   ========================================================= */
+.error-box {
+	background: var(--color-danger-bg);
+	border: 1px solid var(--color-danger-border);
+	color: var(--color-danger-text);
+	border-radius: 10px;
+	padding: 1rem 1.25rem;
+	font-size: 0.9rem;
+}
+
+.tip {
+	font-size: 0.78rem;
+	color: var(--color-muted);
 }

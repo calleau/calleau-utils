@@ -1,0 +1,181 @@
+/* =========================================================
+   Welcome Bonus — styles spécifiques à la page
+   ========================================================= */
+
+/* Bouton calculer pleine largeur */
+.btn-calc {
+	width: 100%;
+	padding: 16px;
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1.4rem;
+	font-weight: 400;
+	letter-spacing: 0.12em;
+	border-radius: 10px;
+}
+
+/* Contrôles sous le tableau */
+.bookies-controls {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--color-divider);
+}
+
+.conv-rate-group {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.conv-rate-label {
+	font-size: 0.78rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+/* =========================================================
+   Section résultats
+   ========================================================= */
+#results {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+/* Grille de mises */
+.stakes-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 1rem;
+}
+
+.stake-card {
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	padding: 1.1rem 1.25rem;
+	border-left-width: 3px;
+}
+
+.stake-bookie {
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	margin-bottom: 0.2rem;
+}
+
+.stake-name {
+	font-size: 0.9rem;
+	color: var(--color-muted);
+	margin-bottom: 0.6rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.stake-amount {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 2.2rem;
+	letter-spacing: 0.02em;
+	line-height: 1;
+	color: var(--c-primary);
+	margin-bottom: 0.25rem;
+}
+
+.stake-outcome {
+	font-size: 0.78rem;
+	color: var(--color-muted);
+}
+
+.stake-cap {
+	font-size: 0.75rem;
+	color: var(--c-tertiary);
+	font-weight: 600;
+	margin-top: 0.3rem;
+}
+
+/* =========================================================
+   Widget versions précédentes
+   ========================================================= */
+#versions-widget {
+	position: fixed;
+	top: 4.5rem;
+	right: 1rem;
+	z-index: 100;
+}
+
+.btn-versions-toggle {
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: 50%;
+	border: 1px solid var(--color-divider);
+	background: var(--color-surface);
+	color: var(--color-muted);
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	transition: background 0.2s, color 0.2s;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-versions-toggle:hover {
+	background: var(--color-surface-2);
+	color: var(--color-text);
+}
+
+.versions-dropdown {
+	position: absolute;
+	right: 0;
+	top: calc(100% + 0.5rem);
+	min-width: 170px;
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+	overflow: hidden;
+}
+
+.versions-header {
+	font-size: 0.65rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	padding: 0.7rem 1rem 0.5rem;
+	border-bottom: 1px solid var(--color-divider);
+}
+
+.version-link {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.6rem 1rem;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.875rem;
+	color: var(--color-text);
+	text-decoration: none;
+	border-bottom: 1px solid var(--color-divider);
+	transition: background 0.15s, color 0.15s;
+}
+
+.version-link:last-child { border-bottom: none; }
+
+.version-link:hover {
+	background: var(--color-surface-2);
+	color: var(--c-primary);
+	text-decoration: none;
+}
+
+.versions-msg {
+	padding: 0.7rem 1rem;
+	font-size: 0.85rem;
+	color: var(--color-muted);
+}
