@@ -1,56 +1,47 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="light">
 
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>Calleau's Utils</title>
-	<link rel="stylesheet" href="styles.css" />
-	<style>
-		/* Styles spécifiques à la homepage */
-		body,
-		html {
-			height: 100%;
-		}
-
-		.home {
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			align-items: center;
-			text-align: center;
-			height: 100%;
-		}
-
-		.home h1 {
-			font-size: 2.5rem;
-			margin-bottom: var(--space-5);
-		}
-
-		.home .menu {
-			display: flex;
-			flex-direction: column;
-			gap: var(--space-3);
-			width: 260px;
-		}
-
-		.home .menu .btn {
-			width: 100%;
-		}
-	</style>
+	<link rel="stylesheet" href="theme.css" />
+	<link rel="stylesheet" href="homepage.css" />
+	<script src="theme-toggle.js"></script>
 </head>
 
 <body>
 	<main class="home">
-		<h1>calleau's utils</h1>
-		<nav class="menu">
-			<a href="calc-freebets.html" class="btn btn-secondary">Calculatrice Freebets</a>
-			<a href="surebet/surebet.html" class="btn btn-secondary">Calculatrice Surebet</a>
-			<a href="calc-conversion.html" class="btn btn-secondary">Taux de conversion</a>
-			<a href="fb-conv/index.html" class="btn btn-secondary">Fb-conv</a>
-			<a href="welcome-bonus/index.html" class="btn btn-secondary">Welcome-bonus</a>
-		</nav>
+		<div class="home-inner">
+			<p class="home-eyebrow">Boîte à outils</p>
+			<h1 class="home-title">calleau's<br><em>utils</em></h1>
+			<div class="accent-bar"></div>
+			<nav class="menu">
+				<a href="fb-conv/index.html" class="menu-item">
+					<span class="menu-num">01</span>
+					<span class="menu-label">Freebets</span>
+					<span class="menu-arrow">→</span>
+				</a>
+				<a href="surebet/surebet.html" class="menu-item">
+					<span class="menu-num">02</span>
+					<span class="menu-label">Calculatrice surebet</span>
+					<span class="menu-arrow">→</span>
+				</a>
+				<a href="welcome-bonus/index.html" class="menu-item">
+					<span class="menu-num">03</span>
+					<span class="menu-label">Bonus de bienvenue</span>
+					<span class="menu-arrow">→</span>
+				</a>
+			</nav>
+		</div>
 	</main>
+	<script>
+		// Classe spéciale pour le bouton sur la homepage (pas de variables --color-* disponibles)
+		document.addEventListener('DOMContentLoaded', function () {
+			const btn = document.getElementById('theme-toggle');
+			if (btn) btn.classList.add('hp');
+		});
+	</script>
 </body>
 
 </html>

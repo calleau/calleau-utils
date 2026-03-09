@@ -1,4 +1,14 @@
 /* =========================================================
+   Palette principale
+   ========================================================= */
+:root {
+	--c-primary: #5C899D;
+	--c-primary-dark: #2E6377; /* version sombre pour le texte (contraste AA) */
+	--c-secondary: #FFFCEF;
+	--c-tertiary: #C07850;
+}
+
+/* =========================================================
    Variables de thème
    ========================================================= */
 
@@ -47,9 +57,24 @@
 }
 
 /* =========================================================
+   Espacement
+   ========================================================= */
+:root {
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.25rem;
+	--space-6: 1.5rem;
+	--space-8: 2rem;
+}
+
+/* =========================================================
    Reset / Base
    ========================================================= */
-* {
+*,
+*::before,
+*::after {
 	box-sizing: border-box;
 }
 
@@ -65,6 +90,7 @@ body {
 	background: var(--color-bg);
 	color: var(--color-text);
 	line-height: 1.5;
+	font-size: 16px;
 }
 
 /* Liens */
@@ -144,12 +170,16 @@ p {
    ========================================================= */
 .btn {
 	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	border-radius: 12px;
-	padding: 10px 14px;
+	padding: 11px 16px;
 	font: 600 15px/1.1 Inter, sans-serif;
 	cursor: pointer;
 	border: 1px solid transparent;
 	transition: filter .15s ease, transform .02s ease;
+	text-decoration: none;
 }
 
 .btn:active {
@@ -201,7 +231,7 @@ p {
 	background: var(--color-surface-2);
 }
 
-.btn-icon{
+.btn-icon {
 	width: 2.2rem;
 	height: 2.2rem;
 	border-radius: 8px;
@@ -284,4 +314,42 @@ textarea:focus {
 
 .step:hover {
 	background: var(--color-accent-100);
+}
+
+/* =========================================================
+   Bouton de bascule light / dark
+   ========================================================= */
+.btn-theme-toggle {
+	position: fixed;
+	top: 1rem;
+	right: 1rem;
+	z-index: 100;
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: 50%;
+	border: 1px solid var(--color-divider, rgba(0, 0, 0, 0.15));
+	background: var(--color-surface, rgba(255, 255, 255, 0.85));
+	color: var(--color-text, #1c1c1c);
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	transition: background 0.2s, border-color 0.2s;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-theme-toggle:hover {
+	background: var(--color-surface-2, rgba(0, 0, 0, 0.06));
+}
+
+/* Sur la homepage, les variables de thème classiques ne sont pas définies */
+.btn-theme-toggle.hp {
+	border-color: rgba(46, 99, 119, 0.25);
+	background: rgba(255, 252, 239, 0.9);
+	color: #1c1c1c;
+}
+
+:root[data-theme="dark"] .btn-theme-toggle.hp {
+	background: rgba(24, 19, 15, 0.9);
+	border-color: rgba(123, 175, 194, 0.25);
+	color: #ede8d4;
 }

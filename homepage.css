@@ -1,0 +1,140 @@
+/* =========================================================
+   Homepage — variables de thème propres à la page
+   ========================================================= */
+:root[data-theme="light"] {
+	--hp-bg: #FFFCEF;
+	--hp-text: #1c1c1c;
+	--hp-num: #2E6377;
+	--hp-divider: rgba(46, 99, 119, 0.2);
+	--hp-arrow: rgba(28, 28, 28, 0.35);
+}
+
+:root[data-theme="dark"] {
+	--hp-bg: #17120e;
+	--hp-text: #ede8d4;
+	--hp-num: #7BAFC2;
+	--hp-divider: rgba(123, 175, 194, 0.2);
+	--hp-arrow: rgba(237, 232, 212, 0.35);
+}
+
+/* =========================================================
+   Homepage — styles spécifiques
+   ========================================================= */
+
+body,
+html {
+	height: 100%;
+	background: var(--hp-bg);
+	color: var(--hp-text);
+	transition: background 0.25s, color 0.25s;
+}
+
+.home {
+	height: 100%;
+	display: grid;
+	place-items: center;
+	padding: 2rem;
+}
+
+.home-inner {
+	display: flex;
+	flex-direction: column;
+	max-width: 540px;
+	width: 100%;
+}
+
+/* Surtitre */
+.home-eyebrow {
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--hp-num);
+	margin: 0 0 1.25rem 0;
+}
+
+/* Titre principal */
+.home-title {
+	font-size: clamp(3.5rem, 10vw, 6rem);
+	font-weight: 800;
+	line-height: 0.95;
+	letter-spacing: -0.04em;
+	margin: 0 0 2.75rem 0;
+	color: var(--hp-text);
+}
+
+.home-title em {
+	font-style: normal;
+	color: var(--c-primary);
+}
+
+/* Barre d'accent */
+.accent-bar {
+	width: 48px;
+	height: 4px;
+	background: var(--c-tertiary);
+	margin-bottom: 2.5rem;
+	border-radius: 2px;
+}
+
+/* Liste de navigation */
+.menu {
+	display: flex;
+	flex-direction: column;
+}
+
+.menu-item {
+	display: flex;
+	align-items: center;
+	gap: 1.5rem;
+	padding: 1.1rem 0.5rem 1.1rem 0;
+	border-bottom: 1px solid var(--hp-divider);
+	text-decoration: none;
+	color: var(--hp-text);
+	transition: padding-left 0.2s ease, color 0.25s;
+}
+
+.menu-item:first-child {
+	border-top: 1px solid var(--hp-divider);
+}
+
+.menu-item:hover {
+	text-decoration: none;
+	padding-left: 0.75rem;
+}
+
+.menu-item:hover .menu-num {
+	color: var(--c-tertiary);
+}
+
+.menu-item:hover .menu-arrow {
+	transform: translateX(6px);
+	opacity: 0.8;
+	color: var(--hp-num);
+}
+
+/* Numéro */
+.menu-num {
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	color: var(--hp-num);
+	min-width: 2rem;
+	transition: color 0.2s;
+}
+
+/* Label du lien */
+.menu-label {
+	flex: 1;
+	font-size: 1.125rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+/* Flèche */
+.menu-arrow {
+	font-size: 1rem;
+	opacity: 0.35;
+	color: var(--hp-text);
+	transition: transform 0.2s ease, opacity 0.2s, color 0.2s;
+}
