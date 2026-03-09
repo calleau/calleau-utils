@@ -1,19 +1,6 @@
-// Lit le thème depuis localStorage ou le cookie (le cookie fonctionne entre sous-dossiers sur file://)
-function _readTheme() {
-	try { const v = localStorage.getItem('theme'); if (v) return v; } catch (_) {}
-	const m = document.cookie.match(/(?:^|; )theme=([^;]+)/);
-	return m ? m[1] : null;
-}
-
-// Sauvegarde dans les deux pour une compatibilité maximale
-function _saveTheme(value) {
-	try { localStorage.setItem('theme', value); } catch (_) {}
-	document.cookie = 'theme=' + value + '; path=/; max-age=31536000; SameSite=Lax';
-}
-
 // Appliqué immédiatement pour éviter le flash de thème au chargement
 (function () {
-	const saved = _readTheme();
+	const saved = localStorage.getItem('theme');
 	const preferred = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 	document.documentElement.setAttribute('data-theme', preferred);
 })();
@@ -51,7 +38,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		const current = document.documentElement.getAttribute('data-theme');
 		const next = current === 'dark' ? 'light' : 'dark';
 		document.documentElement.setAttribute('data-theme', next);
-		_saveTheme(next);
+		localStorage.setItem('theme', next);
 		syncIcon();
 	});
 

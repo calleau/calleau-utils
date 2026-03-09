@@ -2,527 +2,77 @@
 <html lang="fr" data-theme="light">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bonus de bienvenue</title>
-  <link rel="stylesheet" href="../theme.css" />
-  <link rel="stylesheet" href="welcome-bonus.css" />
-  <script src="../theme-toggle.js"></script>
-  <script src="versions.js"></script>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Bonus de bienvenue</title>
+	<link rel="stylesheet" href="../theme.css" />
+	<link rel="stylesheet" href="welcome-bonus.css" />
+	<script src="../theme-toggle.js"></script>
+	<script src="versions.js"></script>
 </head>
 
 <body>
-  <div class="wrap">
+	<div class="wrap">
 
-    <header class="toolbar">
-      <h1 class="title">Bonus de bienvenue</h1>
-    </header>
 
-    <section class="card">
-      <div id="bookies-container"></div>
-      <div class="bookies-controls">
-        <div class="actions">
-          <button class="btn btn-ghost" onclick="addBookie()">+ Ajouter un site</button>
-          <button class="btn btn-ghost" onclick="removeBookie()">− Retirer le dernier</button>
-        </div>
-        <div class="conv-rate-group">
-          <span class="conv-rate-label">Taux de conversion freebet</span>
-          <div class="numinput">
-            <input type="number" id="convRate" value="80" min="1" max="100" step="1" onclick="this.select()" />
-            <span class="unit">%</span>
-            <div class="nbtn-wrap">
-              <button class="nbtn" onclick="incrementConvRate()" type="button">▲</button>
-              <button class="nbtn" onclick="decrementConvRate()" type="button">▼</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+		<header class="toolbar">
+			<a href="../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Bonus de bienvenue</h1>
+		</header>
 
-    <button class="btn btn-primary btn-calc" onclick="calculate()">Calculer les mises</button>
+		<section>
+			<div id="bookies-container"></div>
+			<div class="bookies-controls">
+				<div class="actions">
+					<button class="btn btn-ghost" onclick="addBookie()">+ Ajouter un site</button>
+					<button class="btn btn-ghost" onclick="removeBookie()">− Retirer le dernier</button>
+				</div>
+				<div class="conv-rate-group">
+					<span class="conv-rate-label">Taux de conversion freebet</span>
+					<div class="numinput">
+						<input type="number" id="convRate" value="80" min="1" max="100" step="1"
+							onclick="this.select()" />
+						<span class="unit">%</span>
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="incrementConvRate()" type="button">▲</button>
+							<button class="nbtn" onclick="decrementConvRate()" type="button">▼</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
 
-    <div id="results" style="display:none">
-      <div id="error-container"></div>
-      <div id="gain-banner"></div>
-      <div id="stakes-grid" class="stakes-grid"></div>
-      <div id="breakdown-container"></div>
-    </div>
+		<button class="btn btn-primary btn-calc" onclick="calculate()">Calculer les mises</button>
 
-  </div>
+		<div id="results" style="display:none">
+			<div id="error-container"></div>
+			<div id="gain-banner"></div>
+			<div id="stakes-grid" class="stakes-grid"></div>
+			<div id="breakdown-container"></div>
+		</div>
 
-  <!-- Widget versions précédentes -->
-  <div id="versions-widget">
-    <button id="versions-btn" class="btn-versions-toggle" aria-label="Versions précédentes" title="Versions précédentes">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-      </svg>
-    </button>
-    <div id="versions-dropdown" class="versions-dropdown" hidden>
-      <p class="versions-msg">Chargement…</p>
-    </div>
-  </div>
+		<footer class="page-footer">
+			<span class="footer-version" id="footer-version"></span>
+		</footer>
 
-  <script>
-    const ACCENT_COLORS = ['#5C899D', '#C07850', '#7BA18A', '#9B7EC4', '#C4A255'];
+	</div>
 
-    let bookies = [];
+	<!-- Widget versions précédentes -->
+	<div id="versions-widget">
+		<button id="versions-btn" class="btn-versions-toggle" aria-label="Versions précédentes"
+			title="Versions précédentes">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+				stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<circle cx="12" cy="12" r="10" />
+				<polyline points="12 6 12 12 16 14" />
+			</svg>
+		</button>
+		<div id="versions-dropdown" class="versions-dropdown" hidden>
+			<p class="versions-msg">Chargement…</p>
+		</div>
+	</div>
 
-    function makeBookie(i) {
-      const defaults = [
-        { name: 'Site 1', outcome: 'Issue 1', odds: 2,   bonus: 'freebet_always', min: 100, maxBonus: 100 },
-        { name: 'Site 2', outcome: 'Issue 2', odds: 3.5, bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-        { name: 'Site 3', outcome: 'Issue 3', odds: 3.5, bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-      ];
-      return defaults[i] || { name: `Site ${i + 1}`, outcome: `Issue ${i + 1}`, odds: 2.0, bonus: 'freebet_lose', min: 100, maxBonus: 100 };
-    }
-
-    function init() {
-      for (let i = 0; i < 3; i++) bookies.push(makeBookie(i));
-      renderBookies();
-    }
-
-    function addBookie() {
-      if (bookies.length >= 5) return;
-      bookies.push(makeBookie(bookies.length));
-      renderBookies();
-    }
-
-    function removeBookie() {
-      if (bookies.length <= 2) return;
-      bookies.pop();
-      renderBookies();
-    }
-
-    function renderBookies() {
-      const container = document.getElementById('bookies-container');
-      container.innerHTML = `
-        <div class="bookies-table-container">
-          <table class="bookies-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Nom du site</th>
-                <th>Issue couverte</th>
-                <th>Cote</th>
-                <th>Type de bonus</th>
-                <th>Mise min</th>
-                <th>Bonus max</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${bookies.map((b, i) => `
-                <tr>
-                  <td>
-                    <div class="bookie-num-badge">
-                      <div style="width:8px;height:8px;border-radius:50%;background:${ACCENT_COLORS[i]}"></div>
-                      ${i + 1}
-                    </div>
-                  </td>
-                  <td><input type="text" value="${b.name}" oninput="bookies[${i}].name=this.value" onclick="this.select()" placeholder="Ex: Betclic" /></td>
-                  <td><input type="text" value="${b.outcome}" oninput="bookies[${i}].outcome=this.value" onclick="this.select()" placeholder="Ex: Équipe gagne" /></td>
-                  <td>
-                    <div class="numinput">
-                      <input type="number" id="odds-${i}" value="${b.odds}" step="0.01" min="1.01" oninput="bookies[${i}].odds=parseFloat(this.value)||1" onclick="this.select()" />
-                      <div class="nbtn-wrap">
-                        <button class="nbtn" onclick="incrementOdds(${i})" type="button">▲</button>
-                        <button class="nbtn" onclick="decrementOdds(${i})" type="button">▼</button>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="bonus-select-wrapper">
-                      <span class="bonus-dot bonus-dot-${i}" data-bonus="${b.bonus}"></span>
-                      <select onchange="bookies[${i}].bonus=this.value; updateBonusDot(${i}, this.value)">
-                        <option value="freebet_lose"   ${b.bonus === 'freebet_lose'   ? 'selected' : ''}>Freebet si perdant</option>
-                        <option value="freebet_always" ${b.bonus === 'freebet_always' ? 'selected' : ''}>Freebet toujours</option>
-                        <option value="cash_lose"      ${b.bonus === 'cash_lose'      ? 'selected' : ''}>Cash si perdant</option>
-                        <option value="cash_always"    ${b.bonus === 'cash_always'    ? 'selected' : ''}>Cash toujours</option>
-                        <option value="no_bonus"       ${b.bonus === 'no_bonus'       ? 'selected' : ''}>Sans bonus</option>
-                      </select>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="numinput">
-                      <input type="number" id="min-${i}" value="${b.min}" step="1" min="0" oninput="bookies[${i}].min=parseFloat(this.value)||0" onclick="this.select()" />
-                      <span class="unit">€</span>
-                      <div class="nbtn-wrap">
-                        <button class="nbtn" onclick="incrementMin(${i})" type="button">▲</button>
-                        <button class="nbtn" onclick="decrementMin(${i})" type="button">▼</button>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="numinput">
-                      <input type="number" id="max-${i}" value="${b.maxBonus}" step="1" min="0" oninput="bookies[${i}].maxBonus=parseFloat(this.value)||0" onclick="this.select()" />
-                      <span class="unit">€</span>
-                      <div class="nbtn-wrap">
-                        <button class="nbtn" onclick="incrementMax(${i})" type="button">▲</button>
-                        <button class="nbtn" onclick="decrementMax(${i})" type="button">▼</button>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
-
-    function incrementOdds(i) {
-      const input = document.getElementById(`odds-${i}`);
-      const newVal = Math.round(((parseFloat(input.value) || 1.01) + 0.01) * 100) / 100;
-      input.value = newVal; bookies[i].odds = newVal;
-    }
-    function decrementOdds(i) {
-      const input = document.getElementById(`odds-${i}`);
-      const newVal = Math.max(1.01, Math.round(((parseFloat(input.value) || 1.01) - 0.01) * 100) / 100);
-      input.value = newVal; bookies[i].odds = newVal;
-    }
-    function incrementMin(i) {
-      const input = document.getElementById(`min-${i}`);
-      const newVal = (parseFloat(input.value) || 0) + 10;
-      input.value = newVal; bookies[i].min = newVal;
-    }
-    function decrementMin(i) {
-      const input = document.getElementById(`min-${i}`);
-      const newVal = Math.max(0, (parseFloat(input.value) || 0) - 10);
-      input.value = newVal; bookies[i].min = newVal;
-    }
-    function incrementMax(i) {
-      const input = document.getElementById(`max-${i}`);
-      const newVal = (parseFloat(input.value) || 0) + 10;
-      input.value = newVal; bookies[i].maxBonus = newVal;
-    }
-    function decrementMax(i) {
-      const input = document.getElementById(`max-${i}`);
-      const newVal = Math.max(0, (parseFloat(input.value) || 0) - 10);
-      input.value = newVal; bookies[i].maxBonus = newVal;
-    }
-    function incrementConvRate() {
-      const input = document.getElementById('convRate');
-      input.value = Math.min(100, (parseFloat(input.value) || 80) + 1);
-    }
-    function decrementConvRate() {
-      const input = document.getElementById('convRate');
-      input.value = Math.max(1, (parseFloat(input.value) || 80) - 1);
-    }
-
-    function updateBonusDot(index, bonusType) {
-      const dot = document.querySelector(`.bonus-dot-${index}`);
-      if (dot) dot.setAttribute('data-bonus', bonusType);
-    }
-
-    function fmt(v, decimals = 2) {
-      return v.toLocaleString('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    }
-
-    function calculate() {
-      const convRate = (parseFloat(document.getElementById('convRate').value) || 80) / 100;
-
-      const rows = document.querySelectorAll('.bookies-table tbody tr');
-      rows.forEach((row, i) => {
-        const inputs = row.querySelectorAll('input, select');
-        bookies[i].name     = inputs[0].value;
-        bookies[i].outcome  = inputs[1].value;
-        bookies[i].odds     = parseFloat(inputs[2].value) || 1.01;
-        bookies[i].bonus    = inputs[3].value;
-        bookies[i].min      = parseFloat(inputs[4].value) || 0;
-        bookies[i].maxBonus = parseFloat(inputs[5].value) || 0;
-      });
-
-      const n = bookies.length;
-
-      const effectiveConv = bookies.map(b => {
-        if (b.bonus === 'no_bonus') return 0;
-        if (b.bonus === 'cash_lose' || b.bonus === 'cash_always') return 1;
-        return convRate;
-      });
-
-      let capped = bookies.map(() => false);
-      let stakes = null;
-
-      for (let iter = 0; iter < 20; iter++) {
-        const winCoef = bookies.map((b, j) => {
-          if (b.bonus === 'no_bonus' || b.bonus === 'freebet_lose' || b.bonus === 'cash_lose') return b.odds - 1;
-          return capped[j] ? (b.odds - 1) : (b.odds - 1 + effectiveConv[j]);
-        });
-        const winConst = bookies.map((b, j) => {
-          if ((b.bonus === 'freebet_always' || b.bonus === 'cash_always') && capped[j]) return effectiveConv[j] * b.maxBonus;
-          return 0;
-        });
-        const loseCoef = bookies.map((b, j) => {
-          if (b.bonus === 'no_bonus') return -1;
-          return capped[j] ? -1 : -(1 - effectiveConv[j]);
-        });
-        const loseConst = bookies.map((b, j) => {
-          if (b.bonus === 'no_bonus') return 0;
-          return capped[j] ? effectiveConv[j] * b.maxBonus : 0;
-        });
-
-        const eff = bookies.map((b, j) => winCoef[j] - loseCoef[j]);
-        const C   = bookies.map((b, j) => winConst[j] - loseConst[j]);
-
-        if (bookies.some((b, j) => Math.abs(eff[j]) < 1e-9)) {
-          showError("Calcul impossible : vérifiez vos cotes et vos types de bonus.");
-          return;
-        }
-
-        let s0 = bookies[0].min || 1;
-        for (let k = 1; k < n; k++) {
-          const needed = (eff[k] * (bookies[k].min || 0) - C[0] + C[k]) / eff[0];
-          if (needed > s0) s0 = needed;
-        }
-        if (s0 < (bookies[0].min || 0)) s0 = bookies[0].min || 0;
-
-        const candidate = bookies.map((b, j) => j === 0 ? s0 : (eff[0] * s0 + C[0] - C[j]) / eff[j]);
-
-        if (candidate.some(s => s < -0.01)) {
-          showError("Impossible d'équilibrer les mises avec ces paramètres. Vérifiez les cotes et les bonus.");
-          return;
-        }
-
-        let changed = false;
-        bookies.forEach((b, j) => {
-          if (b.bonus === 'no_bonus' || b.maxBonus <= 0) return;
-          const shouldCap = candidate[j] > b.maxBonus + 0.01;
-          if (shouldCap !== capped[j]) { capped[j] = shouldCap; changed = true; }
-        });
-
-        stakes = candidate;
-        if (!changed) break;
-      }
-
-      if (!stakes) { showError("Erreur de calcul interne."); return; }
-
-      const bonusAmount = (b, s, bIdx) => {
-        if (b.bonus === 'no_bonus') return 0;
-        return effectiveConv[bIdx] * Math.min(s, b.maxBonus > 0 ? b.maxBonus : s);
-      };
-
-      const gains = bookies.map((b, outcomeIdx) => {
-        let g = 0;
-        bookies.forEach((bk, j) => {
-          const s = stakes[j];
-          if (j === outcomeIdx) {
-            g += (bk.odds - 1) * s;
-            if (bk.bonus === 'freebet_always' || bk.bonus === 'cash_always') g += bonusAmount(bk, s, j);
-          } else {
-            g += -s + bonusAmount(bk, s, j);
-          }
-        });
-        return g;
-      });
-
-      const totalStaked = stakes.reduce((a, b) => a + b, 0);
-      const avgGain = gains.reduce((a, b) => a + b, 0) / gains.length;
-      const roi = (avgGain / totalStaked) * 100;
-
-      showResults({ stakes, gains, avgGain, totalStaked, roi, convRate, effectiveConv, capped, bonusAmount });
-    }
-
-    function showError(msg) {
-      document.getElementById('results').style.display = 'flex';
-      document.getElementById('error-container').innerHTML = `<div class="error-box">⚠ ${msg}</div>`;
-      document.getElementById('gain-banner').innerHTML = '';
-      document.getElementById('stakes-grid').innerHTML = '';
-      document.getElementById('breakdown-container').innerHTML = '';
-    }
-
-    function showResults({ stakes, gains, avgGain, totalStaked, roi, convRate, effectiveConv, capped, bonusAmount }) {
-      document.getElementById('error-container').innerHTML = '';
-      document.getElementById('results').style.display = 'flex';
-
-      document.getElementById('gain-banner').innerHTML = `
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <div class="metric-label">Total misé</div>
-            <div class="metric-value">${fmt(totalStaked)} €</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Gain net</div>
-            <div class="metric-value ${avgGain >= 0 ? 'pos' : 'neg'}">${fmt(avgGain)} €</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Total garanti</div>
-            <div class="metric-value pos">${fmt(totalStaked + avgGain)} €</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">ROI</div>
-            <div class="metric-value ${roi >= 0 ? 'pos' : 'neg'}">${fmt(roi, 1)} %</div>
-          </div>
-        </div>
-      `;
-
-      document.getElementById('stakes-grid').innerHTML = bookies.map((b, i) => {
-        const capNote = capped[i] ? `<div class="stake-cap">⚠ Bonus plafonné à ${fmt(b.maxBonus)} €</div>` : '';
-        return `
-          <div class="stake-card" style="border-left-color:${ACCENT_COLORS[i]}">
-            <div class="stake-bookie" style="color:${ACCENT_COLORS[i]}">${b.name}</div>
-            <div class="stake-name">${b.outcome}</div>
-            <div class="stake-amount">${fmt(stakes[i])} €</div>
-            <div class="stake-outcome">@ cote ${fmt(b.odds, 2)}</div>
-            ${capNote}
-          </div>
-        `;
-      }).join('');
-
-      const isCashBonus = (bonus) => bonus === 'cash_lose' || bonus === 'cash_always';
-
-      const tableHTML = `
-        <div class="card breakdown">
-          <table class="breakdown-table">
-            <thead>
-              <tr>
-                <th>Site / Bookmaker</th>
-                ${bookies.map(b => `
-                  <th>
-                    <div class="th-outcome-title">${b.outcome}</div>
-                    <div class="th-outcome-sub">${b.name} gagne @ ${fmt(b.odds)}</div>
-                  </th>
-                `).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${bookies.map((site, siteIdx) => {
-                const s = stakes[siteIdx];
-                const bonusRaw  = site.bonus === 'no_bonus' ? 0 : Math.min(s, site.maxBonus > 0 ? site.maxBonus : s);
-                const bonusCash = bonusAmount(site, s, siteIdx);
-                const isCash    = isCashBonus(site.bonus);
-                return `
-                  <tr>
-                    <td>
-                      <div class="site-name">${site.name}</div>
-                      <div class="site-meta">Mise : ${fmt(s)} €${capped[siteIdx] ? ' ⚠' : ''}</div>
-                    </td>
-                    ${bookies.map((outcome, outcomeIdx) => {
-                      const wins = siteIdx === outcomeIdx;
-                      if (wins) {
-                        const cashProfit     = (site.odds - 1) * s;
-                        const hasAlwaysBonus = site.bonus === 'freebet_always' || site.bonus === 'cash_always';
-                        const bonusIfWin     = hasAlwaysBonus ? bonusCash : 0;
-                        const total          = cashProfit + bonusIfWin;
-                        if (isCash) return `
-                          <td class="td-outcome win">
-                            <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val pos">+${fmt(cashProfit)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Bonus cash</span><span class="detail-val ${bonusIfWin > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusIfWin)} €</span></div>
-                            <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val pos strong">+${fmt(total)} €</span></div>
-                          </td>`;
-                        const fbRaw = hasAlwaysBonus ? bonusRaw : 0;
-                        return `
-                          <td class="td-outcome win">
-                            <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val pos">+${fmt(cashProfit)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${fbRaw > 0 ? 'neut' : 'text-muted'}">+${fmt(fbRaw)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Freebet @${Math.round(convRate * 100)}%</span><span class="detail-val ${bonusIfWin > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusIfWin)} €</span></div>
-                            <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val pos strong">+${fmt(total)} €</span></div>
-                          </td>`;
-                      } else {
-                        const cashLoss = -s;
-                        const total    = cashLoss + bonusCash;
-                        if (isCash) return `
-                          <td class="td-outcome lose">
-                            <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val neg">${fmt(cashLoss)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Bonus cash</span><span class="detail-val ${bonusCash > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusCash)} €</span></div>
-                            <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val ${total >= 0 ? 'neut' : 'neg'} strong">${fmt(total)} €</span></div>
-                          </td>`;
-                        return `
-                          <td class="td-outcome lose">
-                            <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val neg">${fmt(cashLoss)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${bonusRaw > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusRaw)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Freebet @${Math.round(convRate * 100)}%</span><span class="detail-val ${bonusCash > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusCash)} €</span></div>
-                            <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val ${total >= 0 ? 'neut' : 'neg'} strong">${fmt(total)} €</span></div>
-                          </td>`;
-                      }
-                    }).join('')}
-                  </tr>
-                `;
-              }).join('')}
-
-              <!-- Ligne totaux -->
-              <tr class="total-row">
-                <td><div class="total-label"><div class="site-name">Total</div></div></td>
-                ${bookies.map((outcome, outcomeIdx) => {
-                  let totalCash = 0, totalFbRaw = 0, totalFbConv = 0, totalCashBonus = 0;
-                  let hasCash = false, hasFb = false;
-                  bookies.forEach((site, siteIdx) => {
-                    const s        = stakes[siteIdx];
-                    const bonusRaw = site.bonus === 'no_bonus' ? 0 : Math.min(s, site.maxBonus > 0 ? site.maxBonus : s);
-                    const bCash    = bonusAmount(site, s, siteIdx);
-                    const wins     = siteIdx === outcomeIdx;
-                    const isCash   = isCashBonus(site.bonus);
-                    if (isCash && site.bonus !== 'no_bonus') hasCash = true;
-                    if (!isCash && site.bonus !== 'no_bonus') hasFb = true;
-                    if (wins) {
-                      totalCash += (site.odds - 1) * s;
-                      if (site.bonus === 'freebet_always' || site.bonus === 'cash_always') {
-                        if (isCash) totalCashBonus += bCash;
-                        else { totalFbRaw += bonusRaw; totalFbConv += bCash; }
-                      }
-                    } else {
-                      totalCash += -s;
-                      if (isCash) totalCashBonus += bCash;
-                      else { totalFbRaw += bonusRaw; totalFbConv += bCash; }
-                    }
-                  });
-                  const total = totalCash + totalFbConv + totalCashBonus;
-                  let lines = `<div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val ${totalCash >= 0 ? 'pos' : 'neg'} strong">${fmt(totalCash)} €</span></div>`;
-                  if (hasFb) {
-                    lines += `<div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${totalFbRaw > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalFbRaw)} €</span></div>`;
-                    lines += `<div class="detail-line"><span class="detail-lbl">Freebet @${Math.round(convRate * 100)}%</span><span class="detail-val ${totalFbConv > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalFbConv)} €</span></div>`;
-                  }
-                  if (hasCash) {
-                    lines += `<div class="detail-line"><span class="detail-lbl">Cash bonus</span><span class="detail-val ${totalCashBonus > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalCashBonus)} €</span></div>`;
-                  }
-                  lines += `<div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val ${total >= 0 ? 'pos' : 'neg'} strong">${fmt(total)} €</span></div>`;
-                  return `<td class="td-outcome">${lines}</td>`;
-                }).join('')}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        ${capped.some(Boolean) ? `<p class="tip">⚠ = bonus plafonné au maximum du site</p>` : ''}
-      `;
-
-      document.getElementById('breakdown-container').innerHTML = tableHTML;
-      document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    init();
-
-    /* ---- Widget versions précédentes ---- */
-    const versionsWidget   = document.getElementById('versions-widget');
-    const versionsBtn      = document.getElementById('versions-btn');
-    const versionsDropdown = document.getElementById('versions-dropdown');
-    let versionsLoaded = false;
-
-    versionsBtn.addEventListener('click', () => {
-      const isOpen = !versionsDropdown.hidden;
-      versionsDropdown.hidden = isOpen;
-      if (isOpen || versionsLoaded) return;
-
-      versionsLoaded = true;
-      const versions = window.AVAILABLE_VERSIONS || [];
-
-      if (versions.length === 0) {
-        versionsDropdown.innerHTML = '<p class="versions-msg">Aucune version disponible</p>';
-      } else {
-        versionsDropdown.innerHTML =
-          '<p class="versions-header">Versions précédentes</p>' +
-          versions.map(v =>
-            `<a href="${v}/index.html" class="version-link">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-              </svg>
-              ${v}
-            </a>`
-          ).join('');
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!versionsWidget.contains(e.target)) versionsDropdown.hidden = true;
-    });
-  </script>
+	<script src="welcome-bonus.js"></script>
 </body>
 
 </html>
