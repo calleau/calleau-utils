@@ -328,6 +328,10 @@ input[type="number"] { -moz-appearance: textfield; }
 /* =========================================================
    Champ numérique avec boutons +/- inline — tableau bookmakers
    ========================================================= */
+.numinput[hidden] {
+	display: none;
+}
+
 .numinput {
 	display: flex;
 	align-items: center;

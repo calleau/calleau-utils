@@ -126,7 +126,7 @@ function renderBookies() {
                   <td>
                     <div class="bonus-select-wrapper">
                       <span class="bonus-dot bonus-dot-${i}" data-bonus="${b.bonus}"></span>
-                      <select id="bonus-${i}" onchange="bookies[${i}].bonus=this.value; updateBonusDot(${i}, this.value)">
+                      <select id="bonus-${i}" onchange="bookies[${i}].bonus=this.value; updateBonusDot(${i}, this.value); updateConvRateVisibility(${i}, this.value)">
                         <option value="freebet_lose"   ${b.bonus === 'freebet_lose' ? 'selected' : ''}>Freebet si perdant</option>
                         <option value="freebet_always" ${b.bonus === 'freebet_always' ? 'selected' : ''}>Freebet toujours</option>
                         <option value="cash_lose"      ${b.bonus === 'cash_lose' ? 'selected' : ''}>Cash si perdant</option>
@@ -156,11 +156,15 @@ function renderBookies() {
                     </div>
                   </td>
                   <td>
-                    <div class="numinput">
+                    <div id="conv-cell-${i}" class="numinput" ${['cash_lose','cash_always','no_bonus'].includes(b.bonus) ? 'hidden' : ''}>
                       <input type="number" id="conv-${i}" value="${b.convRate}" min="1" max="100" step="1"
                         oninput="bookies[${i}].convRate=Math.min(100,Math.max(1,parseFloat(this.value)||80))"
                         onclick="this.select()" />
                       <span class="unit">%</span>
+                      <div class="nbtn-wrap">
+                        <button class="nbtn" onclick="incrementConv(${i})" type="button">▲</button>
+                        <button class="nbtn" onclick="decrementConv(${i})" type="button">▼</button>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -243,6 +247,20 @@ function decrementMax(i) {
 	const newVal = Math.max(0, (parseFloat(input.value) || 0) - 10);
 	input.value = newVal; bookies[i].maxBonus = newVal;
 }
+function incrementConv(i) {
+	const input = document.getElementById(`conv-${i}`);
+	const newVal = Math.min(100, (parseFloat(input.value) || 80) + 5);
+	input.value = newVal; bookies[i].convRate = newVal;
+}
+function decrementConv(i) {
+	const input = document.getElementById(`conv-${i}`);
+	const newVal = Math.max(1, (parseFloat(input.value) || 80) - 5);
+	input.value = newVal; bookies[i].convRate = newVal;
+}
+function updateConvRateVisibility(i, bonusType) {
+	const cell = document.getElementById(`conv-cell-${i}`);
+	if (cell) cell.hidden = ['cash_lose', 'cash_always', 'no_bonus'].includes(bonusType);
+}
 
 function selectSite(i, siteKey) {
 	bookies[i].site = siteKey;
@@ -257,6 +275,7 @@ function selectSite(i, siteKey) {
 	document.getElementById(`name-${i}`).value = siteKey;
 	document.getElementById(`bonus-${i}`).value = preset.bonus;
 	updateBonusDot(i, preset.bonus);
+	updateConvRateVisibility(i, preset.bonus);
 	document.getElementById(`min-${i}`).value = preset.min;
 	document.getElementById(`max-${i}`).value = preset.maxBonus;
 	document.getElementById(`conv-${i}`).value = preset.convRate;
