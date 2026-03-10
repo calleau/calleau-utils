@@ -8,17 +8,18 @@ const SITE_LIST = [
 
 const SITE_PRESETS = {
 	'Betclic':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
-	'Betsson':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
-	'bwin':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
-	'Daznbet':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
-	'Feelingbet':     { bonus: 'freebet_lose',   min: 50,  maxBonus: 50,  convRate: 70 },
-	'Olybet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'Betsson':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
+	'bwin':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
+	'Daznbet':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
+	'Feelingbet':     { bonus: 'freebet_lose',   min: 50,  maxBonus: 50,  convRate: 65 },
+	'Olybet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
 	'Parions Sports': { bonus: 'freebet_always', min: 100, maxBonus: 100, convRate: 85 },
-	'PMU':            { bonus: 'cash_lose',      min: 100, maxBonus: 100, convRate: 70 },
-	'Pokerstars':     { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'PMU':            { bonus: 'cash_lose',      min: 100, maxBonus: 100, convRate: 65 },
+	'Pokerstars':     { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
 	'Unibet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
-	'VBET':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'VBET':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
 	'Winamax':        { bonus: 'cash_lose',      min: 100, maxBonus: 100, convRate: 80 },
+	'-Autre-':        { bonus: 'no_bonus',      min: 100, maxBonus: 100, convRate: 65 }
 };
 
 const OUTCOMES = ['1', 'N', '2'];
@@ -44,7 +45,8 @@ function makeBookie(i) {
 		{ site: 'Winamax', name: 'Winamax', bonus: 'freebet_always', min: 100, maxBonus: 100, convRate: 80 },
 		{ site: 'Unibet',  name: 'Unibet',  bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
 	];
-	return defaults[i] || { site: '-Autre-', name: `Site ${i + 1}`, bonus: 'freebet_lose', min: 100, maxBonus: 100, convRate: 80 };
+	const p = SITE_PRESETS['-Autre-'];
+	return defaults[i] || { site: '-Autre-', name: `Site ${i + 1}`, bonus: p.bonus, min: p.min, maxBonus: p.maxBonus, convRate: p.convRate };
 }
 
 function makeOddsForSite() {
@@ -52,18 +54,6 @@ function makeOddsForSite() {
 }
 
 function init() {
-	for (let i = 0; i < 3; i++) {
-		bookies.push(makeBookie(i));
-		oddsGrid.push(makeOddsForSite());
-	}
-	// Cotes d'exemple — match 0
-	oddsGrid[0][0] = [2.10, 3.20, 3.50];
-	oddsGrid[1][0] = [2.05, 3.40, 3.30];
-	oddsGrid[2][0] = [2.15, 3.10, 3.60];
-	// Cotes d'exemple — match 1
-	oddsGrid[0][1] = [1.90, 3.50, 4.00];
-	oddsGrid[1][1] = [1.95, 3.30, 3.80];
-	oddsGrid[2][1] = [1.85, 3.60, 4.10];
 	renderAll();
 }
 
@@ -76,10 +66,9 @@ function addBookie() {
 	renderAll();
 }
 
-function removeBookie() {
-	if (bookies.length <= 2) return;
-	bookies.pop();
-	oddsGrid.pop();
+function deleteBookie(i) {
+	bookies.splice(i, 1);
+	oddsGrid.splice(i, 1);
 	renderAll();
 }
 
@@ -138,6 +127,7 @@ function renderBookies() {
                 <th>Mise min</th>
                 <th>Bonus max</th>
                 <th>Taux FB</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -200,9 +190,19 @@ function renderBookies() {
                       </div>
                     </div>
                   </td>
+                  <td class="td-delete">
+                    <button class="btn-delete-bookie" onclick="deleteBookie(${i})" title="Supprimer ce site"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
+            <tfoot>
+              <tr class="add-bookie-row">
+                <td colspan="8">
+                  <button class="btn-add-bookie" onclick="addBookie()" ${bookies.length >= 15 ? 'disabled' : ''}>+ Ajouter un site</button>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       `;
@@ -229,7 +229,7 @@ function renderMatchesAndOdds() {
         <div class="match-section">
           <div class="match-header">
             <input type="text" class="match-name-input" value="${m.name}" oninput="matches[${mIdx}].name = this.value" onclick="this.select()" placeholder="Nom du match" />
-            ${matches.length > 1 ? `<button class="btn-remove-match" onclick="removeMatch(${mIdx})" title="Supprimer ce match">✕</button>` : ''}
+            ${matches.length > 1 ? `<button class="btn-remove-match" onclick="removeMatch(${mIdx})" title="Supprimer ce match"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
           </div>
           <div class="bookies-table-container">
             <table class="odds-table">
@@ -315,15 +315,16 @@ function updateConvRateVisibility(i, bonusType) {
 
 function selectSite(i, siteKey) {
 	bookies[i].site = siteKey;
-	if (siteKey === '-Autre-') return;
 	const preset = SITE_PRESETS[siteKey];
 	if (!preset) return;
-	bookies[i].name = siteKey;
+	if (siteKey !== '-Autre-') {
+		bookies[i].name = siteKey;
+		document.getElementById(`name-${i}`).value = siteKey;
+	}
 	bookies[i].bonus = preset.bonus;
 	bookies[i].min = preset.min;
 	bookies[i].maxBonus = preset.maxBonus;
 	bookies[i].convRate = preset.convRate;
-	document.getElementById(`name-${i}`).value = siteKey;
 	document.getElementById(`bonus-${i}`).value = preset.bonus;
 	updateBonusDot(i, preset.bonus);
 	updateConvRateVisibility(i, preset.bonus);
@@ -657,8 +658,8 @@ function showError(msg) {
 
 // ---- Détail d'une combinaison ----
 
-function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusAmount }) {
-	const matchLabel = active[0]?.matchLabel || '';
+function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusAmount, matchIndices }) {
+	const matchLabel = matchIndices ? matchIndices.map(mi => matches[mi].name).join(' + ') : (active[0]?.matchLabel || '');
 	document.getElementById('gain-banner').innerHTML = `
         ${matchLabel ? '<div class="result-match-label">' + matchLabel + '</div>' : ''}
         <div class="metrics-grid">

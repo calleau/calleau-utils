@@ -67,16 +67,62 @@
 	border-radius: 10px;
 }
 
-/* Contrôles sous le tableau */
-.bookies-controls {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	flex-wrap: wrap;
-	margin-top: 1rem;
-	padding-top: 1rem;
+/* Bouton supprimer une ligne bookie */
+.td-delete {
+	width: 2rem;
+	text-align: center;
+}
+
+.btn-delete-bookie {
+	background: none;
+	border: none;
+	color: var(--color-muted);
+	cursor: pointer;
+	font-size: 0.7rem;
+	padding: 4px 6px;
+	border-radius: 4px;
+	line-height: 1;
+	transition: background 0.15s, color 0.15s;
+}
+
+.btn-delete-bookie:hover:not(:disabled) {
+	background: var(--color-surface-2);
+	color: var(--color-text);
+}
+
+.btn-delete-bookie:disabled {
+	opacity: 0.25;
+	cursor: not-allowed;
+}
+
+/* Ligne d'ajout de site en bas du tableau */
+.add-bookie-row td {
+	padding: 0.4rem 0.75rem;
+	background: var(--color-surface-2);
 	border-top: 1px solid var(--color-divider);
+}
+
+.btn-add-bookie {
+	background: none;
+	border: none;
+	color: var(--color-muted);
+	cursor: pointer;
+	font-size: 0.8rem;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 4px;
+	letter-spacing: 0.03em;
+	transition: color 0.15s, background 0.15s;
+}
+
+.btn-add-bookie:hover:not(:disabled) {
+	color: var(--c-primary);
+	background: transparent;
+}
+
+.btn-add-bookie:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
 }
 
 .conv-rate-group {

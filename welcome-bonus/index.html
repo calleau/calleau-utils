@@ -22,12 +22,6 @@
 
 		<section>
 			<div id="bookies-container"></div>
-			<div class="bookies-controls">
-				<div class="actions">
-					<button class="btn btn-ghost" onclick="addBookie()">+ Ajouter un site</button>
-					<button class="btn btn-ghost" onclick="removeBookie()">− Retirer le dernier</button>
-				</div>
-			</div>
 		</section>
 
 		<section>
@@ -64,23 +58,17 @@
 	<div id="floating-actions">
 		<button class="btn-versions-toggle" aria-label="Remplir les cotes aléatoirement"
 			title="Remplir les cotes aléatoirement" onclick="randomizeOdds()">
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
 				stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-				<rect x="2" y="2" width="20" height="20" rx="3" />
-				<circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
-				<circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none" />
-				<circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none" />
-				<circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none" />
-				<circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+				<rect width="12" height="12" x="2" y="10" rx="2" ry="2"/><path d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6"/><path d="M6 18h.01"/><path d="M10 14h.01"/><path d="M15 6h.01"/><path d="M18 9h.01"/>
 			</svg>
 		</button>
 		<div id="versions-widget">
 			<button id="versions-btn" class="btn-versions-toggle" aria-label="Versions précédentes"
 				title="Versions précédentes">
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
 					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-					<circle cx="12" cy="12" r="10" />
-					<polyline points="12 6 12 12 16 14" />
+					<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>
 				</svg>
 			</button>
 			<div id="versions-dropdown" class="versions-dropdown" hidden>
