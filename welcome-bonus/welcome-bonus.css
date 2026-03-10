@@ -134,6 +134,10 @@
 	color: var(--color-text);
 }
 
+.results-tab-panel[hidden] {
+	display: none;
+}
+
 .results-tab-panel {
 	display: flex;
 	flex-direction: column;
