@@ -25,8 +25,10 @@ const SITE_PRESETS = {
 let bookies  = [];           // { site, name, bonus, min, maxBonus }
 let outcomes = ['1', 'N', '2'];
 let oddsGrid = [];           // oddsGrid[siteIdx][outcomeIdx] = float | null
-let _comboResults    = null; // { results }
+let _comboResults     = null; // { results }
 let _selectedComboIdx = 0;
+let _currentShowCount = 20;
+let _nameRefreshTimer = null;
 
 // ---- Initialisation ----
 
@@ -120,7 +122,7 @@ function renderBookies() {
                       ${SITE_LIST.map(s => `<option value="${s}" ${b.site === s ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                   </td>
-                  <td><input type="text" id="name-${i}" value="${b.name}" oninput="bookies[${i}].name=this.value" onclick="this.select()" placeholder="Ex: Betclic" /></td>
+                  <td><input type="text" id="name-${i}" value="${b.name}" oninput="bookies[${i}].name=this.value; const s=document.getElementById('odds-name-${i}'); if(s) s.textContent=this.value; scheduleNameRefresh();" onclick="this.select()" placeholder="Ex: Betclic" /></td>
                   <td>
                     <div class="bonus-select-wrapper">
                       <span class="bonus-dot bonus-dot-${i}" data-bonus="${b.bonus}"></span>
@@ -197,7 +199,7 @@ function renderOddsTable() {
                 <tr>
                   <td class="odds-site-cell">
                     <div class="bookie-color-dot" style="background:${ACCENT_COLORS[i % ACCENT_COLORS.length]}"></div>
-                    <span>${b.name}</span>
+                    <span id="odds-name-${i}">${b.name}</span>
                   </td>
                   ${outcomes.map((_, j) => `
                     <td class="odds-cell">
@@ -416,17 +418,10 @@ function calculate() {
 
 // ---- Affichage des combinaisons ----
 
-function renderCombinationsList(showCount) {
-	const { results } = _comboResults;
-	const displayed   = results.slice(0, showCount);
-	const remaining   = results.length - showCount;
-
-	document.getElementById('results').style.display = 'flex';
-	document.getElementById('error-container').innerHTML = '';
-	document.getElementById('results-tabs-wrapper').hidden = false;
-	switchTab('combos');
-
-	document.getElementById('combos-container').innerHTML = `
+function buildCombosHTML(results, showCount) {
+	const displayed = results.slice(0, showCount);
+	const remaining = results.length - showCount;
+	return `
         <div class="combos-list">
           <div class="combos-list-header">
             <span>${results.length} combinaison${results.length > 1 ? 's' : ''} trouvée${results.length > 1 ? 's' : ''}</span>
@@ -454,12 +449,43 @@ function renderCombinationsList(showCount) {
           ` : ''}
         </div>
       `;
+}
+
+function renderCombinationsList(showCount) {
+	_currentShowCount = showCount;
+	const { results } = _comboResults;
+
+	document.getElementById('results').style.display = 'flex';
+	document.getElementById('error-container').innerHTML = '';
+	document.getElementById('results-tabs-wrapper').hidden = false;
+	switchTab('combos');
+
+	document.getElementById('combos-container').innerHTML = buildCombosHTML(results, showCount);
 
 	document.getElementById('gain-banner').innerHTML = '';
 	document.getElementById('stakes-grid').innerHTML = '';
 	document.getElementById('breakdown-container').innerHTML = '';
 
-	selectCombo(Math.min(_selectedComboIdx, displayed.length - 1), false);
+	selectCombo(Math.min(_selectedComboIdx, results.slice(0, showCount).length - 1), false);
+}
+
+function scheduleNameRefresh() {
+	clearTimeout(_nameRefreshTimer);
+	_nameRefreshTimer = setTimeout(() => {
+		if (!_comboResults) return;
+		const { results } = _comboResults;
+		// Mettre à jour les noms dans les snapshots active[]
+		results.forEach(r => r.active.forEach(a => { a.name = bookies[a.siteIdx].name; }));
+		// Ré-afficher la liste sans changer d'onglet
+		document.getElementById('combos-container').innerHTML = buildCombosHTML(results, _currentShowCount);
+		document.querySelectorAll('.combo-row').forEach((el, i) => {
+			el.classList.toggle('combo-row--active', i === _selectedComboIdx);
+		});
+		// Ré-afficher le détail si l'onglet résultat est ouvert
+		if (!document.getElementById('tab-result').hidden) {
+			showResults({ active: results[_selectedComboIdx].active, ...results[_selectedComboIdx] });
+		}
+	}, 500);
 }
 
 function selectCombo(idx, navigate = true) {
