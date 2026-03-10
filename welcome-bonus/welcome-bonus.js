@@ -106,6 +106,11 @@ function updateBookieName(i, val) {
 	scheduleNameRefresh();
 }
 
+function updateMatchName(idx, val) {
+	matches[idx].name = val;
+	scheduleNameRefresh();
+}
+
 // ---- Rendu ----
 
 function renderAll() {
@@ -213,8 +218,10 @@ function renderMatchesAndOdds() {
 	const parlayBtn1Class = 'parlay-btn' + (parlaySize === 1 ? ' parlay-btn--active' : '');
 	const parlayBtn2Class = 'parlay-btn' + (parlaySize === 2 ? ' parlay-btn--active' : '');
 	const parlayBtn2Disabled = matches.length < 2 ? 'disabled' : '';
+	const TRASH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+	const oddsCols = matches.length * 3;
 
-	let html = `
+	const html = `
         <div class="parlay-selector">
           <span class="parlay-label">Nombre de matchs en combiné :</span>
           <div class="parlay-toggle">
@@ -222,54 +229,47 @@ function renderMatchesAndOdds() {
             <button class="${parlayBtn2Class}" onclick="setParlaySize(2)" ${parlayBtn2Disabled}>2 matchs — 9 issues</button>
           </div>
         </div>
-      `;
+        <div class="bookies-table-container">
+          <div class="odds-grid" style="--odds-cols:${oddsCols}">
 
-	matches.forEach((m, mIdx) => {
-		html += `
-        <div class="match-section">
-          <div class="match-header">
-            <input type="text" class="match-name-input" value="${m.name}" oninput="matches[${mIdx}].name = this.value" onclick="this.select()" placeholder="Nom du match" />
-            ${matches.length > 1 ? `<button class="btn-remove-match" onclick="removeMatch(${mIdx})" title="Supprimer ce match"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
-          </div>
-          <div class="bookies-table-container">
-            <table class="odds-table">
-              <thead>
-                <tr>
-                  <th class="odds-site-th">Site</th>
-                  ${OUTCOMES.map(o => `<th><div class="outcome-th"><span class="outcome-label">${o}</span></div></th>`).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${bookies.map((b, i) => `
-                  <tr>
-                    <td class="odds-site-cell">
-                      <div class="bookie-color-dot" style="background:${ACCENT_COLORS[i % ACCENT_COLORS.length]}"></div>
-                      <span data-odds-name="${i}">${b.name}</span>
-                    </td>
-                    ${OUTCOMES.map((_, j) => `
-                      <td class="odds-cell">
-                        <input type="number"
-                          class="odds-input"
-                          value="${oddsGrid[i] && oddsGrid[i][mIdx] && oddsGrid[i][mIdx][j] != null ? oddsGrid[i][mIdx][j] : ''}"
-                          step="0.01" min="1.01"
-                          placeholder="—"
-                          oninput="oddsGrid[${i}][${mIdx}][${j}] = parseFloat(this.value) || null"
-                          onclick="this.select()" />
-                      </td>
-                    `).join('')}
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      `;
-	});
+            <div class="og-site-th">Site</div>
+            ${matches.map((m, mIdx) => `
+              <div class="og-match-th${mIdx > 0 ? ' og-group-start' : ''}">
+                <div class="match-header">
+                  <input type="text" class="match-name-input" value="${m.name}" oninput="updateMatchName(${mIdx}, this.value)" onclick="this.select()" placeholder="Nom du match" />
+                  ${matches.length > 1 ? `<button class="btn-remove-match" onclick="removeMatch(${mIdx})" title="Supprimer ce match">${TRASH}</button>` : ''}
+                </div>
+              </div>
+            `).join('')}
 
-	html += `
-        <div class="match-controls">
-          <button class="btn btn-ghost" onclick="addMatch()" ${matches.length >= 5 ? 'disabled' : ''}>+ Ajouter un match</button>
-          ${matches.length > 1 ? `<button class="btn btn-ghost" onclick="removeMatch(matches.length - 1)">− Retirer le dernier</button>` : ''}
+            <div class="og-site-placeholder"></div>
+            ${matches.map((_, mIdx) => OUTCOMES.map((o, j) => `
+              <div class="og-outcome-th${mIdx > 0 && j === 0 ? ' og-group-start' : ''}">${o}</div>
+            `).join('')).join('')}
+
+            ${bookies.map((b, i) => `
+              <div class="og-row">
+                <div class="og-site-cell">
+                  <div class="bookie-color-dot" style="background:${ACCENT_COLORS[i % ACCENT_COLORS.length]}"></div>
+                  <span data-odds-name="${i}">${b.name}</span>
+                </div>
+                ${matches.map((_, mIdx) => OUTCOMES.map((_, j) => `
+                  <div class="og-cell${mIdx > 0 && j === 0 ? ' og-group-start' : ''}">
+                    <input type="number" class="odds-input"
+                      value="${oddsGrid[i] && oddsGrid[i][mIdx] && oddsGrid[i][mIdx][j] != null ? oddsGrid[i][mIdx][j] : ''}"
+                      step="0.01" min="1.01" placeholder="—"
+                      oninput="oddsGrid[${i}][${mIdx}][${j}] = parseFloat(this.value) || null"
+                      onclick="this.select()" />
+                  </div>
+                `).join('')).join('')}
+              </div>
+            `).join('')}
+
+            <div class="og-add-row">
+              <button class="btn-add-match" onclick="addMatch()" ${matches.length >= 5 ? 'disabled' : ''}>+ Ajouter un match</button>
+            </div>
+
+          </div>
         </div>
       `;
 

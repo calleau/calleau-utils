@@ -102,10 +102,10 @@
 	border-top: 1px solid var(--color-divider);
 }
 
-.btn-add-bookie {
+.btn-add-bookie, .btn-add-match {
 	background: none;
 	border: none;
-	color: var(--color-muted);
+	color: var(--color-text);
 	cursor: pointer;
 	font-size: 0.8rem;
 	font-weight: 600;
@@ -115,7 +115,7 @@
 	transition: color 0.15s, background 0.15s;
 }
 
-.btn-add-bookie:hover:not(:disabled) {
+.btn-add-bookie:hover:not(:disabled), .btn-add-match:hover:not(:disabled) {
 	color: var(--c-primary);
 	background: transparent;
 }
@@ -136,7 +136,7 @@
 	font-weight: 600;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
-	color: var(--color-muted);
+	color: var(--color-text);
 	white-space: nowrap;
 }
 
@@ -215,7 +215,7 @@
 
 .stake-name {
 	font-size: 0.9rem;
-	color: var(--color-muted);
+	color: var(--color-text);
 	margin-bottom: 0.6rem;
 	white-space: nowrap;
 	overflow: hidden;
@@ -233,7 +233,7 @@
 
 .stake-outcome {
 	font-size: 0.78rem;
-	color: var(--color-muted);
+	color: var(--color-text);
 }
 
 .stake-cap {
@@ -258,7 +258,7 @@
 	border-radius: 50%;
 	border: 1px solid var(--color-divider);
 	background: var(--color-surface);
-	color: var(--color-muted);
+	color: var(--color-text);
 	cursor: pointer;
 	display: grid;
 	place-items: center;
@@ -321,24 +321,92 @@
 }
 
 /* =========================================================
-   Tableau des cotes
+   Grille des cotes (CSS Grid)
    ========================================================= */
 
-.odds-table {
-	width: 100%;
+.odds-grid {
+	display: grid;
+	grid-template-columns: minmax(130px, auto) repeat(var(--odds-cols), minmax(80px, 1fr));
+	font-size: 0.9rem;
 }
 
-.odds-site-th {
-	min-width: 120px;
+/* En-tête colonne "Site" */
+.og-site-th {
+	background: var(--color-surface-2);
+	padding: 8px 14px;
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-text);
+	border-bottom: 2px solid var(--color-divider);
+	display: flex;
+	align-items: center;
 }
 
-.odds-site-cell {
+/* En-tête groupe match */
+.og-match-th {
+	grid-column: span 3;
+	background: var(--color-surface-2);
+	padding: 8px 14px 6px;
+	border-bottom: 1px solid var(--color-divider);
+}
+
+.og-match-th .match-header {
+	margin-bottom: 0;
+}
+
+/* Placeholder "Site" sur la ligne des issues */
+.og-site-placeholder {
+	background: var(--color-surface-2);
+	border-bottom: 2px solid var(--color-divider);
+}
+
+/* En-têtes 1 / N / 2 */
+.og-outcome-th {
+	background: var(--color-surface-2);
+	padding: 5px 14px 8px;
+	text-align: center;
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	color: var(--color-text);
+	border-bottom: 2px solid var(--color-divider);
+}
+
+/* Séparateur entre groupes de matchs */
+.og-group-start {
+	border-left: 2px solid var(--color-divider);
+}
+
+/* Ligne bookie (display:contents pour que les enfants restent dans la grille) */
+.og-row {
+	display: contents;
+}
+
+.og-row:hover > * {
+	background: rgba(92, 137, 157, 0.04);
+}
+
+/* Cellule nom de site */
+.og-site-cell {
+	padding: 10px 14px;
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
 	font-weight: 600;
 	font-size: 0.875rem;
 	white-space: nowrap;
+	border-bottom: 1px solid var(--color-divider);
+}
+
+/* Cellule cote */
+.og-cell {
+	padding: 6px 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-bottom: 1px solid var(--color-divider);
 }
 
 .bookie-color-dot {
@@ -348,65 +416,19 @@
 	flex-shrink: 0;
 }
 
-.outcome-th {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.35rem;
-}
-
-.outcome-name-input {
-	width: 56px;
-	font-size: 0.8rem;
-	font-weight: 700;
-	text-align: center;
-	letter-spacing: 0.05em;
-	background: transparent;
-	border: none;
-	border-bottom: 1px solid var(--color-divider);
-	color: var(--color-text);
-	padding: 2px 4px;
-}
-
-.outcome-name-input:focus {
-	outline: none;
-	border-bottom-color: var(--c-primary);
-}
-
-.btn-remove-outcome {
-	background: none;
-	border: none;
-	color: var(--color-muted);
-	cursor: pointer;
-	font-size: 0.65rem;
-	padding: 2px 3px;
-	border-radius: 3px;
-	line-height: 1;
-}
-
-.btn-remove-outcome:hover {
-	color: var(--color-text);
-	background: var(--color-surface-2);
-}
-
-.th-add-outcome {
-	white-space: nowrap;
-}
-
-.btn-sm {
-	padding: 4px 10px;
-	font-size: 0.78rem;
-}
-
-.odds-cell {
-	text-align: center;
-}
-
 .odds-input {
 	width: 72px;
 	text-align: center;
 	font-family: 'DM Mono', monospace;
 	font-size: 0.875rem;
+}
+
+/* Ligne d'ajout de match */
+.og-add-row {
+	grid-column: 1 / -1;
+	background: var(--color-surface-2);
+	padding: 0.4rem 0.75rem;
+	border-top: 1px solid var(--color-divider);
 }
 
 /* =========================================================
@@ -430,7 +452,7 @@
 	font-weight: 700;
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
-	color: var(--color-muted);
+	color: var(--color-text);
 }
 
 .combos-list-hint {
@@ -467,7 +489,7 @@
 .combo-rank {
 	font-family: 'DM Mono', monospace;
 	font-size: 0.7rem;
-	color: var(--color-muted);
+	color: var(--color-text);
 	min-width: 2.2rem;
 	flex-shrink: 0;
 }
@@ -547,7 +569,7 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--color-muted);
+    color: var(--color-text);
     white-space: nowrap;
 }
 
@@ -669,7 +691,7 @@
 .combo-match-label {
     font-size: 0.78rem;
     font-weight: 600;
-    color: var(--color-muted);
+    color: var(--color-text);
     white-space: nowrap;
     flex-shrink: 0;
     max-width: 160px;
