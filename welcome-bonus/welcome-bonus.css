@@ -483,3 +483,163 @@
 	font-size: 0.82rem;
 	padding: 6px 16px;
 }
+
+/* =========================================================
+   Sélecteur de parlay
+   ========================================================= */
+
+.parlay-selector {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.parlay-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    white-space: nowrap;
+}
+
+.parlay-toggle {
+    display: flex;
+    border: 1px solid var(--color-divider);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.parlay-btn {
+    padding: 0.45rem 1rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--color-divider);
+    color: var(--color-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.parlay-btn:last-child {
+    border-right: none;
+}
+
+.parlay-btn:hover:not(:disabled):not(.parlay-btn--active) {
+    background: var(--color-surface-2);
+    color: var(--color-text);
+}
+
+.parlay-btn--active {
+    background: var(--c-primary);
+    color: #fff;
+}
+
+.parlay-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* =========================================================
+   Section par match (table des cotes)
+   ========================================================= */
+
+.match-section {
+    margin-bottom: 1.5rem;
+}
+
+.match-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.match-name-input {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--color-divider);
+    color: var(--color-text);
+    padding: 2px 4px;
+    min-width: 120px;
+    max-width: 280px;
+    transition: border-color 0.15s;
+}
+
+.match-name-input:focus {
+    outline: none;
+    border-bottom-color: var(--c-primary);
+}
+
+.btn-remove-match {
+    background: none;
+    border: none;
+    color: var(--color-muted);
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 3px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
+}
+
+.btn-remove-match:hover {
+    background: var(--color-surface-2);
+    color: var(--color-text);
+}
+
+.outcome-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--color-text);
+}
+
+/* =========================================================
+   Contrôles des matchs
+   ========================================================= */
+
+.match-controls {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-divider);
+}
+
+/* =========================================================
+   Liste des combinaisons — étiquette match
+   ========================================================= */
+
+.combo-match-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* =========================================================
+   Résultats — étiquette match
+   ========================================================= */
+
+.result-match-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--c-primary);
+    margin-bottom: 0.5rem;
+}

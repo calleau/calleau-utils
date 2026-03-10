@@ -21,10 +21,16 @@ const SITE_PRESETS = {
 	'Winamax':        { bonus: 'cash_lose',      min: 100, maxBonus: 100, convRate: 80 },
 };
 
+const OUTCOMES = ['1', 'N', '2'];
+
+const SLOTS_P2 = [];
+for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) SLOTS_P2.push([i, j]);
+
 // ---- État global ----
 let bookies  = [];           // { site, name, bonus, min, maxBonus }
-let outcomes = ['1', 'N', '2'];
-let oddsGrid = [];           // oddsGrid[siteIdx][outcomeIdx] = float | null
+let matches  = [{ name: 'Match 1' }, { name: 'Match 2' }];
+let parlaySize = 1;
+let oddsGrid = [];           // oddsGrid[siteIdx][matchIdx][outcomeIdx] = float | null
 let _comboResults     = null; // { results }
 let _selectedComboIdx = 0;
 let _currentShowCount = 20;
@@ -41,24 +47,32 @@ function makeBookie(i) {
 	return defaults[i] || { site: '-Autre-', name: `Site ${i + 1}`, bonus: 'freebet_lose', min: 100, maxBonus: 100, convRate: 80 };
 }
 
+function makeOddsForSite() {
+	return matches.map(() => new Array(3).fill(null));
+}
+
 function init() {
 	for (let i = 0; i < 3; i++) {
 		bookies.push(makeBookie(i));
-		oddsGrid.push(new Array(outcomes.length).fill(null));
+		oddsGrid.push(makeOddsForSite());
 	}
-	// Cotes d'exemple
-	oddsGrid[0] = [2.10, 3.20, 3.50];
-	oddsGrid[1] = [2.05, 3.40, 3.30];
-	oddsGrid[2] = [2.15, 3.10, 3.60];
+	// Cotes d'exemple — match 0
+	oddsGrid[0][0] = [2.10, 3.20, 3.50];
+	oddsGrid[1][0] = [2.05, 3.40, 3.30];
+	oddsGrid[2][0] = [2.15, 3.10, 3.60];
+	// Cotes d'exemple — match 1
+	oddsGrid[0][1] = [1.90, 3.50, 4.00];
+	oddsGrid[1][1] = [1.95, 3.30, 3.80];
+	oddsGrid[2][1] = [1.85, 3.60, 4.10];
 	renderAll();
 }
 
 // ---- Gestion des sites ----
 
 function addBookie() {
-	if (bookies.length >= 8) return;
+	if (bookies.length >= 15) return;
 	bookies.push(makeBookie(bookies.length));
-	oddsGrid.push(new Array(outcomes.length).fill(null));
+	oddsGrid.push(makeOddsForSite());
 	renderAll();
 }
 
@@ -69,26 +83,45 @@ function removeBookie() {
 	renderAll();
 }
 
-// ---- Gestion des issues ----
+// ---- Gestion des matchs ----
 
-function addOutcome() {
-	outcomes.push(`Issue ${outcomes.length + 1}`);
-	oddsGrid.forEach(row => row.push(null));
+function addMatch() {
+	if (matches.length >= 5) return;
+	matches.push({ name: `Match ${matches.length + 1}` });
+	for (let i = 0; i < oddsGrid.length; i++) {
+		oddsGrid[i].push(new Array(3).fill(null));
+	}
 	renderAll();
 }
 
-function removeOutcome(j) {
-	if (outcomes.length <= 2) return;
-	outcomes.splice(j, 1);
-	oddsGrid.forEach(row => row.splice(j, 1));
+function removeMatch(idx) {
+	matches.splice(idx, 1);
+	for (let i = 0; i < oddsGrid.length; i++) {
+		oddsGrid[i].splice(idx, 1);
+	}
+	if (parlaySize === 2 && matches.length < 2) parlaySize = 1;
 	renderAll();
+}
+
+function setParlaySize(size) {
+	if (size === 2 && matches.length < 2) return;
+	parlaySize = size;
+	renderMatchesAndOdds();
+}
+
+// ---- Mise à jour du nom d'un bookmaker ----
+
+function updateBookieName(i, val) {
+	bookies[i].name = val;
+	document.querySelectorAll('[data-odds-name="' + i + '"]').forEach(el => el.textContent = val);
+	scheduleNameRefresh();
 }
 
 // ---- Rendu ----
 
 function renderAll() {
 	renderBookies();
-	renderOddsTable();
+	renderMatchesAndOdds();
 }
 
 function renderBookies() {
@@ -122,7 +155,7 @@ function renderBookies() {
                       ${SITE_LIST.map(s => `<option value="${s}" ${b.site === s ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                   </td>
-                  <td><input type="text" id="name-${i}" value="${b.name}" oninput="bookies[${i}].name=this.value; const s=document.getElementById('odds-name-${i}'); if(s) s.textContent=this.value; scheduleNameRefresh();" onclick="this.select()" placeholder="Ex: Betclic" /></td>
+                  <td><input type="text" id="name-${i}" value="${b.name}" oninput="updateBookieName(${i}, this.value)" onclick="this.select()" placeholder="Ex: Betclic" /></td>
                   <td>
                     <div class="bonus-select-wrapper">
                       <span class="bonus-dot bonus-dot-${i}" data-bonus="${b.bonus}"></span>
@@ -175,54 +208,72 @@ function renderBookies() {
       `;
 }
 
-function renderOddsTable() {
+function renderMatchesAndOdds() {
 	const container = document.getElementById('odds-container');
-	container.innerHTML = `
-        <div class="bookies-table-container">
-          <table class="odds-table">
-            <thead>
-              <tr>
-                <th class="odds-site-th">Site</th>
-                ${outcomes.map((o, j) => `
-                  <th>
-                    <div class="outcome-th">
-                      <input type="text" class="outcome-name-input" value="${o}"
-                        oninput="outcomes[${j}] = this.value"
-                        placeholder="Issue" />
-                      ${outcomes.length > 2 ? `<button class="btn-remove-outcome" onclick="removeOutcome(${j})" title="Supprimer cette issue">✕</button>` : ''}
-                    </div>
-                  </th>
-                `).join('')}
-                <th class="th-add-outcome">
-                  <button class="btn btn-ghost btn-sm" onclick="addOutcome()">+ Issue</button>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              ${bookies.map((b, i) => `
-                <tr>
-                  <td class="odds-site-cell">
-                    <div class="bookie-color-dot" style="background:${ACCENT_COLORS[i % ACCENT_COLORS.length]}"></div>
-                    <span id="odds-name-${i}">${b.name}</span>
-                  </td>
-                  ${outcomes.map((_, j) => `
-                    <td class="odds-cell">
-                      <input type="number"
-                        class="odds-input"
-                        value="${oddsGrid[i] && oddsGrid[i][j] != null ? oddsGrid[i][j] : ''}"
-                        step="0.01" min="1.01"
-                        placeholder="—"
-                        oninput="oddsGrid[${i}][${j}] = parseFloat(this.value) || null"
-                        onclick="this.select()" />
-                    </td>
-                  `).join('')}
-                  <td></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+	const parlayBtn1Class = 'parlay-btn' + (parlaySize === 1 ? ' parlay-btn--active' : '');
+	const parlayBtn2Class = 'parlay-btn' + (parlaySize === 2 ? ' parlay-btn--active' : '');
+	const parlayBtn2Disabled = matches.length < 2 ? 'disabled' : '';
+
+	let html = `
+        <div class="parlay-selector">
+          <span class="parlay-label">Nombre de matchs en combiné :</span>
+          <div class="parlay-toggle">
+            <button class="${parlayBtn1Class}" onclick="setParlaySize(1)">1 match — 3 issues</button>
+            <button class="${parlayBtn2Class}" onclick="setParlaySize(2)" ${parlayBtn2Disabled}>2 matchs — 9 issues</button>
+          </div>
         </div>
       `;
+
+	matches.forEach((m, mIdx) => {
+		html += `
+        <div class="match-section">
+          <div class="match-header">
+            <input type="text" class="match-name-input" value="${m.name}" oninput="matches[${mIdx}].name = this.value" onclick="this.select()" placeholder="Nom du match" />
+            ${matches.length > 1 ? `<button class="btn-remove-match" onclick="removeMatch(${mIdx})" title="Supprimer ce match">✕</button>` : ''}
+          </div>
+          <div class="bookies-table-container">
+            <table class="odds-table">
+              <thead>
+                <tr>
+                  <th class="odds-site-th">Site</th>
+                  ${OUTCOMES.map(o => `<th><div class="outcome-th"><span class="outcome-label">${o}</span></div></th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${bookies.map((b, i) => `
+                  <tr>
+                    <td class="odds-site-cell">
+                      <div class="bookie-color-dot" style="background:${ACCENT_COLORS[i % ACCENT_COLORS.length]}"></div>
+                      <span data-odds-name="${i}">${b.name}</span>
+                    </td>
+                    ${OUTCOMES.map((_, j) => `
+                      <td class="odds-cell">
+                        <input type="number"
+                          class="odds-input"
+                          value="${oddsGrid[i] && oddsGrid[i][mIdx] && oddsGrid[i][mIdx][j] != null ? oddsGrid[i][mIdx][j] : ''}"
+                          step="0.01" min="1.01"
+                          placeholder="—"
+                          oninput="oddsGrid[${i}][${mIdx}][${j}] = parseFloat(this.value) || null"
+                          onclick="this.select()" />
+                      </td>
+                    `).join('')}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+	});
+
+	html += `
+        <div class="match-controls">
+          <button class="btn btn-ghost" onclick="addMatch()" ${matches.length >= 5 ? 'disabled' : ''}>+ Ajouter un match</button>
+          ${matches.length > 1 ? `<button class="btn btn-ghost" onclick="removeMatch(matches.length - 1)">− Retirer le dernier</button>` : ''}
+        </div>
+      `;
+
+	container.innerHTML = html;
 }
 
 // ---- Contrôles numériques ----
@@ -292,31 +343,44 @@ function fmt(v, decimals = 2) {
 
 // ---- Calcul ----
 
-function generateCombinations() {
-	const M = outcomes.length;
+function generateCombinationsP1() {
+	const results = [];
 	const N = bookies.length;
-	const combos = [];
-	const used = new Array(N).fill(false);
-
-	function recurse(outcomeIdx, current) {
-		if (outcomeIdx === M) {
-			combos.push([...current]);
-			return;
-		}
+	function recurseMatch(m, outcomeIdx, current, used) {
+		if (outcomeIdx === 3) { results.push({ matchIndices: [m], combo: [...current] }); return; }
 		for (let s = 0; s < N; s++) {
 			if (used[s]) continue;
-			const odds = oddsGrid[s] && oddsGrid[s][outcomeIdx];
+			const odds = oddsGrid[s][m][outcomeIdx];
 			if (!odds || odds < 1.01) continue;
-			used[s] = true;
-			current.push(s);
-			recurse(outcomeIdx + 1, current);
-			current.pop();
-			used[s] = false;
+			used[s] = true; current.push(s);
+			recurseMatch(m, outcomeIdx + 1, current, used);
+			current.pop(); used[s] = false;
 		}
 	}
+	for (let m = 0; m < matches.length; m++) recurseMatch(m, 0, [], new Array(N).fill(false));
+	return results;
+}
 
-	recurse(0, []);
-	return combos;
+function generateCombinationsP2() {
+	const results = [];
+	const N = bookies.length;
+	const M = matches.length;
+	function recurseP2(m1, m2, slotIdx, current, used) {
+		if (slotIdx === 9) { results.push({ matchIndices: [m1, m2], combo: [...current] }); return; }
+		const [i, j] = SLOTS_P2[slotIdx];
+		for (let s = 0; s < N; s++) {
+			if (used[s]) continue;
+			const o1 = oddsGrid[s][m1][i], o2 = oddsGrid[s][m2][j];
+			if (!o1 || o1 < 1.01 || !o2 || o2 < 1.01) continue;
+			used[s] = true; current.push(s);
+			recurseP2(m1, m2, slotIdx + 1, current, used);
+			current.pop(); used[s] = false;
+		}
+	}
+	for (let m1 = 0; m1 < M - 1; m1++)
+		for (let m2 = m1 + 1; m2 < M; m2++)
+			recurseP2(m1, m2, 0, [], new Array(N).fill(false));
+	return results;
 }
 
 function computeStakes(active) {
@@ -405,31 +469,48 @@ function computeStakes(active) {
 }
 
 function calculate() {
-	const combos = generateCombinations();
-	if (combos.length === 0) {
-		showError('Aucune combinaison valide. Assurez-vous que chaque issue a au moins une cote renseignée sur un site différent.');
+	const rawCombos = parlaySize === 1 ? generateCombinationsP1() : generateCombinationsP2();
+	if (rawCombos.length === 0) {
+		showError(parlaySize === 1
+			? 'Aucune combinaison valide. Assurez-vous que chaque issue a au moins une cote renseignée sur un site différent.'
+			: 'Aucune combinaison valide. Pour un combiné 2 matchs, il faut au moins 9 sites avec des cotes renseignées sur les deux matchs.'
+		);
 		return;
 	}
-
 	const results = [];
-	combos.forEach(combo => {
-		const active = combo.map((siteIdx, outcomeIdx) => ({
-			...bookies[siteIdx],
-			odds: oddsGrid[siteIdx][outcomeIdx],
-			outcome: outcomes[outcomeIdx],
-			siteIdx,
-		}));
+	rawCombos.forEach(({ matchIndices, combo }) => {
+		let active;
+		if (parlaySize === 1) {
+			const m = matchIndices[0];
+			active = combo.map((siteIdx, outcomeIdx) => ({
+				...bookies[siteIdx],
+				odds: oddsGrid[siteIdx][m][outcomeIdx],
+				outcome: OUTCOMES[outcomeIdx],
+				matchLabel: matches[m].name,
+				siteIdx,
+			}));
+		} else {
+			const [m1, m2] = matchIndices;
+			active = combo.map((siteIdx, slotIdx) => {
+				const [i, j] = SLOTS_P2[slotIdx];
+				return {
+					...bookies[siteIdx],
+					odds: oddsGrid[siteIdx][m1][i] * oddsGrid[siteIdx][m2][j],
+					outcome: `${OUTCOMES[i]}×${OUTCOMES[j]}`,
+					matchLabel: `${matches[m1].name} + ${matches[m2].name}`,
+					siteIdx,
+				};
+			});
+		}
 		const result = computeStakes(active);
-		if (result) results.push({ combo, active, ...result });
+		if (result) results.push({ matchIndices, combo, active, ...result });
 	});
-
 	if (results.length === 0) {
 		showError("Impossible d'équilibrer les mises pour ces paramètres. Vérifiez les cotes et les bonus.");
 		return;
 	}
-
 	results.sort((a, b) => b.avgGain - a.avgGain);
-	_comboResults     = { results };
+	_comboResults = { results };
 	_selectedComboIdx = 0;
 	renderCombinationsList(20);
 	document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -447,12 +528,22 @@ function buildCombosHTML(results, showCount) {
             <span class="combos-list-hint">Cliquer pour afficher le détail</span>
           </div>
           ${displayed.map((r, idx) => {
-		const assignment = r.combo.map((siteIdx, outcomeIdx) =>
-			`<span class="combo-site" style="color:${ACCENT_COLORS[siteIdx % ACCENT_COLORS.length]}">${bookies[siteIdx].name}</span><span class="combo-outcome-tag">${outcomes[outcomeIdx]}</span>`
-		).join('<span class="combo-sep">·</span>');
+		const matchLabel = r.matchIndices.map(mi => matches[mi].name).join(' + ');
+		let assignment;
+		if (parlaySize === 1) {
+			assignment = r.combo.map((siteIdx, outcomeIdx) =>
+				`<span class="combo-site" style="color:${ACCENT_COLORS[siteIdx % ACCENT_COLORS.length]}">${bookies[siteIdx].name}</span><span class="combo-outcome-tag">${OUTCOMES[outcomeIdx]}</span>`
+			).join('<span class="combo-sep">·</span>');
+		} else {
+			assignment = r.combo.slice(0, 3).map((siteIdx, k) => {
+				const [i, j] = SLOTS_P2[k];
+				return `<span class="combo-site" style="color:${ACCENT_COLORS[siteIdx % ACCENT_COLORS.length]}">${bookies[siteIdx].name}</span><span class="combo-outcome-tag">${OUTCOMES[i]}×${OUTCOMES[j]}</span>`;
+			}).join('<span class="combo-sep">·</span>') + '<span class="combo-sep">…</span>';
+		}
 		return `
               <div class="combo-row" onclick="selectCombo(${idx})">
                 <span class="combo-rank">#${idx + 1}</span>
+                <span class="combo-match-label">${matchLabel}</span>
                 <span class="combo-assignment">${assignment}</span>
                 <span class="combo-gain ${r.avgGain >= 0 ? 'pos' : 'neg'}">${fmt(r.avgGain)} €</span>
                 <span class="combo-roi ${r.roi >= 0 ? 'pos' : 'neg'}">${fmt(r.roi, 1)} %</span>
@@ -467,7 +558,7 @@ function buildCombosHTML(results, showCount) {
             </div>
           ` : ''}
         </div>
-      `;
+    `;
 }
 
 function renderCombinationsList(showCount) {
@@ -536,7 +627,9 @@ function showError(msg) {
 // ---- Détail d'une combinaison ----
 
 function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusAmount }) {
+	const matchLabel = active[0]?.matchLabel || '';
 	document.getElementById('gain-banner').innerHTML = `
+        ${matchLabel ? '<div class="result-match-label">' + matchLabel + '</div>' : ''}
         <div class="metrics-grid">
           <div class="metric-card">
             <div class="metric-label">Total misé</div>
@@ -693,15 +786,15 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusA
 // ---- Cotes aléatoires ----
 
 function randomizeOdds() {
-	const hasOdds = oddsGrid.some(row => row.some(v => v != null));
+	const hasOdds = oddsGrid.some(row => row.some(m => m.some(v => v != null)));
 	if (hasOdds) {
 		const confirmed = confirm('Les cotes actuelles seront toutes remplacées. Continuer ?');
 		if (!confirmed) return;
 	}
 	oddsGrid = bookies.map(() =>
-		outcomes.map(() => Math.round((Math.random() + 2) * 100) / 100)
+		matches.map(() => OUTCOMES.map(() => Math.round((Math.random() + 2) * 100) / 100))
 	);
-	renderOddsTable();
+	renderMatchesAndOdds();
 }
 
 // ---- Démarrage ----
