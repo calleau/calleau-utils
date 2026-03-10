@@ -343,44 +343,75 @@ function fmt(v, decimals = 2) {
 
 // ---- Calcul ----
 
+// Nombre de combinaisons à stocker et présenter (20 affichées + 100 via bouton)
+const MAX_STORED = 120;
+
+// Score rapide d'un slot : 1 / (cote - taux_conv_effectif)
+// Somme sur tous les slots = indicateur d'arbitrage (plus bas = plus rentable)
+// Monotone croissant pendant le backtracking → permet l'élagage branch-and-bound
+function slotScore(siteIdx, odds) {
+	const b = bookies[siteIdx];
+	let r;
+	if (b.bonus === 'no_bonus') r = 0;
+	else if (b.bonus === 'cash_lose' || b.bonus === 'cash_always') r = 1;
+	else r = b.convRate / 100;
+	return 1 / Math.max(odds - r, 0.001);
+}
+
+// Insère dans un tableau trié par score croissant, plafond MAX_STORED
+function insertTop(top, item) {
+	if (top.length === MAX_STORED && item.score >= top[top.length - 1].score) return;
+	let lo = 0, hi = top.length;
+	while (lo < hi) { const mid = (lo + hi) >> 1; if (top[mid].score < item.score) lo = mid + 1; else hi = mid; }
+	top.splice(lo, 0, item);
+	if (top.length > MAX_STORED) top.pop();
+}
+
 function generateCombinationsP1() {
-	const results = [];
+	const top = [];
 	const N = bookies.length;
-	function recurseMatch(m, outcomeIdx, current, used) {
-		if (outcomeIdx === 3) { results.push({ matchIndices: [m], combo: [...current] }); return; }
+	function recurse(m, slotIdx, current, used, ps) {
+		// Élagage : ps est un minorant du score final (tous les termes sont ≥ 0)
+		if (top.length === MAX_STORED && ps >= top[top.length - 1].score) return;
+		if (slotIdx === 3) { insertTop(top, { matchIndices: [m], combo: [...current], score: ps }); return; }
 		for (let s = 0; s < N; s++) {
 			if (used[s]) continue;
-			const odds = oddsGrid[s][m][outcomeIdx];
+			const odds = oddsGrid[s][m][slotIdx];
 			if (!odds || odds < 1.01) continue;
+			const ns = ps + slotScore(s, odds);
+			if (top.length === MAX_STORED && ns >= top[top.length - 1].score) continue;
 			used[s] = true; current.push(s);
-			recurseMatch(m, outcomeIdx + 1, current, used);
+			recurse(m, slotIdx + 1, current, used, ns);
 			current.pop(); used[s] = false;
 		}
 	}
-	for (let m = 0; m < matches.length; m++) recurseMatch(m, 0, [], new Array(N).fill(false));
-	return results;
+	for (let m = 0; m < matches.length; m++) recurse(m, 0, [], new Array(N).fill(false), 0);
+	return top;
 }
 
 function generateCombinationsP2() {
-	const results = [];
+	const top = [];
 	const N = bookies.length;
 	const M = matches.length;
-	function recurseP2(m1, m2, slotIdx, current, used) {
-		if (slotIdx === 9) { results.push({ matchIndices: [m1, m2], combo: [...current] }); return; }
+	function recurse(m1, m2, slotIdx, current, used, ps) {
+		if (top.length === MAX_STORED && ps >= top[top.length - 1].score) return;
+		if (slotIdx === 9) { insertTop(top, { matchIndices: [m1, m2], combo: [...current], score: ps }); return; }
 		const [i, j] = SLOTS_P2[slotIdx];
 		for (let s = 0; s < N; s++) {
 			if (used[s]) continue;
 			const o1 = oddsGrid[s][m1][i], o2 = oddsGrid[s][m2][j];
 			if (!o1 || o1 < 1.01 || !o2 || o2 < 1.01) continue;
+			const ns = ps + slotScore(s, o1 * o2);
+			if (top.length === MAX_STORED && ns >= top[top.length - 1].score) continue;
 			used[s] = true; current.push(s);
-			recurseP2(m1, m2, slotIdx + 1, current, used);
+			recurse(m1, m2, slotIdx + 1, current, used, ns);
 			current.pop(); used[s] = false;
 		}
 	}
 	for (let m1 = 0; m1 < M - 1; m1++)
 		for (let m2 = m1 + 1; m2 < M; m2++)
-			recurseP2(m1, m2, 0, [], new Array(N).fill(false));
-	return results;
+			recurse(m1, m2, 0, [], new Array(N).fill(false), 0);
+	return top;
 }
 
 function computeStakes(active) {
