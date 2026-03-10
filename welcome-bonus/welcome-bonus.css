@@ -233,3 +233,213 @@
 	font-size: 0.85rem;
 	color: var(--color-muted);
 }
+
+/* =========================================================
+   Tableau des cotes
+   ========================================================= */
+
+.odds-table {
+	width: 100%;
+}
+
+.odds-site-th {
+	min-width: 120px;
+}
+
+.odds-site-cell {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-weight: 600;
+	font-size: 0.875rem;
+	white-space: nowrap;
+}
+
+.bookie-color-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.outcome-th {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.35rem;
+}
+
+.outcome-name-input {
+	width: 56px;
+	font-size: 0.8rem;
+	font-weight: 700;
+	text-align: center;
+	letter-spacing: 0.05em;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--color-divider);
+	color: var(--color-text);
+	padding: 2px 4px;
+}
+
+.outcome-name-input:focus {
+	outline: none;
+	border-bottom-color: var(--c-primary);
+}
+
+.btn-remove-outcome {
+	background: none;
+	border: none;
+	color: var(--color-muted);
+	cursor: pointer;
+	font-size: 0.65rem;
+	padding: 2px 3px;
+	border-radius: 3px;
+	line-height: 1;
+}
+
+.btn-remove-outcome:hover {
+	color: var(--color-text);
+	background: var(--color-surface-2);
+}
+
+.th-add-outcome {
+	white-space: nowrap;
+}
+
+.btn-sm {
+	padding: 4px 10px;
+	font-size: 0.78rem;
+}
+
+.odds-cell {
+	text-align: center;
+}
+
+.odds-input {
+	width: 72px;
+	text-align: center;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.875rem;
+}
+
+/* =========================================================
+   Liste des combinaisons
+   ========================================================= */
+
+.combos-list {
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	overflow: hidden;
+}
+
+.combos-list-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.65rem 1rem;
+	background: var(--color-surface-2);
+	border-bottom: 1px solid var(--color-divider);
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+}
+
+.combos-list-hint {
+	font-weight: 400;
+	letter-spacing: 0;
+	text-transform: none;
+	font-size: 0.72rem;
+}
+
+.combo-row {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.65rem 1rem;
+	border-bottom: 1px solid var(--color-divider);
+	cursor: pointer;
+	transition: background 0.12s;
+}
+
+.combo-row:last-child {
+	border-bottom: none;
+}
+
+.combo-row:hover {
+	background: var(--color-surface-2);
+}
+
+.combo-row--active {
+	background: var(--color-surface-2);
+	border-left: 3px solid var(--c-primary);
+	padding-left: calc(1rem - 3px);
+}
+
+.combo-rank {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.7rem;
+	color: var(--color-muted);
+	min-width: 2.2rem;
+	flex-shrink: 0;
+}
+
+.combo-assignment {
+	flex: 1;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.2rem;
+	font-size: 0.875rem;
+	min-width: 0;
+}
+
+.combo-site {
+	font-weight: 600;
+}
+
+.combo-outcome-tag {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.65rem;
+	background: var(--color-surface-3);
+	border-radius: 4px;
+	padding: 1px 5px;
+	color: var(--color-muted);
+	margin-right: 0.2rem;
+}
+
+.combo-sep {
+	color: var(--color-divider);
+	margin: 0 0.15rem;
+	font-size: 0.75rem;
+}
+
+.combo-gain {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1.25rem;
+	letter-spacing: 0.04em;
+	min-width: 5.5rem;
+	text-align: right;
+	flex-shrink: 0;
+}
+
+.combo-roi {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.78rem;
+	min-width: 3.5rem;
+	text-align: right;
+	flex-shrink: 0;
+}
+
+.combos-more-row {
+	padding: 0.6rem 1rem;
+	border-top: 1px solid var(--color-divider);
+	text-align: center;
+}
+
+.combos-more-btn {
+	font-size: 0.82rem;
+	padding: 6px 16px;
+}
