@@ -1,0 +1,485 @@
+/* =========================================================
+   Welcome Bonus — styles spécifiques à la page
+   ========================================================= */
+
+/* Header : back-link à gauche, titre centré, sur la même ligne */
+.toolbar {
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	align-items: center;
+	gap: 1rem;
+}
+
+.toolbar .title {
+	text-align: center;
+}
+
+/* Lien retour vers l'accueil — style home-title */
+.back-link {
+	display: inline-block;
+	font-size: 2.8rem;
+	font-weight: 800;
+	line-height: 0.95;
+	letter-spacing: -0.04em;
+	color: var(--color-text);
+	text-decoration: none;
+	transition: color 0.2s;
+	width: fit-content;
+	align-self: flex-start;
+}
+
+.back-link em {
+	font-style: normal;
+	color: var(--c-primary);
+}
+
+.back-link:hover {
+	color: var(--c-primary);
+	text-decoration: none;
+}
+
+.back-link:hover em {
+	color: var(--c-primary-dark);
+}
+
+/* Footer */
+.page-footer {
+	border-top: 1px solid var(--color-divider);
+	padding-top: 1rem;
+	text-align: center;
+}
+
+.footer-version {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.72rem;
+	color: var(--color-muted);
+	letter-spacing: 0.05em;
+}
+
+/* Bouton calculer pleine largeur */
+.btn-calc {
+	width: 100%;
+	padding: 16px;
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1.4rem;
+	font-weight: 400;
+	letter-spacing: 0.12em;
+	border-radius: 10px;
+}
+
+/* Contrôles sous le tableau */
+.bookies-controls {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--color-divider);
+}
+
+.conv-rate-group {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.conv-rate-label {
+	font-size: 0.78rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+/* =========================================================
+   Section résultats
+   ========================================================= */
+#results {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+/* Onglets résultats */
+.results-tabs {
+	display: flex;
+	border-bottom: 2px solid var(--color-divider);
+	margin-bottom: 1rem;
+}
+
+.results-tab {
+	padding: 0.55rem 1.25rem;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.85rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -2px;
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: color 0.15s, border-color 0.15s;
+}
+
+.results-tab--active {
+	color: var(--c-primary);
+	border-bottom-color: var(--c-primary);
+}
+
+.results-tab:hover:not(.results-tab--active) {
+	color: var(--color-text);
+}
+
+.results-tab-panel[hidden] {
+	display: none;
+}
+
+.results-tab-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+/* Grille de mises */
+.stakes-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 1rem;
+}
+
+.stake-card {
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	padding: 1.1rem 1.25rem;
+	border-left-width: 3px;
+}
+
+.stake-bookie {
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	margin-bottom: 0.2rem;
+}
+
+.stake-name {
+	font-size: 0.9rem;
+	color: var(--color-muted);
+	margin-bottom: 0.6rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.stake-amount {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 2.2rem;
+	letter-spacing: 0.02em;
+	line-height: 1;
+	color: var(--c-primary);
+	margin-bottom: 0.25rem;
+}
+
+.stake-outcome {
+	font-size: 0.78rem;
+	color: var(--color-muted);
+}
+
+.stake-cap {
+	font-size: 0.75rem;
+	color: var(--c-tertiary);
+	font-weight: 600;
+	margin-top: 0.3rem;
+}
+
+/* =========================================================
+   Boutons flottants (dé + versions)
+   ========================================================= */
+
+/* Widget versions précédentes */
+#versions-widget {
+	position: relative;
+}
+
+.btn-versions-toggle {
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: 50%;
+	border: 1px solid var(--color-divider);
+	background: var(--color-surface);
+	color: var(--color-muted);
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	transition: background 0.2s, color 0.2s;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-versions-toggle:hover {
+	background: var(--color-surface-2);
+	color: var(--color-text);
+}
+
+.versions-dropdown {
+	position: absolute;
+	right: 0;
+	top: calc(100% + 0.5rem);
+	min-width: 170px;
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+	overflow: hidden;
+}
+
+.versions-header {
+	font-size: 0.65rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	padding: 0.7rem 1rem 0.5rem;
+	border-bottom: 1px solid var(--color-divider);
+}
+
+.version-link {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.6rem 1rem;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.875rem;
+	color: var(--color-text);
+	text-decoration: none;
+	border-bottom: 1px solid var(--color-divider);
+	transition: background 0.15s, color 0.15s;
+}
+
+.version-link:last-child { border-bottom: none; }
+
+.version-link:hover {
+	background: var(--color-surface-2);
+	color: var(--c-primary);
+	text-decoration: none;
+}
+
+.versions-msg {
+	padding: 0.7rem 1rem;
+	font-size: 0.85rem;
+	color: var(--color-muted);
+}
+
+/* =========================================================
+   Tableau des cotes
+   ========================================================= */
+
+.odds-table {
+	width: 100%;
+}
+
+.odds-site-th {
+	min-width: 120px;
+}
+
+.odds-site-cell {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-weight: 600;
+	font-size: 0.875rem;
+	white-space: nowrap;
+}
+
+.bookie-color-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.outcome-th {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.35rem;
+}
+
+.outcome-name-input {
+	width: 56px;
+	font-size: 0.8rem;
+	font-weight: 700;
+	text-align: center;
+	letter-spacing: 0.05em;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--color-divider);
+	color: var(--color-text);
+	padding: 2px 4px;
+}
+
+.outcome-name-input:focus {
+	outline: none;
+	border-bottom-color: var(--c-primary);
+}
+
+.btn-remove-outcome {
+	background: none;
+	border: none;
+	color: var(--color-muted);
+	cursor: pointer;
+	font-size: 0.65rem;
+	padding: 2px 3px;
+	border-radius: 3px;
+	line-height: 1;
+}
+
+.btn-remove-outcome:hover {
+	color: var(--color-text);
+	background: var(--color-surface-2);
+}
+
+.th-add-outcome {
+	white-space: nowrap;
+}
+
+.btn-sm {
+	padding: 4px 10px;
+	font-size: 0.78rem;
+}
+
+.odds-cell {
+	text-align: center;
+}
+
+.odds-input {
+	width: 72px;
+	text-align: center;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.875rem;
+}
+
+/* =========================================================
+   Liste des combinaisons
+   ========================================================= */
+
+.combos-list {
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	overflow: hidden;
+}
+
+.combos-list-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.65rem 1rem;
+	background: var(--color-surface-2);
+	border-bottom: 1px solid var(--color-divider);
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+}
+
+.combos-list-hint {
+	font-weight: 400;
+	letter-spacing: 0;
+	text-transform: none;
+	font-size: 0.72rem;
+}
+
+.combo-row {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.65rem 1rem;
+	border-bottom: 1px solid var(--color-divider);
+	cursor: pointer;
+	transition: background 0.12s;
+}
+
+.combo-row:last-child {
+	border-bottom: none;
+}
+
+.combo-row:hover {
+	background: var(--color-surface-2);
+}
+
+.combo-row--active {
+	background: var(--color-surface-2);
+	border-left: 3px solid var(--c-primary);
+	padding-left: calc(1rem - 3px);
+}
+
+.combo-rank {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.7rem;
+	color: var(--color-muted);
+	min-width: 2.2rem;
+	flex-shrink: 0;
+}
+
+.combo-assignment {
+	flex: 1;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.2rem;
+	font-size: 0.875rem;
+	min-width: 0;
+}
+
+.combo-site {
+	font-weight: 600;
+}
+
+.combo-outcome-tag {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.65rem;
+	background: var(--color-surface-3);
+	border-radius: 4px;
+	padding: 1px 5px;
+	color: var(--color-muted);
+	margin-right: 0.2rem;
+}
+
+.combo-sep {
+	color: var(--color-divider);
+	margin: 0 0.15rem;
+	font-size: 0.75rem;
+}
+
+.combo-gain {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1.25rem;
+	letter-spacing: 0.04em;
+	min-width: 5.5rem;
+	text-align: right;
+	flex-shrink: 0;
+}
+
+.combo-roi {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.78rem;
+	min-width: 3.5rem;
+	text-align: right;
+	flex-shrink: 0;
+}
+
+.combos-more-row {
+	padding: 0.6rem 1rem;
+	border-top: 1px solid var(--color-divider);
+	text-align: center;
+}
+
+.combos-more-btn {
+	font-size: 0.82rem;
+	padding: 6px 16px;
+}
