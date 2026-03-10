@@ -56,5 +56,11 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 
 	syncIcon();
-	document.body.appendChild(btn);
+	let container = document.getElementById('floating-actions');
+	if (!container) {
+		container = document.createElement('div');
+		container.id = 'floating-actions';
+		document.body.appendChild(container);
+	}
+	container.insertBefore(btn, container.firstChild);
 });

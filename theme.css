@@ -397,13 +397,24 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 /* =========================================================
-   Bouton de bascule light / dark
+   Boutons flottants — conteneur partagé
    ========================================================= */
-.btn-theme-toggle {
+#floating-actions {
 	position: fixed;
 	top: 1rem;
 	right: 1rem;
 	z-index: 100;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.8rem;
+}
+
+/* =========================================================
+   Bouton de bascule light / dark
+   ========================================================= */
+.btn-theme-toggle {
+	position: static;
 	width: 2.5rem;
 	height: 2.5rem;
 	border-radius: 50%;

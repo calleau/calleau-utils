@@ -27,18 +27,6 @@
 					<button class="btn btn-ghost" onclick="addBookie()">+ Ajouter un site</button>
 					<button class="btn btn-ghost" onclick="removeBookie()">− Retirer le dernier</button>
 				</div>
-				<div class="conv-rate-group">
-					<span class="conv-rate-label">Taux de conversion freebet</span>
-					<div class="numinput">
-						<input type="number" id="convRate" value="80" min="1" max="100" step="1"
-							onclick="this.select()" />
-						<span class="unit">%</span>
-						<div class="nbtn-wrap">
-							<button class="nbtn" onclick="incrementConvRate()" type="button">▲</button>
-							<button class="nbtn" onclick="decrementConvRate()" type="button">▼</button>
-						</div>
-					</div>
-				</div>
 			</div>
 		</section>
 
@@ -50,10 +38,20 @@
 
 		<div id="results" style="display:none">
 			<div id="error-container"></div>
-			<div id="combos-container"></div>
-			<div id="gain-banner"></div>
-			<div id="stakes-grid" class="stakes-grid"></div>
-			<div id="breakdown-container"></div>
+			<div id="results-tabs-wrapper" hidden>
+				<div class="results-tabs" role="tablist">
+					<button class="results-tab results-tab--active" onclick="switchTab('combos')" role="tab">Combinaisons</button>
+					<button class="results-tab" onclick="switchTab('result')" role="tab">Résultat</button>
+				</div>
+				<div id="tab-combos" class="results-tab-panel">
+					<div id="combos-container"></div>
+				</div>
+				<div id="tab-result" class="results-tab-panel" hidden>
+					<div id="gain-banner"></div>
+					<div id="stakes-grid" class="stakes-grid"></div>
+					<div id="breakdown-container"></div>
+				</div>
+			</div>
 		</div>
 
 		<footer class="page-footer">
@@ -62,18 +60,32 @@
 
 	</div>
 
-	<!-- Widget versions précédentes -->
-	<div id="versions-widget">
-		<button id="versions-btn" class="btn-versions-toggle" aria-label="Versions précédentes"
-			title="Versions précédentes">
+	<!-- Boutons flottants (thème injecté par theme-toggle.js en premier) -->
+	<div id="floating-actions">
+		<button class="btn-versions-toggle" aria-label="Remplir les cotes aléatoirement"
+			title="Remplir les cotes aléatoirement" onclick="randomizeOdds()">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
 				stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-				<circle cx="12" cy="12" r="10" />
-				<polyline points="12 6 12 12 16 14" />
+				<rect x="2" y="2" width="20" height="20" rx="3" />
+				<circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
+				<circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none" />
+				<circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none" />
+				<circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none" />
+				<circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
 			</svg>
 		</button>
-		<div id="versions-dropdown" class="versions-dropdown" hidden>
-			<p class="versions-msg">Chargement…</p>
+		<div id="versions-widget">
+			<button id="versions-btn" class="btn-versions-toggle" aria-label="Versions précédentes"
+				title="Versions précédentes">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<circle cx="12" cy="12" r="10" />
+					<polyline points="12 6 12 12 16 14" />
+				</svg>
+			</button>
+			<div id="versions-dropdown" class="versions-dropdown" hidden>
+				<p class="versions-msg">Chargement…</p>
+			</div>
 		</div>
 	</div>
 

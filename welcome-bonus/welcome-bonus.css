@@ -103,6 +103,43 @@
 	gap: 1rem;
 }
 
+/* Onglets résultats */
+.results-tabs {
+	display: flex;
+	border-bottom: 2px solid var(--color-divider);
+	margin-bottom: 1rem;
+}
+
+.results-tab {
+	padding: 0.55rem 1.25rem;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.85rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -2px;
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: color 0.15s, border-color 0.15s;
+}
+
+.results-tab--active {
+	color: var(--c-primary);
+	border-bottom-color: var(--c-primary);
+}
+
+.results-tab:hover:not(.results-tab--active) {
+	color: var(--color-text);
+}
+
+.results-tab-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
 /* Grille de mises */
 .stakes-grid {
 	display: grid;
@@ -157,13 +194,12 @@
 }
 
 /* =========================================================
-   Widget versions précédentes
+   Boutons flottants (dé + versions)
    ========================================================= */
+
+/* Widget versions précédentes */
 #versions-widget {
-	position: fixed;
-	top: 4.5rem;
-	right: 1rem;
-	z-index: 100;
+	position: relative;
 }
 
 .btn-versions-toggle {

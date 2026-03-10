@@ -7,36 +7,36 @@ const SITE_LIST = [
 ];
 
 const SITE_PRESETS = {
-	'Betclic':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-	'Betsson':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-	'bwin':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-	'Daznbet':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-	'Feelingbet':     { bonus: 'freebet_lose',   min: 50, maxBonus: 50 },
-	'Olybet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-	'Parions Sports': { bonus: 'freebet_always',   min: 100, maxBonus: 100 },
-	'PMU':            { bonus: 'cash_lose',   min: 100, maxBonus: 100 },
-	'Pokerstars':     { bonus: 'freebet_lose',   min: 100,  maxBonus: 100  },
-	'Unibet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-	'VBET':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-	'Winamax':        { bonus: 'cash_lose', min: 100, maxBonus: 100 },
+	'Betclic':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
+	'Betsson':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'bwin':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'Daznbet':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'Feelingbet':     { bonus: 'freebet_lose',   min: 50,  maxBonus: 50,  convRate: 70 },
+	'Olybet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'Parions Sports': { bonus: 'freebet_always', min: 100, maxBonus: 100, convRate: 85 },
+	'PMU':            { bonus: 'cash_lose',      min: 100, maxBonus: 100, convRate: 70 },
+	'Pokerstars':     { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'Unibet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
+	'VBET':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 70 },
+	'Winamax':        { bonus: 'cash_lose',      min: 100, maxBonus: 100, convRate: 80 },
 };
 
 // ---- État global ----
 let bookies  = [];           // { site, name, bonus, min, maxBonus }
 let outcomes = ['1', 'N', '2'];
 let oddsGrid = [];           // oddsGrid[siteIdx][outcomeIdx] = float | null
-let _comboResults    = null; // { results, convRate }
+let _comboResults    = null; // { results }
 let _selectedComboIdx = 0;
 
 // ---- Initialisation ----
 
 function makeBookie(i) {
 	const defaults = [
-		{ site: 'Betclic', name: 'Betclic', bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
-		{ site: 'Winamax', name: 'Winamax', bonus: 'freebet_always', min: 100, maxBonus: 100 },
-		{ site: 'Unibet',  name: 'Unibet',  bonus: 'freebet_lose',   min: 100, maxBonus: 100 },
+		{ site: 'Betclic', name: 'Betclic', bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
+		{ site: 'Winamax', name: 'Winamax', bonus: 'freebet_always', min: 100, maxBonus: 100, convRate: 80 },
+		{ site: 'Unibet',  name: 'Unibet',  bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
 	];
-	return defaults[i] || { site: '-Autre-', name: `Site ${i + 1}`, bonus: 'freebet_lose', min: 100, maxBonus: 100 };
+	return defaults[i] || { site: '-Autre-', name: `Site ${i + 1}`, bonus: 'freebet_lose', min: 100, maxBonus: 100, convRate: 80 };
 }
 
 function init() {
@@ -102,6 +102,7 @@ function renderBookies() {
                 <th>Type de bonus</th>
                 <th>Mise min</th>
                 <th>Bonus max</th>
+                <th>Taux FB</th>
               </tr>
             </thead>
             <tbody>
@@ -150,6 +151,14 @@ function renderBookies() {
                         <button class="nbtn" onclick="incrementMax(${i})" type="button">▲</button>
                         <button class="nbtn" onclick="decrementMax(${i})" type="button">▼</button>
                       </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="numinput">
+                      <input type="number" id="conv-${i}" value="${b.convRate}" min="1" max="100" step="1"
+                        oninput="bookies[${i}].convRate=Math.min(100,Math.max(1,parseFloat(this.value)||80))"
+                        onclick="this.select()" />
+                      <span class="unit">%</span>
                     </div>
                   </td>
                 </tr>
@@ -232,14 +241,6 @@ function decrementMax(i) {
 	const newVal = Math.max(0, (parseFloat(input.value) || 0) - 10);
 	input.value = newVal; bookies[i].maxBonus = newVal;
 }
-function incrementConvRate() {
-	const input = document.getElementById('convRate');
-	input.value = Math.min(100, (parseFloat(input.value) || 80) + 1);
-}
-function decrementConvRate() {
-	const input = document.getElementById('convRate');
-	input.value = Math.max(1, (parseFloat(input.value) || 80) - 1);
-}
 
 function selectSite(i, siteKey) {
 	bookies[i].site = siteKey;
@@ -250,11 +251,13 @@ function selectSite(i, siteKey) {
 	bookies[i].bonus = preset.bonus;
 	bookies[i].min = preset.min;
 	bookies[i].maxBonus = preset.maxBonus;
+	bookies[i].convRate = preset.convRate;
 	document.getElementById(`name-${i}`).value = siteKey;
 	document.getElementById(`bonus-${i}`).value = preset.bonus;
 	updateBonusDot(i, preset.bonus);
 	document.getElementById(`min-${i}`).value = preset.min;
 	document.getElementById(`max-${i}`).value = preset.maxBonus;
+	document.getElementById(`conv-${i}`).value = preset.convRate;
 }
 
 function updateBonusDot(index, bonusType) {
@@ -295,13 +298,13 @@ function generateCombinations() {
 	return combos;
 }
 
-function computeStakes(active, convRate) {
+function computeStakes(active) {
 	const n = active.length;
 
 	const effectiveConv = active.map(b => {
 		if (b.bonus === 'no_bonus') return 0;
 		if (b.bonus === 'cash_lose' || b.bonus === 'cash_always') return 1;
-		return convRate;
+		return b.convRate / 100;
 	});
 
 	let capped = active.map(() => false);
@@ -381,8 +384,6 @@ function computeStakes(active, convRate) {
 }
 
 function calculate() {
-	const convRate = (parseFloat(document.getElementById('convRate').value) || 80) / 100;
-
 	const combos = generateCombinations();
 	if (combos.length === 0) {
 		showError('Aucune combinaison valide. Assurez-vous que chaque issue a au moins une cote renseignée sur un site différent.');
@@ -397,7 +398,7 @@ function calculate() {
 			outcome: outcomes[outcomeIdx],
 			siteIdx,
 		}));
-		const result = computeStakes(active, convRate);
+		const result = computeStakes(active);
 		if (result) results.push({ combo, active, ...result });
 	});
 
@@ -407,7 +408,7 @@ function calculate() {
 	}
 
 	results.sort((a, b) => b.avgGain - a.avgGain);
-	_comboResults     = { results, convRate };
+	_comboResults     = { results };
 	_selectedComboIdx = 0;
 	renderCombinationsList(20);
 	document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -422,6 +423,8 @@ function renderCombinationsList(showCount) {
 
 	document.getElementById('results').style.display = 'flex';
 	document.getElementById('error-container').innerHTML = '';
+	document.getElementById('results-tabs-wrapper').hidden = false;
+	switchTab('combos');
 
 	document.getElementById('combos-container').innerHTML = `
         <div class="combos-list">
@@ -456,32 +459,38 @@ function renderCombinationsList(showCount) {
 	document.getElementById('stakes-grid').innerHTML = '';
 	document.getElementById('breakdown-container').innerHTML = '';
 
-	selectCombo(Math.min(_selectedComboIdx, displayed.length - 1));
+	selectCombo(Math.min(_selectedComboIdx, displayed.length - 1), false);
 }
 
-function selectCombo(idx) {
+function selectCombo(idx, navigate = true) {
 	_selectedComboIdx = idx;
 	document.querySelectorAll('.combo-row').forEach((el, i) => {
 		el.classList.toggle('combo-row--active', i === idx);
 	});
-	const { results, convRate } = _comboResults;
-	showResults({ active: results[idx].active, ...results[idx], convRate });
+	const { results } = _comboResults;
+	showResults({ active: results[idx].active, ...results[idx] });
+	if (navigate) switchTab('result');
+}
+
+function switchTab(name) {
+	document.querySelectorAll('.results-tab').forEach(btn => {
+		btn.classList.toggle('results-tab--active', btn.textContent.trim() === (name === 'combos' ? 'Combinaisons' : 'Résultat'));
+	});
+	document.getElementById('tab-combos').hidden = (name !== 'combos');
+	document.getElementById('tab-result').hidden  = (name !== 'result');
 }
 
 // ---- Erreur ----
 
 function showError(msg) {
 	document.getElementById('results').style.display = 'flex';
+	document.getElementById('results-tabs-wrapper').hidden = true;
 	document.getElementById('error-container').innerHTML = `<div class="error-box">⚠ ${msg}</div>`;
-	document.getElementById('combos-container').innerHTML = '';
-	document.getElementById('gain-banner').innerHTML = '';
-	document.getElementById('stakes-grid').innerHTML = '';
-	document.getElementById('breakdown-container').innerHTML = '';
 }
 
 // ---- Détail d'une combinaison ----
 
-function showResults({ active, stakes, avgGain, totalStaked, roi, convRate, capped, bonusAmount }) {
+function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusAmount }) {
 	document.getElementById('gain-banner').innerHTML = `
         <div class="metrics-grid">
           <div class="metric-card">
@@ -563,7 +572,7 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, convRate, capp
                           <td class="td-outcome win">
                             <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val pos">+${fmt(cashProfit)} €</span></div>
                             <div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${fbRaw > 0 ? 'neut' : 'text-muted'}">+${fmt(fbRaw)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Freebet @${Math.round(convRate * 100)}%</span><span class="detail-val ${bonusIfWin > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusIfWin)} €</span></div>
+                            <div class="detail-line"><span class="detail-lbl">Freebet @${site.convRate}%</span><span class="detail-val ${bonusIfWin > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusIfWin)} €</span></div>
                             <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val pos strong">+${fmt(total)} €</span></div>
                           </td>`;
 			} else {
@@ -579,7 +588,7 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, convRate, capp
                           <td class="td-outcome lose">
                             <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val neg">${fmt(cashLoss)} €</span></div>
                             <div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${bonusRaw > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusRaw)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Freebet @${Math.round(convRate * 100)}%</span><span class="detail-val ${bonusCash > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusCash)} €</span></div>
+                            <div class="detail-line"><span class="detail-lbl">Freebet @${site.convRate}%</span><span class="detail-val ${bonusCash > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusCash)} €</span></div>
                             <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val ${total >= 0 ? 'neut' : 'neg'} strong">${fmt(total)} €</span></div>
                           </td>`;
 			}
@@ -618,7 +627,7 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, convRate, capp
 		let lines = `<div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val ${totalCash >= 0 ? 'pos' : 'neg'} strong">${fmt(totalCash)} €</span></div>`;
 		if (hasFb) {
 			lines += `<div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${totalFbRaw > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalFbRaw)} €</span></div>`;
-			lines += `<div class="detail-line"><span class="detail-lbl">Freebet @${Math.round(convRate * 100)}%</span><span class="detail-val ${totalFbConv > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalFbConv)} €</span></div>`;
+			lines += `<div class="detail-line"><span class="detail-lbl">Freebet converti</span><span class="detail-val ${totalFbConv > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalFbConv)} €</span></div>`;
 		}
 		if (hasCash) {
 			lines += `<div class="detail-line"><span class="detail-lbl">Cash bonus</span><span class="detail-val ${totalCashBonus > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalCashBonus)} €</span></div>`;
@@ -634,6 +643,20 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, convRate, capp
       `;
 
 	document.getElementById('breakdown-container').innerHTML = tableHTML;
+}
+
+// ---- Cotes aléatoires ----
+
+function randomizeOdds() {
+	const hasOdds = oddsGrid.some(row => row.some(v => v != null));
+	if (hasOdds) {
+		const confirmed = confirm('Les cotes actuelles seront toutes remplacées. Continuer ?');
+		if (!confirmed) return;
+	}
+	oddsGrid = bookies.map(() =>
+		outcomes.map(() => Math.round((Math.random() + 2) * 100) / 100)
+	);
+	renderOddsTable();
 }
 
 // ---- Démarrage ----
