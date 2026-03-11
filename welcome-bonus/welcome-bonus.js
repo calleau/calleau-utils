@@ -120,96 +120,89 @@ function renderAll() {
 
 function renderBookies() {
 	const container = document.getElementById('bookies-container');
+	const TRASH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
 	container.innerHTML = `
-        <div class="bookies-table-container">
-          <table class="bookies-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Site</th>
-                <th>Nom affiché</th>
-                <th>Type de bonus</th>
-                <th>Mise min</th>
-                <th>Bonus max</th>
-                <th>Taux FB</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${bookies.map((b, i) => `
-                <tr>
-                  <td>
-                    <div class="bookie-num-badge">
-                      <div style="width:8px;height:8px;border-radius:50%;background:${ACCENT_COLORS[i % ACCENT_COLORS.length]}"></div>
-                      ${i + 1}
-                    </div>
-                  </td>
-                  <td>
-                    <select id="site-${i}" class="site-select" onchange="selectSite(${i}, this.value)">
-                      <option value="-Autre-" ${b.site === '-Autre-' ? 'selected' : ''}>— Autre —</option>
-                      ${SITE_LIST.map(s => `<option value="${s}" ${b.site === s ? 'selected' : ''}>${s}</option>`).join('')}
+        <div class="bookies-grid">
+          <div class="bg-th">#</div>
+            <div class="bg-th">Site</div>
+            <div class="bg-th">Nom affiché</div>
+            <div class="bg-th">Type de bonus</div>
+            <div class="bg-th">Mise min</div>
+            <div class="bg-th">Bonus max</div>
+            <div class="bg-th">Taux FB</div>
+            <div class="bg-th"></div>
+
+            ${bookies.map((b, i) => `
+              <div class="bg-row">
+                <div class="bg-cell bg-cell-num">
+                  <div class="bookie-num-badge">
+                    <div style="width:8px;height:8px;border-radius:50%;background:${ACCENT_COLORS[i % ACCENT_COLORS.length]}"></div>
+                    ${i + 1}
+                  </div>
+                </div>
+                <div class="bg-cell">
+                  <select id="site-${i}" class="site-select" onchange="selectSite(${i}, this.value)">
+                    <option value="-Autre-" ${b.site === '-Autre-' ? 'selected' : ''}>— Autre —</option>
+                    ${SITE_LIST.map(s => `<option value="${s}" ${b.site === s ? 'selected' : ''}>${s}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="bg-cell">
+                  <input type="text" id="name-${i}" value="${b.name}" oninput="updateBookieName(${i}, this.value)" onclick="this.select()" placeholder="Ex: Betclic" />
+                </div>
+                <div class="bg-cell">
+                  <div class="bonus-select-wrapper">
+                    <span class="bonus-dot bonus-dot-${i}" data-bonus="${b.bonus}"></span>
+                    <select id="bonus-${i}" onchange="bookies[${i}].bonus=this.value; updateBonusDot(${i}, this.value); updateConvRateVisibility(${i}, this.value)">
+                      <option value="freebet_lose"   ${b.bonus === 'freebet_lose' ? 'selected' : ''}>Freebet si perdant</option>
+                      <option value="freebet_always" ${b.bonus === 'freebet_always' ? 'selected' : ''}>Freebet toujours</option>
+                      <option value="cash_lose"      ${b.bonus === 'cash_lose' ? 'selected' : ''}>Cash si perdant</option>
+                      <option value="cash_always"    ${b.bonus === 'cash_always' ? 'selected' : ''}>Cash toujours</option>
+                      <option value="no_bonus"       ${b.bonus === 'no_bonus' ? 'selected' : ''}>Sans bonus</option>
                     </select>
-                  </td>
-                  <td><input type="text" id="name-${i}" value="${b.name}" oninput="updateBookieName(${i}, this.value)" onclick="this.select()" placeholder="Ex: Betclic" /></td>
-                  <td>
-                    <div class="bonus-select-wrapper">
-                      <span class="bonus-dot bonus-dot-${i}" data-bonus="${b.bonus}"></span>
-                      <select id="bonus-${i}" onchange="bookies[${i}].bonus=this.value; updateBonusDot(${i}, this.value); updateConvRateVisibility(${i}, this.value)">
-                        <option value="freebet_lose"   ${b.bonus === 'freebet_lose' ? 'selected' : ''}>Freebet si perdant</option>
-                        <option value="freebet_always" ${b.bonus === 'freebet_always' ? 'selected' : ''}>Freebet toujours</option>
-                        <option value="cash_lose"      ${b.bonus === 'cash_lose' ? 'selected' : ''}>Cash si perdant</option>
-                        <option value="cash_always"    ${b.bonus === 'cash_always' ? 'selected' : ''}>Cash toujours</option>
-                        <option value="no_bonus"       ${b.bonus === 'no_bonus' ? 'selected' : ''}>Sans bonus</option>
-                      </select>
+                  </div>
+                </div>
+                <div class="bg-cell">
+                  <div class="numinput">
+                    <input type="number" id="min-${i}" value="${b.min}" step="1" min="0" oninput="bookies[${i}].min=parseFloat(this.value)||0" onclick="this.select()" />
+                    <span class="unit">€</span>
+                    <div class="nbtn-wrap">
+                      <button class="nbtn" onclick="incrementMin(${i})" type="button">▲</button>
+                      <button class="nbtn" onclick="decrementMin(${i})" type="button">▼</button>
                     </div>
-                  </td>
-                  <td>
-                    <div class="numinput">
-                      <input type="number" id="min-${i}" value="${b.min}" step="1" min="0" oninput="bookies[${i}].min=parseFloat(this.value)||0" onclick="this.select()" />
-                      <span class="unit">€</span>
-                      <div class="nbtn-wrap">
-                        <button class="nbtn" onclick="incrementMin(${i})" type="button">▲</button>
-                        <button class="nbtn" onclick="decrementMin(${i})" type="button">▼</button>
-                      </div>
+                  </div>
+                </div>
+                <div class="bg-cell">
+                  <div class="numinput">
+                    <input type="number" id="max-${i}" value="${b.maxBonus}" step="1" min="0" oninput="bookies[${i}].maxBonus=parseFloat(this.value)||0" onclick="this.select()" />
+                    <span class="unit">€</span>
+                    <div class="nbtn-wrap">
+                      <button class="nbtn" onclick="incrementMax(${i})" type="button">▲</button>
+                      <button class="nbtn" onclick="decrementMax(${i})" type="button">▼</button>
                     </div>
-                  </td>
-                  <td>
-                    <div class="numinput">
-                      <input type="number" id="max-${i}" value="${b.maxBonus}" step="1" min="0" oninput="bookies[${i}].maxBonus=parseFloat(this.value)||0" onclick="this.select()" />
-                      <span class="unit">€</span>
-                      <div class="nbtn-wrap">
-                        <button class="nbtn" onclick="incrementMax(${i})" type="button">▲</button>
-                        <button class="nbtn" onclick="decrementMax(${i})" type="button">▼</button>
-                      </div>
+                  </div>
+                </div>
+                <div class="bg-cell">
+                  <div id="conv-cell-${i}" class="numinput" ${['cash_lose','cash_always','no_bonus'].includes(b.bonus) ? 'hidden' : ''}>
+                    <input type="number" id="conv-${i}" value="${b.convRate}" min="1" max="100" step="1"
+                      oninput="bookies[${i}].convRate=Math.min(100,Math.max(1,parseFloat(this.value)||80))"
+                      onclick="this.select()" />
+                    <span class="unit">%</span>
+                    <div class="nbtn-wrap">
+                      <button class="nbtn" onclick="incrementConv(${i})" type="button">▲</button>
+                      <button class="nbtn" onclick="decrementConv(${i})" type="button">▼</button>
                     </div>
-                  </td>
-                  <td>
-                    <div id="conv-cell-${i}" class="numinput" ${['cash_lose','cash_always','no_bonus'].includes(b.bonus) ? 'hidden' : ''}>
-                      <input type="number" id="conv-${i}" value="${b.convRate}" min="1" max="100" step="1"
-                        oninput="bookies[${i}].convRate=Math.min(100,Math.max(1,parseFloat(this.value)||80))"
-                        onclick="this.select()" />
-                      <span class="unit">%</span>
-                      <div class="nbtn-wrap">
-                        <button class="nbtn" onclick="incrementConv(${i})" type="button">▲</button>
-                        <button class="nbtn" onclick="decrementConv(${i})" type="button">▼</button>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="td-delete">
-                    <button class="btn-delete-bookie" onclick="deleteBookie(${i})" title="Supprimer ce site"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-            <tfoot>
-              <tr class="add-bookie-row">
-                <td colspan="8">
-                  <button class="btn-add-bookie" onclick="addBookie()" ${bookies.length >= 15 ? 'disabled' : ''}>+ Ajouter un site</button>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                  </div>
+                </div>
+                <div class="bg-cell bg-cell-delete">
+                  <button class="btn-delete-bookie" onclick="deleteBookie(${i})" title="Supprimer ce site">${TRASH}</button>
+                </div>
+              </div>
+            `).join('')}
+
+            <div class="bg-add-row">
+              <button class="btn-add-bookie" onclick="addBookie()" ${bookies.length >= 15 ? 'disabled' : ''}>+ Ajouter un site</button>
+            </div>
+          </div>
       `;
 }
 
@@ -229,8 +222,7 @@ function renderMatchesAndOdds() {
             <button class="${parlayBtn2Class}" onclick="setParlaySize(2)" ${parlayBtn2Disabled}>2 matchs — 9 issues</button>
           </div>
         </div>
-        <div class="bookies-table-container">
-          <div class="odds-grid" style="--odds-cols:${oddsCols}">
+        <div class="odds-grid" style="--odds-cols:${oddsCols}">
 
             <div class="og-site-th">Site</div>
             ${matches.map((m, mIdx) => `
@@ -270,7 +262,6 @@ function renderMatchesAndOdds() {
             </div>
 
           </div>
-        </div>
       `;
 
 	container.innerHTML = html;

@@ -293,7 +293,6 @@ input[type="number"] { -moz-appearance: textfield; }
 	width: 5rem;
 	height: 100%;
 	padding: 0 10px;
-	background: transparent;
 	border: 0;
 	outline: 0;
 	color: var(--color-text);
@@ -335,13 +334,13 @@ input[type="number"] { -moz-appearance: textfield; }
 .numinput {
 	display: flex;
 	align-items: center;
-	background: var(--color-surface-2);
 	border: 1px solid var(--color-divider);
 	border-radius: 8px;
 	overflow: hidden;
 	height: 36px;
 	width: fit-content;
 	transition: border-color 0.2s;
+	background: var(--color-surface);
 }
 
 .numinput:focus-within {
@@ -350,7 +349,6 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 .numinput input {
-	background: transparent;
 	border: none;
 	border-radius: 0;
 	height: 100%;
@@ -529,7 +527,6 @@ input[type="number"] { -moz-appearance: textfield; }
 .bookies-table input[type="text"] {
 	width: 100%;
 	min-width: 100px;
-	background: var(--color-surface-2);
 }
 
 .bookie-num-badge {

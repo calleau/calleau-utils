@@ -67,11 +67,67 @@
 	border-radius: 10px;
 }
 
-/* Bouton supprimer une ligne bookie */
-.td-delete {
-	width: 2rem;
-	text-align: center;
+/* =========================================================
+   Grille des bookies (CSS Grid)
+   ========================================================= */
+
+.bookies-grid {
+	display: grid;
+	grid-template-columns: 50px minmax(130px, auto) minmax(140px, 1fr) minmax(180px, auto) auto auto auto 40px;
+	font-size: 0.9rem;
+	width: fit-content;
+	min-width: min(100%, 900px);
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	overflow: hidden;
 }
+
+.bg-th {
+	background: var(--color-surface-2);
+	padding: 8px 14px;
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-text);
+	border-bottom: 2px solid var(--color-divider);
+	display: flex;
+	align-items: center;
+}
+
+.bg-row {
+	display: contents;
+}
+
+.bg-row:hover > * {
+	background: rgba(92, 137, 157, 0.04);
+}
+
+.bg-cell {
+	padding: 6px 14px;
+	display: flex;
+	align-items: center;
+	border-bottom: 1px solid var(--color-divider);
+}
+
+.bg-cell-num {
+	justify-content: center;
+	padding: 6px;
+}
+
+.bg-cell-delete {
+	justify-content: center;
+	padding: 4px 6px;
+}
+
+.bg-add-row {
+	grid-column: 1 / -1;
+	background: var(--color-surface-2);
+	padding: 0.4rem 0.75rem;
+	border-top: 1px solid var(--color-divider);
+}
+
+/* Bouton supprimer une ligne bookie */
 
 .btn-delete-bookie {
 	background: none;
@@ -95,12 +151,6 @@
 	cursor: not-allowed;
 }
 
-/* Ligne d'ajout de site en bas du tableau */
-.add-bookie-row td {
-	padding: 0.4rem 0.75rem;
-	background: var(--color-surface-2);
-	border-top: 1px solid var(--color-divider);
-}
 
 .btn-add-bookie, .btn-add-match {
 	background: none;
@@ -328,6 +378,9 @@
 	display: grid;
 	grid-template-columns: minmax(130px, auto) repeat(var(--odds-cols), minmax(80px, 1fr));
 	font-size: 0.9rem;
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	overflow: hidden;
 }
 
 /* En-tête colonne "Site" */
