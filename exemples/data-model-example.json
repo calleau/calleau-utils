@@ -1,0 +1,343 @@
+{
+	"Foot_Everton vs Man United_2026-02-23T21:00_Premier Lg": {
+		"competition": "Premier Lg",
+		"dateTime": "2026-02-23T21:00:00",
+		"opponents": [
+			"Everton",
+			"Man United"
+		],
+		"ids":{
+			"Unibet": "3368797",
+			"Betclic": "654321",
+			"PIWIXchange": "35144487"
+		},
+		"markets": {
+			"Résultat": {
+				"Everton": {
+					"Unibet": 3.72,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"Nul:": {
+					"Unibet": 3.78,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"Man United": {
+					"Unibet": 1.9,
+					"PSEL": 11,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				}
+			},
+			"Double Chance": {
+				"Everton ou Nul": {
+					"Unibet": 1.78,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"Everton ou Man United": {
+					"Unibet": 1.23,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"Nul ou Man United": {
+					"Unibet": 1.23,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				}
+			},
+			"Buts 2 eqp": {
+				"Oui": {
+					"Unibet": 1.54,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"Non": {
+					"Unibet": 2.00,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				}
+			},
+			"Total buts": {
+				"0,5-": {
+					"Unibet": 1.78,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"0,5+": {
+					"Unibet": 1.23,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"1,5-": {
+					"Unibet": 1.78,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"1,5+": {
+					"Unibet": 1.23,
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				}
+			}
+		}
+	},
+	"Paris SG vs Paris FC - 2026-01-12 22:30 - Coupe de France FFF": {
+		"competition": "Coupe de France FFF",
+		"dateTime": "2026-01-12T22:30:00",
+		"opponents": [
+			"Paris SG",
+			"Paris FC"
+		],
+		"ids":{
+			"PSEL": "123456",
+			"Betclic": "654321",
+			"PIWIXchange": "35144487"
+		},
+		"markets": {
+			"Vainqueur": {
+				"Paris SG": {
+					"PSEL": 1.55,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"Nul:": {
+					"PSEL": 4.2,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"Paris FC": {
+					"PSEL": 13.5,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				}
+			}
+		}
+	},
+	"A.Tabilo vs U.Carabelli - 2026-01-12 22:30 - Auckland H": {
+		"competition": "Auckland H",
+		"dateTime": "2026-01-12T22:30:00",
+		"opponents": [
+			"A.Tabilo",
+			"U.Carabelli"
+		],
+		"ids":{
+			"PSEL": "123456",
+			"Betclic": "654321",
+			"PIWIXchange": "35144487"
+		},
+		"markets": {
+			"Vainqueur": {
+				"A.Tabilo": {
+					"PSEL": 5.3,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				},
+				"U.Carabelli": {
+					"PSEL": 5.3,
+					"Betclic": 5.3,
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						}
+					}
+				}
+			}
+		}
+	}
+}
+

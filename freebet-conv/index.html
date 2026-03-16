@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Conversion Freebets</title>
+	<link rel="stylesheet" href="../theme.css" />
+	<link rel="stylesheet" href="freebet-conv.css" />
+	<script src="../theme-toggle.js"></script>
+</head>
+
+<body>
+	<div class="wrap">
+
+		<header class="toolbar">
+			<a href="../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Conversion Freebets</h1>
+		</header>
+
+		<div class="fc-config card">
+			<div class="fc-controls-row">
+				<div class="fc-field">
+					<label class="fc-label" for="fc-site-select">Site de conversion</label>
+					<select id="fc-site-select" disabled>
+						<option value="">— Charger un JSON —</option>
+					</select>
+				</div>
+				<div class="fc-field">
+					<label class="fc-label" for="fc-amount">Montant freebet</label>
+					<div class="numinput">
+						<input type="number" id="fc-amount" value="10" min="1" step="5"
+							onclick="this.select()" oninput="tryRender()" />
+						<span class="unit">€</span>
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="stepAmount(5)">▲</button>
+							<button class="nbtn" onclick="stepAmount(-5)">▼</button>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="fc-json-row">
+				<div class="fc-json-label-row">
+					<label class="fc-label" for="fc-json">Données JSON</label>
+					<button class="btn btn-ghost fc-paste-btn" onclick="pasteFromClipboard()">Coller</button>
+				</div>
+				<textarea id="fc-json" class="fc-textarea"
+					placeholder="Coller votre JSON ici…"
+					oninput="onJsonChange()" spellcheck="false"></textarea>
+				<p id="fc-json-error" class="fc-json-error" hidden></p>
+			</div>
+		</div>
+
+		<div id="fc-results" hidden></div>
+
+		<footer class="page-footer">
+			<span class="footer-version">v1.0.2</span>
+		</footer>
+
+	</div>
+
+	<div id="floating-actions"></div>
+	<script src="freebet-conv.js"></script>
+</body>
+
+</html>
