@@ -1,5 +1,5 @@
 {
-	"Foot_Everton vs Man United_2026-02-23T21:00_Premier Lg": {
+	"Foot_Everton vs Man United_2026-02-23T21:00": {
 		"competition": "Premier Lg",
 		"dateTime": "2026-02-23T21:00:00",
 		"opponents": [
@@ -225,7 +225,7 @@
 			}
 		}
 	},
-	"Paris SG vs Paris FC - 2026-01-12 22:30 - Coupe de France FFF": {
+	"Foot_Paris SG vs Paris FC_2026-01-12T22:30": {
 		"competition": "Coupe de France FFF",
 		"dateTime": "2026-01-12T22:30:00",
 		"opponents": [
@@ -290,7 +290,7 @@
 			}
 		}
 	},
-	"A.Tabilo vs U.Carabelli - 2026-01-12 22:30 - Auckland H": {
+	"Foot_A.Tabilo vs U.Carabelli_2026-01-12T22:30": {
 		"competition": "Auckland H",
 		"dateTime": "2026-01-12T22:30:00",
 		"opponents": [

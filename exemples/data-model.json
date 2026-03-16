@@ -1,5 +1,5 @@
 {
-	"Sport_Nom event_YYYY-MM-DD hh:mm_Tournoi": {
+	"Nom event_YYYY-MM-DDThh:mm": {
 		"dateTime": "YYYY-MM-DDThh:mm:ss",
 		"tournoi": "Nom du tournoi",
 		"nom_event": "Nom de l'événement",

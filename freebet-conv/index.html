@@ -18,43 +18,54 @@
 			<h1 class="title">Conversion Freebets</h1>
 		</header>
 
-		<div class="fc-config card">
-			<div class="fc-controls-row">
-				<div class="fc-field">
-					<label class="fc-label" for="fc-site-select">Site de conversion</label>
-					<select id="fc-site-select" disabled>
-						<option value="">— Charger un JSON —</option>
-					</select>
-				</div>
-				<div class="fc-field">
-					<label class="fc-label" for="fc-amount">Montant freebet</label>
-					<div class="numinput">
-						<input type="number" id="fc-amount" value="10" min="1" step="5"
-							onclick="this.select()" oninput="tryRender()" />
-						<span class="unit">€</span>
-						<div class="nbtn-wrap">
-							<button class="nbtn" onclick="stepAmount(5)">▲</button>
-							<button class="nbtn" onclick="stepAmount(-5)">▼</button>
+		<div class="fc-layout">
+			<div class="fc-config card">
+				<div class="fc-controls-row">
+					<div class="fc-field">
+						<label class="fc-label" for="fc-amount">Montant freebet</label>
+						<div class="numinput">
+							<input type="number" id="fc-amount" value="10" min="1" step="5"
+								onclick="this.select()" oninput="tryRender()" />
+							<span class="unit">€</span>
+							<div class="nbtn-wrap">
+								<button class="nbtn" onclick="stepAmount(5)">▲</button>
+								<button class="nbtn" onclick="stepAmount(-5)">▼</button>
+							</div>
 						</div>
 					</div>
 				</div>
-			</div>
-			<div class="fc-json-row">
-				<div class="fc-json-label-row">
-					<label class="fc-label" for="fc-json">Données JSON</label>
-					<button class="btn btn-ghost fc-paste-btn" onclick="pasteFromClipboard()">Coller</button>
+				<div class="fc-json-row">
+					<div class="fc-json-label-row">
+						<label class="fc-label" for="fc-json">Données JSON</label>
+						<button class="btn btn-ghost fc-paste-btn" onclick="pasteFromClipboard()">Coller</button>
+					</div>
+					<textarea id="fc-json" class="fc-textarea"
+						placeholder="Coller votre JSON ici…"
+						oninput="onJsonChange()" spellcheck="false"></textarea>
+					<p id="fc-json-error" class="fc-json-error" hidden></p>
 				</div>
-				<textarea id="fc-json" class="fc-textarea"
-					placeholder="Coller votre JSON ici…"
-					oninput="onJsonChange()" spellcheck="false"></textarea>
-				<p id="fc-json-error" class="fc-json-error" hidden></p>
+				<div class="fc-field" id="fc-site-field" hidden>
+					<label class="fc-label" for="fc-site-select">Site de conversion</label>
+					<select id="fc-site-select">
+						<option value="">— Sélectionner un site —</option>
+					</select>
+				</div>
+			</div>
+
+			<div class="fc-right">
+				<div id="fc-legs-row" hidden>
+					<div class="fc-legs-toggle">
+						<button class="fc-legs-btn fc-legs-btn--active" onclick="setLegs(1)">1</button>
+						<button class="fc-legs-btn" onclick="setLegs(2)">2 comb.</button>
+						<button class="fc-legs-btn" onclick="setLegs(3)">3 comb.</button>
+					</div>
+				</div>
+				<div id="fc-results" hidden></div>
 			</div>
 		</div>
 
-		<div id="fc-results" hidden></div>
-
 		<footer class="page-footer">
-			<span class="footer-version">v1.0.2</span>
+			<span class="footer-version">v1.2.0</span>
 		</footer>
 
 	</div>
