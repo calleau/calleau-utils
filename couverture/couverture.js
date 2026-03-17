@@ -421,10 +421,21 @@ function stepAmount(delta) {
 document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
 
+	// Réception via postMessage (page ouverte par window.open)
+	window.addEventListener('message', (e) => {
+		if (e.data?.type === 'couverture_json') {
+			document.getElementById('fc-json').value = e.data.json;
+			onJsonChange();
+		}
+	});
+	window.opener?.postMessage({ type: 'couverture_ready' }, '*');
+
+	// Fallback : paramètre URL (JSON petit)
 	const param = new URLSearchParams(location.search).get('data');
 	if (param) {
 		try {
-			const json = decodeURIComponent(atob(param));
+			const bytes = Uint8Array.from(atob(param), c => c.charCodeAt(0));
+			const json = new TextDecoder().decode(bytes);
 			document.getElementById('fc-json').value = json;
 			onJsonChange();
 		} catch {
