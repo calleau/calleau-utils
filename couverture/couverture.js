@@ -420,6 +420,17 @@ function stepAmount(delta) {
 
 document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
+
+	const param = new URLSearchParams(location.search).get('data');
+	if (param) {
+		try {
+			const json = decodeURIComponent(atob(param));
+			document.getElementById('fc-json').value = json;
+			onJsonChange();
+		} catch {
+			// param malformé, on ignore
+		}
+	}
 });
 
 // ---- Combinés (freebet uniquement) ----
