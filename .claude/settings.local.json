@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv freebet-conv:*)",
+      "Bash(mv couverture/freebet-conv.js couverture/couverture.js)",
+      "Bash(mv couverture/freebet-conv.css couverture/couverture.css)"
+    ]
+  }
+}

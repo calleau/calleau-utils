@@ -1,742 +1,382 @@
 /* =========================================================
-
-   Freebet Converter — styles
-
+   Couverture de Paris — styles
    ========================================================= */
-
-
 
 /* Toolbar avec titre centré (override theme.css flex) */
 
 .toolbar {
-
 	display: grid;
-
 	grid-template-columns: 1fr auto 1fr;
-
 	align-items: center;
-
 	gap: 1rem;
-
 }
-
-
 
 .toolbar .title {
-
 	text-align: center;
-
 }
-
-
 
 /* Lien retour */
 
 .back-link {
-
 	display: inline-block;
-
 	font-size: 2.8rem;
-
 	font-weight: 800;
-
 	line-height: 0.95;
-
 	letter-spacing: -0.04em;
-
 	color: var(--color-text);
-
 	text-decoration: none;
-
 	transition: color 0.2s;
-
 	width: fit-content;
-
 	align-self: flex-start;
-
 }
-
-
 
 .back-link em {
-
 	font-style: normal;
-
 	color: var(--c-primary);
-
 }
 
-
-
 .back-link:hover { color: var(--c-primary); text-decoration: none; }
-
 .back-link:hover em { color: var(--c-primary-dark); }
-
-
 
 /* Footer */
 
 .page-footer {
-
 	border-top: 1px solid var(--color-divider);
-
 	padding-top: 1rem;
-
 	text-align: center;
-
 }
-
-
 
 .footer-version {
-
 	font-family: 'DM Mono', monospace;
-
 	font-size: 0.72rem;
-
 	color: var(--color-muted);
-
 	letter-spacing: 0.05em;
-
 }
 
-
-
 /* =========================================================
-
    Layout deux colonnes
-
    ========================================================= */
-
-
 
 .wrap {
-
 	max-width: 95vw;
-
 }
-
-
 
 .fc-layout {
-
 	display: grid;
-
 	grid-template-columns: 360px 1fr;
-
 	gap: 1rem;
-
 	align-items: start;
-
 }
-
-
 
 @media (max-width: 900px) {
-
 	.fc-layout {
-
 		grid-template-columns: 1fr;
-
 	}
-
 }
-
-
 
 /* =========================================================
-
    Panneau de configuration
-
    ========================================================= */
 
-
-
 .fc-config {
-
 	display: flex;
-
 	flex-direction: column;
-
 	gap: 1.25rem;
-
 }
-
-
 
 .fc-controls-row {
-
 	display: flex;
-
 	gap: 2rem;
-
 	flex-wrap: wrap;
-
 	align-items: flex-end;
-
 }
-
-
 
 .fc-field {
-
 	display: flex;
-
 	flex-direction: column;
-
 	gap: 0.4rem;
-
 }
-
-
 
 .fc-field[hidden] { display: none; }
 
-
-
 .fc-label {
-
 	font-size: 0.72rem;
-
 	font-weight: 600;
-
 	letter-spacing: 0.12em;
-
 	text-transform: uppercase;
-
 	color: var(--color-muted);
-
 }
-
-
 
 .fc-json-row {
-
 	flex: 1;
-
 	display: flex;
-
 	flex-direction: column;
-
 	gap: 0.4rem;
-
 }
-
-
 
 .fc-json-label-row {
-
 	display: flex;
-
 	align-items: center;
-
 	justify-content: space-between;
-
 }
-
-
 
 .fc-paste-btn {
-
 	padding: 5px 14px;
-
 	font-size: 0.8rem;
-
 }
-
-
 
 .fc-textarea {
-
 	width: 100%;
-
 	flex: 1;
-
 	min-height: 200px;
-
 	font-family: 'DM Mono', monospace;
-
 	font-size: 0.72rem;
-
 	resize: vertical;
-
 	line-height: 1.6;
-
 }
-
-
 
 .fc-json-error {
-
 	font-size: 0.8rem;
-
 	color: var(--color-neg);
-
 	margin: 0;
-
 }
-
-
 
 /* =========================================================
-
    Résultats
-
    ========================================================= */
 
-
-
 #fc-results {
-
 	display: flex;
-
 	flex-direction: column;
-
 	gap: 0.6rem;
-
 }
-
-
 
 .fc-summary {
-
 	font-size: 0.82rem;
-
 	color: var(--color-muted);
-
 }
-
-
 
 .fc-empty {
-
 	text-align: center;
-
 	padding: 2rem;
-
 }
-
-
 
 .fc-results-grid {
-
 	display: grid;
-
 	grid-template-columns:
-
-		minmax(130px, 2fr)    /* événement */
-
-		minmax(70px, 1fr)     /* marché */
-
-		minmax(90px, 1fr)     /* issue */
-
-		64px                  /* cote back */
-
-		minmax(140px, 1.5fr)  /* couverture */
-
-		64px                  /* cote couv */
-
-		80px                  /* mise */
-
-		80px                  /* profit */
-
-		72px;                 /* taux */
-
+		minmax(130px, 2fr)   /* événement */
+		minmax(70px, 1fr)    /* marché */
+		minmax(90px, 1fr)    /* issue */
+		64px                 /* cote back */
+		minmax(140px, 1.5fr) /* couverture */
+		64px                 /* cote couv */
+		80px                 /* mise */
+		80px                 /* profit */
+		72px;                /* taux */
 	border: 1px solid var(--color-divider);
-
 	border-radius: 10px;
-
 	overflow: hidden;
-
 	font-size: 0.875rem;
-
 	width: fit-content;
-
 	min-width: min(100%, 900px);
-
 }
-
-
 
 .fc-th {
-
 	background: var(--color-surface-2);
-
 	padding: 8px 12px;
-
 	font-size: 0.65rem;
-
 	font-weight: 600;
-
 	letter-spacing: 0.15em;
-
 	text-transform: uppercase;
-
 	color: var(--color-text);
-
 	border-bottom: 2px solid var(--color-divider);
-
 	display: flex;
-
 	align-items: center;
-
 }
-
-
 
 .fc-row {
-
 	display: contents;
-
 }
-
-
 
 .fc-row:hover > .fc-cell {
-
 	background: rgba(92, 137, 157, 0.04);
-
 }
-
-
 
 .fc-cell {
-
 	padding: 8px 12px;
-
 	display: flex;
-
 	align-items: center;
-
 	border-bottom: 1px solid var(--color-divider);
-
 	overflow: hidden;
-
 }
-
-
 
 /* Cellule événement */
 
 .fc-event-wrap {
-
 	display: flex;
-
 	flex-direction: column;
-
 	gap: 2px;
-
 	min-width: 0;
-
 }
-
-
 
 .fc-event-name {
-
 	font-weight: 600;
-
 	font-size: 0.85rem;
-
 	white-space: nowrap;
-
 	overflow: hidden;
-
 	text-overflow: ellipsis;
-
 }
-
-
 
 .fc-event-meta {
-
 	font-size: 0.7rem;
-
 	color: var(--color-muted);
-
 	white-space: nowrap;
-
 	overflow: hidden;
-
 	text-overflow: ellipsis;
-
 }
-
-
 
 /* Cellule couverture */
 
 .fc-cover-wrap {
-
 	display: flex;
-
 	flex-direction: column;
-
 	gap: 3px;
-
 	min-width: 0;
-
 }
-
-
 
 .fc-cover-top {
-
 	display: flex;
-
 	align-items: center;
-
 	gap: 0.4rem;
-
 }
-
-
 
 .fc-cover-site {
-
 	font-weight: 600;
-
 	font-size: 0.85rem;
-
 	white-space: nowrap;
-
 }
-
-
 
 .fc-badge {
-
 	font-family: 'DM Mono', monospace;
-
 	font-size: 0.6rem;
-
 	font-weight: 700;
-
 	letter-spacing: 0.06em;
-
 	padding: 2px 6px;
-
 	border-radius: 4px;
-
 	flex-shrink: 0;
-
 }
-
-
 
 .fc-badge-lay {
-
 	background: var(--color-accent-100);
-
 	color: var(--color-accent-700);
-
 }
-
-
 
 .fc-badge-dc {
-
 	background: rgba(192, 120, 80, 0.15);
-
 	color: var(--c-tertiary);
-
 }
-
-
 
 .fc-cover-outcome {
-
 	font-size: 0.72rem;
-
 	color: var(--color-muted);
-
 	white-space: nowrap;
-
 	overflow: hidden;
-
 	text-overflow: ellipsis;
-
 }
-
-
 
 /* Cellules chiffrées */
 
 .fc-cell-mono {
-
 	font-family: 'DM Mono', monospace;
-
 	font-variant-numeric: tabular-nums;
-
 	font-size: 0.85rem;
-
 	justify-content: flex-end;
-
 }
 
-
-
 .fc-cell-muted { color: var(--color-muted); font-size: 0.82rem; }
-
 .fc-cell-strong { font-weight: 600; }
-
 .fc-cell-profit { font-weight: 700; }
-
-
 
 /* Cellule avec valeur principale + sous-valeur */
 
 .fc-cell-stack {
-
 	flex-direction: column;
-
 	align-items: flex-end;
-
 	gap: 2px;
-
 }
-
-
 
 .fc-cell-main {
-
 	font-size: 0.85rem;
-
 }
-
-
 
 .fc-cell-sub {
-
 	font-size: 0.68rem;
-
 	color: var(--color-muted);
-
 	font-weight: 400;
-
 }
 
-
-
-/* Taux de conversion */
+/* Taux */
 
 .fc-rate-good,
-
 .fc-rate-ok,
-
 .fc-rate-bad {
-
 	font-family: 'DM Mono', monospace;
-
 	font-variant-numeric: tabular-nums;
-
 	font-size: 0.85rem;
-
 	font-weight: 700;
-
 	justify-content: flex-end;
-
 }
-
-
 
 .fc-rate-good { color: var(--color-pos); }
-
 .fc-rate-ok   { color: var(--c-tertiary); }
-
 .fc-rate-bad  { color: var(--color-neg); }
 
-
-
 /* =========================================================
-
    Compteur et recherche
-
    ========================================================= */
 
-
-
 .fc-grid-label {
-
 	font-size: 0.75rem;
-
 	color: var(--color-muted);
-
 	margin: 0;
-
 }
-
-
 
 .fc-search-row {
-
 	display: flex;
-
 	align-items: center;
-
 	gap: 0.6rem;
-
 	border: 1px solid var(--color-divider);
-
 	border-radius: 10px;
-
 	padding: 0 12px;
-
 	background: var(--color-surface);
-
 	transition: border-color 0.2s;
-
 }
-
-
 
 .fc-search-row:focus-within {
-
 	border-color: var(--c-primary);
-
 	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
-
 }
-
-
 
 .fc-search-icon {
-
 	color: var(--color-muted);
-
 	flex-shrink: 0;
-
 }
-
-
 
 .fc-search-input {
-
 	flex: 1;
-
 	border: none;
-
 	background: transparent;
-
 	padding: 10px 0;
-
 	font-size: 0.9rem;
-
 	box-shadow: none;
-
 }
-
-
 
 .fc-search-input:focus {
-
 	outline: none;
-
 	box-shadow: none;
-
 	border: none;
-
 }
+
 /* =========================================================
    Legs toggle
    ========================================================= */

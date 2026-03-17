@@ -4,6 +4,7 @@ let _data = null;
 let _opps = [];
 let _legs = 1;
 let _rateCache = null;
+let _mode = 'freebet'; // 'freebet' | 'cash'
 
 // ---- Helpers ----
 
@@ -77,6 +78,7 @@ function formatDate(dt) {
 
 function computeOpportunities(data, freebetSite, amount) {
 	const results = [];
+	const isFb = _mode === 'freebet';
 
 	for (const [eventKey, event] of Object.entries(data)) {
 		const evName = eventDisplayName(eventKey, event);
@@ -94,17 +96,23 @@ function computeOpportunities(data, freebetSite, amount) {
 				const b = getBackOdds(fbVal);
 				if (!b || b <= 1) continue;
 
-				// — Couverture Lay (sites exchange dans la même issue) —
+				// — Couverture Lay (exchange) —
 				for (const [site, val] of Object.entries(oddsMap)) {
 					if (site === freebetSite) continue;
 					const lNet = getLayOddsNet(val);
 					if (!lNet || lNet <= 1) continue;
 					const lGross = val.Lay?.odds ?? null;
-					// c = commission dérivée depuis lGross et odds_net : c = 1 − (odds_net−1)/(lGross−1)
 					const c = (lGross != null && lGross > 1) ? 1 - (lNet - 1) / (lGross - 1) : 0;
 					const denom = lGross != null ? lGross - c : lNet;
-					const stake = amount * (b - 1) / denom;
-					const profit = stake * (1 - c);
+					let stake, profit;
+					if (isFb) {
+						stake = amount * (b - 1) / denom;
+						profit = stake * (1 - c);
+					} else {
+						// Cash : L = S*b/(lGross-c), résultat = L*(1-c) - S
+						stake = amount * b / denom;
+						profit = stake * (1 - c) - amount;
+					}
 					const liability = lGross != null ? stake * (lGross - 1) : null;
 					const rate = profit / amount;
 					results.push({ evName, evDate, evComp, marketName, outcomeName, b, coverSite: site, coverType: 'lay', coverOdds: lNet, lGross, liability, coverOutcome: outcomeName, stake, profit, rate });
@@ -121,11 +129,17 @@ function computeOpportunities(data, freebetSite, amount) {
 								if (site === freebetSite) continue;
 								if (isExchange(val)) continue;
 								if (typeof val !== 'number' || val <= 1) continue;
-								const c = val;
-								const stake = amount * (b - 1) / c;
-								const profit = stake * (c - 1);
-								const rate = (b - 1) * (c - 1) / c;
-								results.push({ evName, evDate, evComp, marketName, outcomeName, b, coverSite: site, coverType: 'dc', coverOdds: c, lGross: null, liability: null, coverOutcome: dcOutcomeName, stake, profit, rate });
+								let stake, profit;
+								if (isFb) {
+									stake = amount * (b - 1) / val;
+									profit = stake * (val - 1);
+								} else {
+									// Cash : L = S*b/dc, résultat = L*(dc-1) - S
+									stake = amount * b / val;
+									profit = stake * (val - 1) - amount;
+								}
+								const rate = profit / amount;
+								results.push({ evName, evDate, evComp, marketName, outcomeName, b, coverSite: site, coverType: 'dc', coverOdds: val, lGross: null, liability: null, coverOutcome: dcOutcomeName, stake, profit, rate });
 							}
 						}
 					}
@@ -140,6 +154,11 @@ function computeOpportunities(data, freebetSite, amount) {
 // ---- Rendu ----
 
 function rateClass(rate) {
+	if (_mode === 'cash') {
+		if (rate >= -0.02) return 'fc-rate-good';
+		if (rate >= -0.05) return 'fc-rate-ok';
+		return 'fc-rate-bad';
+	}
 	if (rate >= 0.75) return 'fc-rate-good';
 	if (rate >= 0.60) return 'fc-rate-ok';
 	return 'fc-rate-bad';
@@ -154,15 +173,15 @@ function esc(s) {
 }
 
 function buildRow(op) {
-	// Cellule "Cote couv." : odds_net + cote brute pour Lay
 	const coverOddsCell = op.coverType === 'lay' && op.lGross != null
 		? `<span class="fc-cell-main">${fmt(op.coverOdds)}</span><span class="fc-cell-sub">brut : ${fmt(op.lGross)}</span>`
 		: `<span class="fc-cell-main">${fmt(op.coverOdds)}</span>`;
 
-	// Cellule "Mise" : stake + liability pour Lay
 	const stakeCell = op.coverType === 'lay' && op.liability != null
 		? `<span class="fc-cell-main">${fmt(op.stake)} €</span><span class="fc-cell-sub">liab. : ${fmt(op.liability)} €</span>`
 		: `<span class="fc-cell-main">${fmt(op.stake)} €</span>`;
+
+	const profitClass = op.profit >= 0 ? 'pos' : 'neg';
 
 	return `
 		<div class="fc-row">
@@ -186,7 +205,7 @@ function buildRow(op) {
 			</div>
 			<div class="fc-cell fc-cell-mono fc-cell-stack">${coverOddsCell}</div>
 			<div class="fc-cell fc-cell-mono fc-cell-stack">${stakeCell}</div>
-			<div class="fc-cell fc-cell-mono fc-cell-profit pos">${fmt(op.profit)} €</div>
+			<div class="fc-cell fc-cell-mono fc-cell-profit ${profitClass}">${fmt(op.profit)} €</div>
 			<div class="fc-cell ${rateClass(op.rate)}">${fmt(op.rate * 100, 1)} %</div>
 		</div>
 	`;
@@ -201,6 +220,8 @@ function renderTable(query) {
 		? _opps.filter(op => op.evName.toLowerCase().includes(q) || op.evComp.toLowerCase().includes(q))
 		: _opps.slice(0, 10);
 
+	const resultHeader = _mode === 'cash' ? 'Résultat' : 'Profit';
+
 	if (!filtered.length) {
 		grid.innerHTML = `
 			<div class="fc-results-grid">
@@ -210,8 +231,8 @@ function renderTable(query) {
 				<div class="fc-th">Cote back</div>
 				<div class="fc-th">Couverture</div>
 				<div class="fc-th">Cote couv.</div>
-				<div class="fc-th">Mise</div>
-				<div class="fc-th">Profit</div>
+				<div class="fc-th">Mise couv.</div>
+				<div class="fc-th">${resultHeader}</div>
 				<div class="fc-th">Taux</div>
 			</div>
 			<p class="fc-empty text-muted">Aucun match correspondant.</p>
@@ -221,7 +242,7 @@ function renderTable(query) {
 
 	const label = q
 		? `${filtered.length} résultat${filtered.length > 1 ? 's' : ''}`
-		: `Top 10 sur ${_opps.length} opportunité${_opps.length > 1 ? 's' : ''}`;
+		: `Top 10 sur ${_opps.length} couverture${_opps.length > 1 ? 's' : ''}`;
 
 	grid.innerHTML = `
 		<p class="fc-grid-label">${label}</p>
@@ -232,8 +253,8 @@ function renderTable(query) {
 			<div class="fc-th">Cote back</div>
 			<div class="fc-th">Couverture</div>
 			<div class="fc-th">Cote couv.</div>
-			<div class="fc-th">Mise</div>
-			<div class="fc-th">Profit</div>
+			<div class="fc-th">Mise couv.</div>
+			<div class="fc-th">${resultHeader}</div>
 			<div class="fc-th">Taux</div>
 			${filtered.map(buildRow).join('')}
 		</div>
@@ -252,13 +273,17 @@ function renderResults(opps) {
 	el.hidden = false;
 
 	if (!opps.length) {
-		el.innerHTML = `<p class="fc-empty text-muted">Aucune opportunité trouvée pour ce site.</p>`;
+		el.innerHTML = `<p class="fc-empty text-muted">Aucune couverture trouvée pour ce site.</p>`;
 		return;
 	}
 
 	const bestRate = opps[0].rate;
+	const summaryLabel = _mode === 'cash'
+		? `${opps.length} couverture${opps.length > 1 ? 's' : ''} — meilleur taux de perte\u00a0: <strong>${fmt(bestRate * 100, 1)}\u00a0%</strong>`
+		: `${opps.length} opportunité${opps.length > 1 ? 's' : ''} — meilleur taux\u00a0: <strong>${fmt(bestRate * 100, 1)}\u00a0%</strong>`;
+
 	el.innerHTML = `
-		<p class="fc-summary">${opps.length} opportunité${opps.length > 1 ? 's' : ''} — meilleur taux : <strong>${fmt(bestRate * 100, 1)} %</strong></p>
+		<p class="fc-summary">${summaryLabel}</p>
 		<div id="fc-grid"></div>
 		<div class="fc-search-row">
 			<svg class="fc-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -269,6 +294,22 @@ function renderResults(opps) {
 }
 
 // ---- Gestionnaires d'événements ----
+
+function setMode(mode) {
+	_mode = mode;
+	_rateCache = null;
+	document.querySelectorAll('.fc-mode-btn').forEach(btn => {
+		btn.classList.toggle('fc-legs-btn--active', btn.dataset.mode === mode);
+	});
+	const label = document.getElementById('fc-amount-label');
+	if (label) label.textContent = mode === 'freebet' ? 'Montant freebet' : 'Mise cash';
+	if (mode === 'cash') {
+		_legs = 1;
+		const legsRow = document.getElementById('fc-legs-row');
+		if (legsRow) legsRow.hidden = true;
+	}
+	tryRender();
+}
 
 function onJsonChange() {
 	const raw = document.getElementById('fc-json').value.trim();
@@ -318,30 +359,10 @@ function setLegs(n) {
 
 function updateLegsButtons(data, site, amount) {
 	const legsRow = document.getElementById('fc-legs-row');
-	if (legsRow) legsRow.hidden = false;
-	if (!_rateCache || _rateCache.data !== data || _rateCache.site !== site || _rateCache.amount !== amount) {
-		_rateCache = {
-			data, site, amount,
-			rates: [1, 2, 3].map(n => {
-				const opps = n === 1
-					? computeOpportunities(data, site, amount)
-					: computeCombinedOpportunities(data, site, amount, n);
-				return opps.length ? opps[0].rate : null;
-			}),
-		};
+	if (_mode === 'cash') {
+		if (legsRow) legsRow.hidden = true;
+		return;
 	}
-	const labels = ['1', '2 comb.', '3 comb.'];
-	document.querySelectorAll('.fc-legs-btn').forEach((btn, i) => {
-		const rate = _rateCache.rates[i];
-		const rateHtml = rate != null
-			? `<span class="fc-btn-rate">${fmt(rate * 100, 1)} %</span>`
-			: '';
-		btn.innerHTML = `<span>${labels[i]}</span>${rateHtml}`;
-		btn.classList.toggle('fc-legs-btn--active', i + 1 === _legs);
-	});
-}
-function updateLegsButtons(data, site, amount) {
-	const legsRow = document.getElementById('fc-legs-row');
 	if (legsRow) legsRow.hidden = false;
 
 	if (!_rateCache || _rateCache.data !== data || _rateCache.site !== site || _rateCache.amount !== amount) {
@@ -356,11 +377,11 @@ function updateLegsButtons(data, site, amount) {
 		};
 	}
 
-	const labels = ['1', '2 comb.', '3 comb.'];
-	document.querySelectorAll('.fc-legs-btn').forEach((btn, i) => {
+	const labels = ['1', '2 comb.', '3 comb.'];
+	document.querySelectorAll('.fc-legs-btn:not(.fc-mode-btn)').forEach((btn, i) => {
 		const rate = _rateCache.rates[i];
 		const rateHtml = rate != null
-			? `<span class="fc-btn-rate">${fmt(rate * 100, 1)} %</span>`
+			? `<span class="fc-btn-rate">${fmt(rate * 100, 1)} %</span>`
 			: '';
 		btn.innerHTML = `<span>${labels[i]}</span>${rateHtml}`;
 		btn.classList.toggle('fc-legs-btn--active', i + 1 === _legs);
@@ -373,7 +394,7 @@ function tryRender() {
 	if (!site) return;
 	const amount = parseFloat(document.getElementById('fc-amount').value) || 10;
 	updateLegsButtons(_data, site, amount);
-	if (_legs === 1) {
+	if (_mode === 'cash' || _legs === 1) {
 		renderResults(computeOpportunities(_data, site, amount));
 	} else {
 		renderCombinedResults(computeCombinedOpportunities(_data, site, amount, _legs));
@@ -400,7 +421,8 @@ function stepAmount(delta) {
 document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
 });
-// ---- Combinés ----
+
+// ---- Combinés (freebet uniquement) ----
 
 const MIN_GAP_MS = 90 * 60 * 1000;
 
