@@ -5,6 +5,7 @@ let _opps = [];
 let _legs = 1;
 let _rateCache = null;
 let _mode = 'freebet'; // 'freebet' | 'cash'
+let _visibleCount = 20;
 
 // ---- Helpers ----
 
@@ -213,16 +214,18 @@ function buildRow(op) {
 
 function renderTable(query) {
 	const grid = document.getElementById('fc-grid');
+	const moreBtn = document.getElementById('fc-more');
 	if (!grid) return;
 
 	const q = query.trim().toLowerCase();
-	const filtered = q
+	const allFiltered = q
 		? _opps.filter(op => op.evName.toLowerCase().includes(q) || op.evComp.toLowerCase().includes(q))
-		: _opps.slice(0, 10);
+		: _opps;
+	const visible = allFiltered.slice(0, q ? allFiltered.length : _visibleCount);
 
 	const resultHeader = _mode === 'cash' ? 'Résultat' : 'Profit';
 
-	if (!filtered.length) {
+	if (!allFiltered.length) {
 		grid.innerHTML = `
 			<div class="fc-results-grid">
 				<div class="fc-th">Événement</div>
@@ -237,12 +240,13 @@ function renderTable(query) {
 			</div>
 			<p class="fc-empty text-muted">Aucun match correspondant.</p>
 		`;
+		if (moreBtn) moreBtn.innerHTML = '';
 		return;
 	}
 
 	const label = q
-		? `${filtered.length} résultat${filtered.length > 1 ? 's' : ''}`
-		: `Top 10 sur ${_opps.length} couverture${_opps.length > 1 ? 's' : ''}`;
+		? `${allFiltered.length} résultat${allFiltered.length > 1 ? 's' : ''}`
+		: `${visible.length} sur ${_opps.length} couverture${_opps.length > 1 ? 's' : ''}`;
 
 	grid.innerHTML = `
 		<p class="fc-grid-label">${label}</p>
@@ -256,9 +260,16 @@ function renderTable(query) {
 			<div class="fc-th">Mise couv.</div>
 			<div class="fc-th">${resultHeader}</div>
 			<div class="fc-th">Taux</div>
-			${filtered.map(buildRow).join('')}
+			${visible.map(buildRow).join('')}
 		</div>
 	`;
+
+	if (moreBtn) {
+		const remaining = _opps.length - _visibleCount;
+		moreBtn.innerHTML = !q && remaining > 0
+			? `<button class="fc-show-more-btn" onclick="showMore()">Voir plus (${Math.min(remaining, 20)} sur ${remaining} restants)</button>`
+			: '';
+	}
 }
 
 function onSearch() {
@@ -282,9 +293,11 @@ function renderResults(opps) {
 		? `${opps.length} couverture${opps.length > 1 ? 's' : ''} — meilleur taux de perte\u00a0: <strong>${fmt(bestRate * 100, 1)}\u00a0%</strong>`
 		: `${opps.length} opportunité${opps.length > 1 ? 's' : ''} — meilleur taux\u00a0: <strong>${fmt(bestRate * 100, 1)}\u00a0%</strong>`;
 
+	_visibleCount = 20;
 	el.innerHTML = `
 		<p class="fc-summary">${summaryLabel}</p>
 		<div id="fc-grid"></div>
+		<div id="fc-more"></div>
 		<div class="fc-search-row">
 			<svg class="fc-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 			<input type="text" id="fc-search" class="fc-search-input" placeholder="Rechercher un match…" oninput="onSearch()" />
@@ -411,6 +424,13 @@ async function pasteFromClipboard() {
 	}
 }
 
+function showMore() {
+	_visibleCount += 20;
+	const q = document.getElementById('fc-search')?.value ?? '';
+	if (_legs === 1) renderTable(q);
+	else renderCombinedTable(q);
+}
+
 function stepAmount(delta) {
 	const input = document.getElementById('fc-amount');
 	const val = Math.max(1, (parseFloat(input.value) || 0) + delta);
@@ -422,13 +442,20 @@ document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
 
 	// Réception via postMessage (page ouverte par window.open)
+	console.log('[couverture] DOMContentLoaded — window.opener =', window.opener);
 	window.addEventListener('message', (e) => {
+		console.log('[couverture] message reçu — origin:', e.origin, '— data:', e.data);
 		if (e.data?.type === 'couverture_json') {
 			document.getElementById('fc-json').value = e.data.json;
 			onJsonChange();
 		}
 	});
-	window.opener?.postMessage({ type: 'couverture_ready' }, '*');
+	if (window.opener) {
+		console.log('[couverture] envoi de couverture_ready à window.opener');
+		window.opener.postMessage({ type: 'couverture_ready' }, '*');
+	} else {
+		console.warn('[couverture] window.opener est null — la page n\'a pas été ouverte via window.open()');
+	}
 
 	// Fallback : paramètre URL (JSON petit)
 	const param = new URLSearchParams(location.search).get('data');
@@ -597,23 +624,33 @@ function buildComboCard(combo) {
 
 function renderCombinedTable(query) {
 	const grid = document.getElementById('fc-grid');
+	const moreBtn = document.getElementById('fc-more');
 	if (!grid) return;
 
 	const q = query.trim().toLowerCase();
-	const filtered = q
+	const allFiltered = q
 		? _opps.filter(combo => combo.legs.some(l => l.evName.toLowerCase().includes(q) || l.evComp.toLowerCase().includes(q)))
-		: _opps.slice(0, 10);
+		: _opps;
+	const visible = allFiltered.slice(0, q ? allFiltered.length : _visibleCount);
 
-	if (!filtered.length) {
+	if (!allFiltered.length) {
 		grid.innerHTML = `<p class="fc-empty text-muted">Aucune combinaison correspondante.</p>`;
+		if (moreBtn) moreBtn.innerHTML = '';
 		return;
 	}
 
 	const label = q
-		? `${filtered.length} r\u00e9sultat${filtered.length > 1 ? 's' : ''}`
-		: `Top 10 sur ${_opps.length} combinaison${_opps.length > 1 ? 's' : ''}`;
+		? `${allFiltered.length} r\u00e9sultat${allFiltered.length > 1 ? 's' : ''}`
+		: `${visible.length} sur ${_opps.length} combinaison${_opps.length > 1 ? 's' : ''}`;
 
-	grid.innerHTML = `<p class="fc-grid-label">${label}</p>${filtered.map(buildComboCard).join('')}`;
+	grid.innerHTML = `<p class="fc-grid-label">${label}</p>${visible.map(buildComboCard).join('')}`;
+
+	if (moreBtn) {
+		const remaining = _opps.length - _visibleCount;
+		moreBtn.innerHTML = !q && remaining > 0
+			? `<button class="fc-show-more-btn" onclick="showMore()">Voir plus (${Math.min(remaining, 20)} sur ${remaining} restants)</button>`
+			: '';
+	}
 }
 
 function renderCombinedResults(opps) {
@@ -627,9 +664,11 @@ function renderCombinedResults(opps) {
 	}
 
 	const bestRate = opps[0].rate;
+	_visibleCount = 20;
 	el.innerHTML = `
 		<p class="fc-summary">${opps.length} combinaison${opps.length > 1 ? 's' : ''} \u2014 meilleur taux\u00a0: <strong>${fmt(bestRate * 100, 1)}\u00a0%</strong></p>
 		<div id="fc-grid"></div>
+		<div id="fc-more"></div>
 		<div class="fc-search-row">
 			<svg class="fc-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 			<input type="text" id="fc-search" class="fc-search-input" placeholder="Rechercher un match\u2026" oninput="onSearch()" />
