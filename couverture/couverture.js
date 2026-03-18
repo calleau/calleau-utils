@@ -218,9 +218,14 @@ function renderTable(query) {
 	if (!grid) return;
 
 	const q = query.trim().toLowerCase();
-	const allFiltered = q
-		? _opps.filter(op => op.evName.toLowerCase().includes(q) || op.evComp.toLowerCase().includes(q))
-		: _opps;
+	const oddsMin = parseFloat(document.getElementById('fc-odds-min')?.value) || null;
+	const oddsMax = parseFloat(document.getElementById('fc-odds-max')?.value) || null;
+	const allFiltered = _opps.filter(op => {
+		if (q && !op.evName.toLowerCase().includes(q) && !op.evComp.toLowerCase().includes(q)) return false;
+		if (oddsMin != null && op.b < oddsMin) return false;
+		if (oddsMax != null && op.b > oddsMax) return false;
+		return true;
+	});
 	const visible = allFiltered.slice(0, q ? allFiltered.length : _visibleCount);
 
 	const resultHeader = _mode === 'cash' ? 'Résultat' : 'Profit';
@@ -354,15 +359,18 @@ function onJsonChange() {
 
 function updateSiteSelect(sites) {
 	const field = document.getElementById('fc-site-field');
+	const filterRow = document.getElementById('fc-odds-filter-row');
 	const sel = document.getElementById('fc-site-select');
 	if (!sites.length) {
 		field.hidden = true;
+		if (filterRow) filterRow.hidden = true;
 		sel.innerHTML = '<option value="">— Sélectionner un site —</option>';
 		return;
 	}
 	sel.innerHTML = '<option value="">— Sélectionner un site —</option>'
 		+ sites.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
 	field.hidden = false;
+	if (filterRow) filterRow.hidden = false;
 }
 
 function setLegs(n) {
@@ -634,9 +642,14 @@ function renderCombinedTable(query) {
 	if (!grid) return;
 
 	const q = query.trim().toLowerCase();
-	const allFiltered = q
-		? _opps.filter(combo => combo.legs.some(l => l.evName.toLowerCase().includes(q) || l.evComp.toLowerCase().includes(q)))
-		: _opps;
+	const oddsMin = parseFloat(document.getElementById('fc-odds-min')?.value) || null;
+	const oddsMax = parseFloat(document.getElementById('fc-odds-max')?.value) || null;
+	const allFiltered = _opps.filter(combo => {
+		if (q && !combo.legs.some(l => l.evName.toLowerCase().includes(q) || l.evComp.toLowerCase().includes(q))) return false;
+		if (oddsMin != null && combo.legs.some(l => l.b != null && l.b < oddsMin)) return false;
+		if (oddsMax != null && combo.legs.some(l => l.b != null && l.b > oddsMax)) return false;
+		return true;
+	});
 	const visible = allFiltered.slice(0, q ? allFiltered.length : _visibleCount);
 
 	if (!allFiltered.length) {

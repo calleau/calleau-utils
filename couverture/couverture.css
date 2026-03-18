@@ -104,6 +104,24 @@
 
 .fc-field[hidden] { display: none; }
 
+.fc-odds-filter-row {
+	display: flex;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.fc-odds-filter-row[hidden] { display: none; }
+
+.fc-odds-input {
+	width: 7rem;
+	padding: 0.4rem 0.6rem;
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	background: var(--color-surface);
+	color: var(--color-text);
+	font-size: 0.9rem;
+}
+
 .fc-label {
 	font-size: 0.72rem;
 	font-weight: 600;
