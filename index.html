@@ -37,16 +37,22 @@
 					<span class="menu-label">Freebets Lay</span>
 					<span class="menu-arrow">→</span>
 				</a>
-			<a href="couverture/index.html" class="menu-item">
+			<a href="couverture/index.html" class="menu-item" id="menu-couverture">
 					<span class="menu-num">05</span>
-					<span class="menu-label">Couverture de paris (JSON)</span>
+					<span class="menu-label">Couverture de paris</span>
+					<span class="menu-badge">JSON</span>
+					<span class="menu-arrow">→</span>
+				</a>
+						<a href="paris-couverts/index.html" class="menu-item">
+					<span class="menu-num">06</span>
+					<span class="menu-label">Paris couverts</span>
+					<span class="menu-badge">JSON</span>
 					<span class="menu-arrow">→</span>
 				</a>
 			</nav>
 		</div>
 	</main>
 	<script>
-		// Classe spéciale pour le bouton sur la homepage (pas de variables --color-* disponibles)
 		document.addEventListener('DOMContentLoaded', function () {
 			const btn = document.getElementById('theme-toggle');
 			if (btn) btn.classList.add('hp');

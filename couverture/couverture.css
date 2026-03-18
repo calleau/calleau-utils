@@ -184,6 +184,11 @@
 	padding: 2rem;
 }
 
+.fc-grid-scroll {
+	overflow-x: auto;
+	width: 100%;
+}
+
 .fc-results-grid {
 	display: grid;
 	grid-template-columns:
@@ -200,8 +205,8 @@
 	border-radius: 10px;
 	overflow: hidden;
 	font-size: 0.875rem;
-	width: fit-content;
-	min-width: min(100%, 1050px);
+	width: 100%;
+	min-width: 900px;
 }
 
 .fc-th {
@@ -498,6 +503,12 @@
 
 .fc-combo-b {
 	flex: 1;
+	font-size: 0.8rem;
+	color: var(--color-muted);
+}
+
+.fc-combo-liability {
+	font-family: 'DM Mono', monospace;
 	font-size: 0.8rem;
 	color: var(--color-muted);
 }

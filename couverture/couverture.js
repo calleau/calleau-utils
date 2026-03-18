@@ -230,19 +230,20 @@ function renderTable(query) {
 
 	const resultHeader = _mode === 'cash' ? 'Résultat' : 'Profit';
 
+	const headers = `
+		<div class="fc-th">Événement</div>
+		<div class="fc-th">Marché</div>
+		<div class="fc-th">Issue</div>
+		<div class="fc-th">Cote back</div>
+		<div class="fc-th">Couverture</div>
+		<div class="fc-th">Cote couv.</div>
+		<div class="fc-th">Mise couv.</div>
+		<div class="fc-th">${resultHeader}</div>
+		<div class="fc-th">Taux</div>`;
+
 	if (!allFiltered.length) {
 		grid.innerHTML = `
-			<div class="fc-results-grid">
-				<div class="fc-th">Événement</div>
-				<div class="fc-th">Marché</div>
-				<div class="fc-th">Issue</div>
-				<div class="fc-th">Cote back</div>
-				<div class="fc-th">Couverture</div>
-				<div class="fc-th">Cote couv.</div>
-				<div class="fc-th">Mise couv.</div>
-				<div class="fc-th">${resultHeader}</div>
-				<div class="fc-th">Taux</div>
-			</div>
+			<div class="fc-grid-scroll"><div class="fc-results-grid">${headers}</div></div>
 			<p class="fc-empty text-muted">Aucun match correspondant.</p>
 		`;
 		if (moreBtn) moreBtn.innerHTML = '';
@@ -255,18 +256,7 @@ function renderTable(query) {
 
 	grid.innerHTML = `
 		<p class="fc-grid-label">${label}</p>
-		<div class="fc-results-grid">
-			<div class="fc-th">Événement</div>
-			<div class="fc-th">Marché</div>
-			<div class="fc-th">Issue</div>
-			<div class="fc-th">Cote back</div>
-			<div class="fc-th">Couverture</div>
-			<div class="fc-th">Cote couv.</div>
-			<div class="fc-th">Mise couv.</div>
-			<div class="fc-th">${resultHeader}</div>
-			<div class="fc-th">Taux</div>
-			${visible.map(buildRow).join('')}
-		</div>
+		<div class="fc-grid-scroll"><div class="fc-results-grid">${headers}${visible.map(buildRow).join('')}</div></div>
 	`;
 
 	if (moreBtn) {
@@ -625,10 +615,13 @@ function buildComboCard(combo) {
 		</div>`;
 	}).join('');
 
+	const totalLiability = combo.legs.reduce((sum, l) => sum + (l.liability ?? 0), 0);
+
 	return `
 	<div class="fc-combo-card">
 		<div class="fc-combo-header">
 			<span class="fc-combo-b">Cot. combinée <strong>${fmt(combo.B)}</strong></span>
+			<span class="fc-combo-liability">Liab. totale <strong>${fmt(totalLiability)}\u00a0\u20ac</strong></span>
 			<span class="fc-combo-profit pos"><strong>${fmt(combo.profit)}\u00a0\u20ac</strong></span>
 			<span class="${rateClass(combo.rate)} fc-combo-rate">${fmt(combo.rate * 100, 1)}\u00a0%</span>
 		</div>

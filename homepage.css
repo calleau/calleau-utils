@@ -131,6 +131,24 @@ html {
 	letter-spacing: 0.01em;
 }
 
+/* Badge JSON */
+.menu-badge {
+	font-size: 0.65rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--hp-num);
+	border: 1px solid var(--hp-num);
+	border-radius: 4px;
+	padding: 2px 6px;
+	opacity: 0.85;
+	transition: transform 0.2s ease;
+}
+
+.menu-item:hover .menu-badge {
+	transform: translateX(6px);
+}
+
 /* Flèche */
 .menu-arrow {
 	font-size: 1rem;

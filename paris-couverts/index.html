@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Paris Couverts</title>
+	<link rel="stylesheet" href="../theme.css" />
+	<link rel="stylesheet" href="paris-couverts.css" />
+	<script src="../theme-toggle.js"></script>
+</head>
+
+<body>
+	<div class="wrap">
+
+		<header class="toolbar">
+			<a href="../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Paris Couverts</h1>
+		</header>
+
+		<div class="pc-layout">
+			<div class="pc-config card">
+				<div class="pc-controls-row">
+					<div class="pc-field">
+						<label class="pc-label" for="pc-amount">Mise sur la cote max.</label>
+						<div class="numinput">
+							<input type="number" id="pc-amount" value="5" min="1" step="1"
+								onclick="this.select()" oninput="tryRender()" />
+							<span class="unit">€</span>
+							<div class="nbtn-wrap">
+								<button class="nbtn" onclick="stepAmount(1)">▲</button>
+								<button class="nbtn" onclick="stepAmount(-1)">▼</button>
+							</div>
+						</div>
+					</div>
+					<div class="pc-field">
+						<label class="pc-label">Mode</label>
+						<div class="pc-legs-toggle">
+							<button class="pc-legs-btn pc-legs-btn--active" id="pc-btn-1" onclick="setLegs(1)">1 marché</button>
+							<button class="pc-legs-btn" id="pc-btn-2" onclick="setLegs(2)">2 combinés</button>
+						</div>
+					</div>
+				</div>
+				<div class="pc-json-row">
+					<div class="pc-json-label-row">
+						<label class="pc-label" for="pc-json">Données JSON</label>
+						<button class="btn btn-ghost pc-paste-btn" onclick="pasteFromClipboard()">Coller</button>
+					</div>
+					<textarea id="pc-json" class="pc-textarea"
+						placeholder="Coller votre JSON ici…"
+						oninput="onJsonChange()" spellcheck="false"></textarea>
+					<p id="pc-json-error" class="pc-json-error" hidden></p>
+				</div>
+				<div class="pc-filter-row" id="pc-filter-row" hidden>
+					<div class="pc-field">
+						<label class="pc-label" for="pc-odds-min">Cote max. min.</label>
+						<input type="number" id="pc-odds-min" class="pc-odds-input" min="1" step="0.05"
+							placeholder="1,00" oninput="onSearch()" />
+					</div>
+					<div class="pc-field">
+						<label class="pc-label" for="pc-odds-max">Cote max. max.</label>
+						<input type="number" id="pc-odds-max" class="pc-odds-input" min="1" step="0.05"
+							placeholder="∞" oninput="onSearch()" />
+					</div>
+				</div>
+			</div>
+
+			<div id="pc-results" hidden></div>
+		</div>
+
+		<footer class="page-footer">
+			<span class="footer-version">v1.1.1</span>
+		</footer>
+
+	</div>
+
+	<div id="floating-actions"></div>
+	<script src="paris-couverts.js"></script>
+</body>
+
+</html>
