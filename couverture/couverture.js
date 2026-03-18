@@ -438,23 +438,19 @@ function stepAmount(delta) {
 	tryRender();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
 
-	// Réception via window.name (passé par l'extension avant navigation)
-	console.log('[couverture] window.name length:', window.name?.length, '| value preview:', window.name?.slice(0, 100));
-	if (window.name) {
-		try {
-			console.log('[couverture] Chargement JSON depuis window.name...');
-			document.getElementById('fc-json').value = window.name;
-			window.name = '';
+	// Auto-paste depuis le presse-papiers
+	try {
+		const text = await navigator.clipboard.readText();
+		if (text) {
+			JSON.parse(text); // valide que c'est du JSON
+			document.getElementById('fc-json').value = text;
 			onJsonChange();
-			console.log('[couverture] onJsonChange() appelé avec succès');
-		} catch (e) {
-			console.warn('[couverture] Erreur lecture window.name:', e.message);
 		}
-	} else {
-		console.log('[couverture] window.name vide, aucun JSON à charger');
+	} catch (e) {
+		// presse-papiers vide, non-JSON, ou permission refusée — on ignore
 	}
 
 	// Fallback : paramètre URL (JSON petit)
