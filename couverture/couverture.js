@@ -445,9 +445,9 @@ document.addEventListener('DOMContentLoaded', () => {
 	window.addEventListener('message', function handler(e) {
 		if (e.data?.type === 'couverture_json') {
 			window.removeEventListener('message', handler);
-			e.source.postMessage({ type: 'couverture_received' }, '*');
 			document.getElementById('fc-json').value = e.data.json;
 			onJsonChange();
+			try { e.source.postMessage({ type: 'couverture_received' }, '*'); } catch (_) {}
 		}
 	});
 
