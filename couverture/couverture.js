@@ -415,6 +415,8 @@ function tryRender() {
 }
 
 async function pasteFromClipboard() {
+	const btn = document.querySelector('.fc-paste-btn');
+	if (btn) { btn.textContent = 'Coller'; btn.style.cssText = ''; }
 	try {
 		const text = await navigator.clipboard.readText();
 		document.getElementById('fc-json').value = text;
