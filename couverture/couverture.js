@@ -441,21 +441,16 @@ function stepAmount(delta) {
 document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
 
-	// Réception via postMessage (envoyé en boucle par l'extension)
-	console.log('[couverture] Enregistrement du listener postMessage');
-	window.addEventListener('message', function handler(e) {
-		console.log('[couverture] Message reçu — origin:', e.origin, '| type:', e.data?.type, '| source:', e.source);
-		if (e.data?.type === 'couverture_json') {
-			console.log('[couverture] couverture_json reçu, json length:', e.data.json?.length);
-			window.removeEventListener('message', handler);
-			document.getElementById('fc-json').value = e.data.json;
+	// Réception via window.name (passé par l'extension avant navigation)
+	if (window.name) {
+		try {
+			document.getElementById('fc-json').value = window.name;
+			window.name = '';
 			onJsonChange();
-			try { e.source.postMessage({ type: 'couverture_received' }, '*'); } catch (err) {
-				console.warn('[couverture] Impossible d\'envoyer couverture_received:', err.message);
-			}
+		} catch (e) {
+			console.warn('[couverture] Erreur lecture window.name:', e.message);
 		}
-	});
-	console.log('[couverture] Listener postMessage enregistré');
+	}
 
 	// Fallback : paramètre URL (JSON petit)
 	const param = new URLSearchParams(location.search).get('data');
