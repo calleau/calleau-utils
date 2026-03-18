@@ -2,6 +2,11 @@
    Couverture de Paris — styles
    ========================================================= */
 
+@keyframes fc-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.5; }
+}
+
 /* Toolbar avec titre centré (override theme.css flex) */
 
 .toolbar {

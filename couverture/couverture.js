@@ -441,16 +441,24 @@ function stepAmount(delta) {
 document.addEventListener('DOMContentLoaded', async () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
 
-	// Auto-paste depuis le presse-papiers
-	try {
-		const text = await navigator.clipboard.readText();
-		if (text) {
-			JSON.parse(text); // valide que c'est du JSON
-			document.getElementById('fc-json').value = text;
-			onJsonChange();
+	// Auto-paste depuis le presse-papiers si demandé par l'extension
+	if (new URLSearchParams(location.search).get('autopaste') === '1') {
+		const btn = document.querySelector('.fc-paste-btn');
+		if (btn) {
+			btn.textContent = '📋 Coller les données';
+			btn.style.cssText = 'animation: fc-pulse 1s infinite; font-weight: bold;';
 		}
-	} catch (e) {
-		// presse-papiers vide, non-JSON, ou permission refusée — on ignore
+		try {
+			const text = await navigator.clipboard.readText();
+			if (text) {
+				JSON.parse(text);
+				document.getElementById('fc-json').value = text;
+				if (btn) { btn.textContent = 'Coller'; btn.style.cssText = ''; }
+				onJsonChange();
+			}
+		} catch (e) {
+			// permission refusée ou non-JSON : le bouton en évidence guide l'utilisateur
+		}
 	}
 
 	// Fallback : paramètre URL (JSON petit)
