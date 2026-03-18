@@ -442,14 +442,19 @@ document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
 
 	// Réception via window.name (passé par l'extension avant navigation)
+	console.log('[couverture] window.name length:', window.name?.length, '| value preview:', window.name?.slice(0, 100));
 	if (window.name) {
 		try {
+			console.log('[couverture] Chargement JSON depuis window.name...');
 			document.getElementById('fc-json').value = window.name;
 			window.name = '';
 			onJsonChange();
+			console.log('[couverture] onJsonChange() appelé avec succès');
 		} catch (e) {
 			console.warn('[couverture] Erreur lecture window.name:', e.message);
 		}
+	} else {
+		console.log('[couverture] window.name vide, aucun JSON à charger');
 	}
 
 	// Fallback : paramètre URL (JSON petit)
