@@ -187,26 +187,26 @@
 .fc-results-grid {
 	display: grid;
 	grid-template-columns:
-		minmax(130px, 2fr)   /* événement */
-		minmax(70px, 1fr)    /* marché */
-		minmax(90px, 1fr)    /* issue */
-		64px                 /* cote back */
-		minmax(140px, 1.5fr) /* couverture */
-		64px                 /* cote couv */
-		80px                 /* mise */
-		80px                 /* profit */
-		72px;                /* taux */
+		minmax(180px, 2.5fr) /* événement */
+		minmax(100px, 1.2fr) /* marché */
+		minmax(110px, 1.2fr) /* issue */
+		76px                 /* cote back */
+		minmax(160px, 1.8fr) /* couverture */
+		76px                 /* cote couv */
+		96px                 /* mise */
+		96px                 /* profit */
+		80px;                /* taux */
 	border: 1px solid var(--color-divider);
 	border-radius: 10px;
 	overflow: hidden;
 	font-size: 0.875rem;
 	width: fit-content;
-	min-width: min(100%, 900px);
+	min-width: min(100%, 1050px);
 }
 
 .fc-th {
 	background: var(--color-surface-2);
-	padding: 8px 12px;
+	padding: 10px 14px;
 	font-size: 0.65rem;
 	font-weight: 600;
 	letter-spacing: 0.15em;
@@ -226,7 +226,7 @@
 }
 
 .fc-cell {
-	padding: 8px 12px;
+	padding: 11px 14px;
 	display: flex;
 	align-items: center;
 	border-bottom: 1px solid var(--color-divider);
