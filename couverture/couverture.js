@@ -441,21 +441,15 @@ function stepAmount(delta) {
 document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fc-site-select').addEventListener('change', tryRender);
 
-	// Réception via postMessage (page ouverte par window.open)
-	console.log('[couverture] DOMContentLoaded — window.opener =', window.opener);
-	window.addEventListener('message', (e) => {
-		console.log('[couverture] message reçu — origin:', e.origin, '— data:', e.data);
+	// Réception via postMessage (envoyé en boucle par l'extension)
+	window.addEventListener('message', function handler(e) {
 		if (e.data?.type === 'couverture_json') {
+			window.removeEventListener('message', handler);
+			e.source.postMessage({ type: 'couverture_received' }, '*');
 			document.getElementById('fc-json').value = e.data.json;
 			onJsonChange();
 		}
 	});
-	if (window.opener) {
-		console.log('[couverture] envoi de couverture_ready à window.opener');
-		window.opener.postMessage({ type: 'couverture_ready' }, '*');
-	} else {
-		console.warn('[couverture] window.opener est null — la page n\'a pas été ouverte via window.open()');
-	}
 
 	// Fallback : paramètre URL (JSON petit)
 	const param = new URLSearchParams(location.search).get('data');
