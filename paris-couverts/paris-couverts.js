@@ -14,11 +14,17 @@ function isExchange(val) {
 function getBackOdds(val) {
 	if (typeof val === 'number') return val;
 	if (isExchange(val)) return val.Back?.odds_net ?? val.Back?.odds ?? null;
+	if (val && typeof val === 'object' && typeof val.odds === 'number') return val.odds;
 	return null;
 }
 
 function eventDisplayName(eventKey, event) {
-	if (event.opponents?.length >= 2) return event.opponents.join(' vs ');
+	if (Array.isArray(event.opponents) && event.opponents.length >= 2)
+		return event.opponents.join(' vs ');
+	if (event.opponents && typeof event.opponents === 'object') {
+		const vals = Object.values(event.opponents);
+		if (vals.length >= 2) return vals.join(' vs ');
+	}
 	const m = eventKey.match(/^[^_]+_(.+?)_\d{4}-\d{2}-\d{2}/);
 	if (m) return m[1];
 	return eventKey;

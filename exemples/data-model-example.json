@@ -1,21 +1,23 @@
 {
-	"Foot_Everton vs Man United_2026-02-23T21:00": {
-		"competition": "Premier Lg",
+	"Everton vs Man United_2026-02-23T21:00": {
+		"nom_event": "Everton vs Man United",
+		"sport": "Football",
 		"dateTime": "2026-02-23T21:00:00",
-		"opponents": [
-			"Everton",
-			"Man United"
-		],
+		"competition": "Premier Lg",
+		"opponents": {
+			"1": "Everton",
+			"2": "Man United"
+		},
 		"ids":{
 			"Unibet": "3368797",
 			"Betclic": "654321",
 			"PIWIXchange": "35144487"
 		},
 		"markets": {
-			"Résultat": {
-				"Everton": {
-					"Unibet": 3.72,
-					"Betclic": 5.3,
+			"Résultats": {
+				"1": {
+					"Unibet": {"odds": 3.72, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -27,12 +29,31 @@
 							"amount": 100,
 							"odds_net": 4.9
 						}
+					},
+					"timeex": "2026-02-18T21:00:00"
+				},
+				"X:": {
+					"Unibet": {"odds": 3.78, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
+					"PIWIXchange": {
+						"Back": {
+							"odds": 5.0,
+							"amount": 120,
+							"odds_net": 4.9
+						},
+						"Lay": {
+							"odds": 5.2,
+							"amount": 100,
+							"odds_net": 4.9
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
-				"Nul:": {
-					"Unibet": 3.78,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+				"2": {
+					"Unibet": {"odds": 1.9, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 11, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -43,32 +64,16 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
-					}
-				},
-				"Man United": {
-					"Unibet": 1.9,
-					"PSEL": 11,
-					"Betclic": 5.3,
-					"PIWIXchange": {
-						"Back": {
-							"odds": 5.0,
-							"amount": 120,
-							"odds_net": 4.9
 						},
-						"Lay": {
-							"odds": 5.2,
-							"amount": 100,
-							"odds_net": 4.9
-						}
+						"timeex": "2026-02-18T21:00:00"
 					}
 				}
 			},
 			"Double Chance": {
-				"Everton ou Nul": {
-					"Unibet": 1.78,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+				"1 ou X": {
+					"Unibet": {"odds": 1.78, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -79,13 +84,14 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
-				"Everton ou Man United": {
-					"Unibet": 1.23,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+				"X ou 2": {
+					"Unibet": {"odds": 1.23, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -96,13 +102,14 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
-				"Nul ou Man United": {
-					"Unibet": 1.23,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+				"1 ou 2": {
+					"Unibet": {"odds": 1.23, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -113,15 +120,16 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				}
 			},
-			"Buts 2 eqp": {
+			"BTTS": {
 				"Oui": {
-					"Unibet": 1.54,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+					"Unibet": {"odds": 1.54, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -132,13 +140,14 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
 				"Non": {
-					"Unibet": 2.00,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+					"Unibet": {"odds": 2.00, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -149,15 +158,16 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				}
 			},
-			"Total buts": {
+			"Nb buts": {
 				"0,5-": {
-					"Unibet": 1.78,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+					"Unibet": {"odds": 1.78, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -168,13 +178,14 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
 				"0,5+": {
-					"Unibet": 1.23,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+					"Unibet": {"odds": 1.23, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -185,13 +196,14 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
 				"1,5-": {
-					"Unibet": 1.78,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+					"Unibet": {"odds": 1.78, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -202,13 +214,14 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
 				"1,5+": {
-					"Unibet": 1.23,
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+					"Unibet": {"odds": 1.23, "timeex": "2026-02-18T21:00:00"},
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -219,19 +232,22 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				}
 			}
 		}
 	},
-	"Foot_Paris SG vs Paris FC_2026-01-12T22:30": {
-		"competition": "Coupe de France FFF",
+	"Paris SG vs Paris FC_2026-01-12T22:30": {
+		"nom_event": "Paris SG vs Paris FC",
+		"sport": "Football",
 		"dateTime": "2026-01-12T22:30:00",
-		"opponents": [
-			"Paris SG",
-			"Paris FC"
-		],
+		"competition": "Coupe de France FFF",
+		"opponents": {
+			"1": "Paris SG",
+			"2": "Paris FC"
+		},
 		"ids":{
 			"PSEL": "123456",
 			"Betclic": "654321",
@@ -240,8 +256,8 @@
 		"markets": {
 			"Vainqueur": {
 				"Paris SG": {
-					"PSEL": 1.55,
-					"Betclic": 5.3,
+					"PSEL": {"odds": 1.55, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -252,12 +268,13 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
 				"Nul:": {
-					"PSEL": 4.2,
-					"Betclic": 5.3,
+					"PSEL": {"odds": 4.2, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -268,12 +285,13 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
 				"Paris FC": {
-					"PSEL": 13.5,
-					"Betclic": 5.3,
+					"PSEL": {"odds": 13.5, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -284,19 +302,22 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				}
 			}
 		}
 	},
-	"Foot_A.Tabilo vs U.Carabelli_2026-01-12T22:30": {
-		"competition": "Auckland H",
+	"A.Tabilo vs U.Carabelli_2026-01-12T22:30": {
+		"nom_event": "A.Tabilo vs U.Carabelli",
+		"sport": "Tennis",
 		"dateTime": "2026-01-12T22:30:00",
-		"opponents": [
-			"A.Tabilo",
-			"U.Carabelli"
-		],
+		"competition": "Auckland H",
+		"opponents": {
+			"1": "A.Tabilo",
+			"2": "U.Carabelli"
+		},
 		"ids":{
 			"PSEL": "123456",
 			"Betclic": "654321",
@@ -305,8 +326,8 @@
 		"markets": {
 			"Vainqueur": {
 				"A.Tabilo": {
-					"PSEL": 5.3,
-					"Betclic": 5.3,
+					"PSEL": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -317,12 +338,13 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				},
 				"U.Carabelli": {
-					"PSEL": 5.3,
-					"Betclic": 5.3,
+					"PSEL": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
+					"Betclic": {"odds": 5.3, "timeex": "2026-02-18T21:00:00"},
 					"PIWIXchange": {
 						"Back": {
 							"odds": 5.0,
@@ -333,7 +355,8 @@
 							"odds": 5.2,
 							"amount": 100,
 							"odds_net": 4.9
-						}
+						},
+						"timeex": "2026-02-18T21:00:00"
 					}
 				}
 			}

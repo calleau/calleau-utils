@@ -1,26 +1,23 @@
 {
 	"Nom event_YYYY-MM-DDThh:mm": {
-		"dateTime": "YYYY-MM-DDThh:mm:ss",
-		"tournoi": "Nom du tournoi",
 		"nom_event": "Nom de l'événement",
-		"adversaires": [
-			"Adversaire 1",
-			"Adversaire 2"
-		],
-		"updates": {
-			"Site_Id": "654321",
-			"PIWIXchange": "35144487"
+		"sport": "Sport",
+		"dateTime": "YYYY-MM-DDThh:mm:ss",
+		"competition": "Competition",
+		"opponents": {
+			"1": "Adversaire 1",
+			"2": "Adversaire 2"
 		},
 		"ids": {
 			"Site1": "ID du match sur le site 1",
 			"Site2": "ID du match sur le site 2",
 			"Site3": "ID du match sur le site 3"
 		},
-		"marchés": {
-			"Marché 1": {
+		"markets": {
+			"Market 1": {
 				"Issue 1": {
-					"Site1": 1,
-					"Site2": 1,
+					"Site1": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site2": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
 					"Site3": {
 						"Back": {
 							"odds": 1,
@@ -31,62 +28,13 @@
 							"odds": 1,
 							"amount": 1,
 							"odds_net": 1
-						}
-					}
-				},
-				"Issue 2:": {
-					"Site1": 1,
-					"Site2": 1,
-					"Site3": {
-						"Back": {
-							"odds": 1,
-							"amount": 1,
-							"odds_net": 1
 						},
-						"Lay": {
-							"odds": 1,
-							"amount": 1,
-							"odds_net": 1
-						}
-					}
-				},
-				"Issue 3": {
-					"Site1": 1,
-					"Site2": 1,
-					"Site3": {
-						"Back": {
-							"odds": 1,
-							"amount": 1,
-							"odds_net": 1
-						},
-						"Lay": {
-							"odds": 1,
-							"amount": 1,
-							"odds_net": 1
-						}
-					}
-				}
-			},
-			"Marché 2": {
-				"Issue 1": {
-					"Site1": 1,
-					"Site2": 1,
-					"Site3": {
-						"Back": {
-							"odds": 1,
-							"amount": 1,
-							"odds_net": 1
-						},
-						"Lay": {
-							"odds": 1,
-							"amount": 1,
-							"odds_net": 1
-						}
+						"timeex": "YYYY-MM-DDThh:mm:ss"
 					}
 				},
 				"Issue 2": {
-					"Site1": 1,
-					"Site2": 1,
+					"Site1": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site2": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
 					"Site3": {
 						"Back": {
 							"odds": 1,
@@ -97,12 +45,13 @@
 							"odds": 1,
 							"amount": 1,
 							"odds_net": 1
-						}
+						},
+						"timeex": "YYYY-MM-DDThh:mm:ss"
 					}
 				},
 				"Issue 3": {
-					"Site1": 1,
-					"Site2": 1,
+					"Site1": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site2": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
 					"Site3": {
 						"Back": {
 							"odds": 1,
@@ -113,7 +62,61 @@
 							"odds": 1,
 							"amount": 1,
 							"odds_net": 1
-						}
+						},
+						"timeex": "YYYY-MM-DDThh:mm:ss"
+					}
+				}
+			},
+			"Market 2": {
+				"Issue 1": {
+					"Site1": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site2": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site3": {
+						"Back": {
+							"odds": 1,
+							"amount": 1,
+							"odds_net": 1
+						},
+						"Lay": {
+							"odds": 1,
+							"amount": 1,
+							"odds_net": 1
+						},
+						"timeex": "YYYY-MM-DDThh:mm:ss"
+					}
+				},
+				"Issue 2": {
+					"Site1": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site2": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site3": {
+						"Back": {
+							"odds": 1,
+							"amount": 1,
+							"odds_net": 1
+						},
+						"Lay": {
+							"odds": 1,
+							"amount": 1,
+							"odds_net": 1
+						},
+						"timeex": "YYYY-MM-DDThh:mm:ss"
+					}
+				},
+				"Issue 3": {
+					"Site1": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site2": {"odds": 1.5, "timeex": "YYYY-MM-DDThh:mm:ss"},
+					"Site3": {
+						"Back": {
+							"odds": 1,
+							"amount": 1,
+							"odds_net": 1
+						},
+						"Lay": {
+							"odds": 1,
+							"amount": 1,
+							"odds_net": 1
+						},
+						"timeex": "YYYY-MM-DDThh:mm:ss"
 					}
 				}
 			}
