@@ -1,0 +1,81 @@
+[
+	{
+		"A": [
+			{ "market": "Résultats", "issue": "1", "betType": "Back" },
+			{ "market": "Double Chance", "issue": "X2", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Résultats", "issue": "1", "betType": "Lay" },
+			{ "market": "Double Chance", "issue": "X2", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Back" }
+		]
+	},
+	{
+		"A": [
+			{ "market": "Résultats", "issue": "X", "betType": "Back" },
+			{ "market": "Double Chance", "issue": "12", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Résultats", "issue": "X", "betType": "Lay" },
+			{ "market": "Double Chance", "issue": "12", "betType": "Back" }
+		]
+	},
+	{
+		"A": [
+			{ "market": "Résultats", "issue": "2", "betType": "Back" },
+			{ "market": "Double Chance", "issue": "1X", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Résultats", "issue": "2", "betType": "Lay" },
+			{ "market": "Double Chance", "issue": "1X", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Back" }
+		]
+	},
+	{
+		"A": [
+			{ "market": "Vainqueur", "issue": "1", "betType": "Back" },
+			{ "market": "Vainqueur", "issue": "2", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Vainqueur", "issue": "2", "betType": "Lay" },
+			{ "market": "Vainqueur", "issue": "1", "betType": "Back" }
+		
+		]
+	},
+	{
+		"A": [
+			{ "market": "BTTS", "issue": "Oui", "betType": "Back" },
+			{ "market": "BTTS", "issue": "Non", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "BTTS", "issue": "Oui", "betType": "Lay" },
+			{ "market": "BTTS", "issue": "Non", "betType": "Back" }
+		]
+	},
+	{
+		"A": [
+			{ "market": "/^Total \\w+$/", "issue": "/^(\\d+,\\d+)([+-])$/", "betType": "Back" },
+			{ "market": "$market", "issue": "$1$2~+-", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "$market", "issue": "$1$2", "betType": "Lay" },
+			{ "market": "$market", "issue": "$1$2~+-", "betType": "Back" }
+		]
+	},
+	{
+		"A": [
+			{ "market": "Asian Handicap", "issue": "/^(1|2) \\(\\+(\\d+,\\d+)\\)$/", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "$1~12 (-$2)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Asian Handicap", "issue": "$1 (+$2)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "$1~12 (-$2)", "betType": "Back" }
+		]
+	}
+]
