@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Freebet Conversion Finder</title>
+	<link rel="stylesheet" href="../theme.css" />
+	<link rel="stylesheet" href="fb-finder.css" />
+	<script src="../theme-toggle.js"></script>
+</head>
+
+<body>
+	<div class="wrap">
+
+		<header class="toolbar">
+			<a href="../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Freebet Conversion Finder</h1>
+		</header>
+
+		<div class="ff-layout">
+
+			<!-- Panneau config -->
+			<div class="ff-config card">
+
+				<!-- Méthode -->
+				<div class="ff-field">
+					<label class="ff-label">Méthode</label>
+					<div class="ff-toggle">
+						<button class="ff-method-btn ff-btn ff-btn--active" data-method="1" onclick="setMethod(1)">
+							<span>M1 — Dutching séquentiel</span>
+							<span class="ff-btn-sub">FB + cash covers</span>
+						</button>
+						<button class="ff-method-btn ff-btn" data-method="2" onclick="setMethod(2)">
+							<span>M2 — Tout en Freebet</span>
+							<span class="ff-btn-sub">Couverture simultanée</span>
+						</button>
+					</div>
+				</div>
+
+				<!-- Nombre de sélections / matchs -->
+				<div class="ff-field">
+					<label class="ff-label" id="ff-legs-label">Sélections</label>
+					<div class="ff-legs-toggle">
+						<button class="ff-legs-btn ff-btn ff-btn--active" data-legs="1" onclick="setLegs(1)">1</button>
+						<button class="ff-legs-btn ff-btn" data-legs="2" onclick="setLegs(2)">2</button>
+						<button class="ff-legs-btn ff-btn" data-legs="3" onclick="setLegs(3)">3</button>
+					</div>
+				</div>
+
+				<!-- Montant -->
+				<div class="ff-field">
+					<label class="ff-label" for="ff-amount">Montant freebet</label>
+					<div class="numinput">
+						<input type="number" id="ff-amount" value="10" min="1" step="5"
+							onclick="this.select()" oninput="tryRender()" />
+						<span class="unit">€</span>
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="stepAmount(5)">▲</button>
+							<button class="nbtn" onclick="stepAmount(-5)">▼</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- JSON -->
+				<div class="ff-json-row">
+					<div class="ff-json-label-row">
+						<label class="ff-label" for="ff-json">Données JSON</label>
+						<button class="btn btn-ghost ff-paste-btn" onclick="pasteFromClipboard()">Coller</button>
+					</div>
+					<textarea id="ff-json" class="ff-textarea"
+						placeholder="Coller votre JSON ici…"
+						oninput="onJsonChange()" spellcheck="false"></textarea>
+					<p id="ff-json-error" class="ff-json-error" hidden></p>
+				</div>
+
+				<!-- Site freebet (méthode 1) -->
+				<div id="ff-site-row">
+					<div class="ff-field" id="ff-site-field" hidden>
+						<label class="ff-label" for="ff-site-select">Site du freebet</label>
+						<select id="ff-site-select">
+							<option value="">— Sélectionner un site —</option>
+						</select>
+					</div>
+				</div>
+
+			</div>
+
+			<!-- Résultats -->
+			<div class="ff-right">
+				<div id="ff-results" hidden></div>
+			</div>
+
+		</div>
+
+		<footer class="page-footer">
+			<span class="footer-version">v1.0.0</span>
+		</footer>
+
+	</div>
+
+	<div id="floating-actions"></div>
+	<script src="fb-finder.js"></script>
+</body>
+
+</html>
