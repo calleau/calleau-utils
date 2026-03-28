@@ -282,6 +282,11 @@
 	color: var(--color-pos);
 }
 
+.ff-card-m3 .ff-card-type {
+	background: rgba(160, 100, 180, 0.15);
+	color: var(--c-primary);
+}
+
 .ff-card-b {
 	flex: 1;
 	font-size: 0.8rem;
@@ -399,6 +404,25 @@
 .ff-sub {
 	font-size: 0.72rem;
 	color: var(--color-muted);
+}
+
+/* M3 cash row */
+
+.ff-leg-cash {
+	background: rgba(160, 100, 180, 0.04);
+}
+
+.ff-leg-num-cash {
+	background: rgba(160, 100, 180, 0.15);
+	color: var(--c-primary);
+	font-size: 0.58rem;
+	letter-spacing: 0.04em;
+}
+
+.ff-m3-divider {
+	height: 1px;
+	background: var(--color-divider);
+	margin: 0;
 }
 
 /* Badges */

@@ -3,7 +3,8 @@
 // ===== STATE =====
 let _data = null;
 let _results = [];
-let _method = 1;   // 1 | 2
+let _method = 1;   // 1 | 2 | 3
+let _betType = 'fb'; // 'fb' | 'cash'
 let _nLegs = 1;
 let _amount = 10;
 let _fbSite = '';
@@ -99,6 +100,12 @@ function fmt(n, d = 2) { return Number(n).toFixed(d).replace('.', ','); }
 function rateClass(rate) {
 	if (rate >= 0.75) return 'ff-rate-good';
 	if (rate >= 0.55) return 'ff-rate-ok';
+	return 'ff-rate-bad';
+}
+
+function rateClassCash(rate) {
+	if (rate >= 0.97) return 'ff-rate-good';
+	if (rate >= 0.93) return 'ff-rate-ok';
 	return 'ff-rate-bad';
 }
 
@@ -253,6 +260,8 @@ function collectLegs(data, fbSite) {
 
 // ===== METHOD 1: SEQUENTIAL DUTCHING =====
 
+const TOP_MULTI_M1 = 50; // legs conservés pour les boucles multileg
+
 function stakeAndLiability(profit, kPrev, cover) {
 	const gain = cover.type === 'lay' ? (1 - cover.c) : (cover.odds - 1);
 	const stake = profit * kPrev / gain;
@@ -260,9 +269,101 @@ function stakeAndLiability(profit, kPrev, cover) {
 	return { stake, liability };
 }
 
-function computeM1(data, fbSite, amount, nLegs) {
+// Cash cover: stake = T / gain, where T is the target total return.
+function stakeAndLiabilityCash(T, cover) {
+	const gain = cover.type === 'lay' ? (1 - cover.c) : (cover.odds - 1);
+	const stake = T / gain;
+	const liability = cover.type === 'lay' ? stake * (cover.lGross - 1) : null;
+	return { stake, liability };
+}
+
+function computeM1(data, fbSite, amount, nLegs, betType = 'fb') {
 	const legs = collectLegs(data, fbSite);
 	const results = [];
+
+	if (betType === 'cash') {
+		const legsForMulti = nLegs > 1
+			? [...legs].sort((a, b) => b.b / b.bestK - a.b / a.bestK).slice(0, TOP_MULTI_M1)
+			: legs;
+
+		if (nLegs === 1) {
+			for (const leg of legs) {
+				for (const cover of leg.covers) {
+					const rate = leg.b / cover.k;
+					const T = amount * rate;
+					const { stake, liability } = stakeAndLiabilityCash(T, cover);
+					results.push({
+						method: 1, nLegs: 1, betType: 'cash',
+						B: leg.b, rate, loss: amount * (1 - rate),
+						legs: [{ ...leg, cover, stake, liability }],
+					});
+				}
+			}
+		} else if (nLegs === 2) {
+			for (let i = 0; i < legsForMulti.length; i++) {
+				const l1 = legsForMulti[i];
+				if (!l1.dateTime) continue;
+				for (let j = 0; j < legsForMulti.length; j++) {
+					if (i === j) continue;
+					const l2 = legsForMulti[j];
+					if (l2.eventKey === l1.eventKey) continue;
+					if (!l2.dateTime || l2.dateTime <= l1.dateTime) continue;
+					if (l2.dateTime - l1.dateTime < MIN_GAP_MS) continue;
+					const B = l1.b * l2.b, K = l1.bestK * l2.bestK;
+					const rate = B / K;
+					const T = amount * rate;
+					results.push({
+						method: 1, nLegs: 2, betType: 'cash',
+						B, rate, loss: amount * (1 - rate),
+						gaps: [l2.dateTime - l1.dateTime],
+						legs: [
+							{ ...l1, cover: l1.bestCover, ...stakeAndLiabilityCash(T, l1.bestCover) },
+							{ ...l2, cover: l2.bestCover, ...stakeAndLiabilityCash(T, l2.bestCover) },
+						],
+					});
+				}
+			}
+		} else if (nLegs === 3) {
+			for (let i = 0; i < legsForMulti.length; i++) {
+				const l1 = legsForMulti[i];
+				if (!l1.dateTime) continue;
+				for (let j = 0; j < legsForMulti.length; j++) {
+					if (i === j) continue;
+					const l2 = legsForMulti[j];
+					if (l2.eventKey === l1.eventKey) continue;
+					if (!l2.dateTime || l2.dateTime <= l1.dateTime) continue;
+					if (l2.dateTime - l1.dateTime < MIN_GAP_MS) continue;
+					for (let m = 0; m < legsForMulti.length; m++) {
+						if (m === i || m === j) continue;
+						const l3 = legsForMulti[m];
+						if (l3.eventKey === l1.eventKey || l3.eventKey === l2.eventKey) continue;
+						if (!l3.dateTime || l3.dateTime <= l2.dateTime) continue;
+						if (l3.dateTime - l2.dateTime < MIN_GAP_MS) continue;
+						const B = l1.b * l2.b * l3.b, K = l1.bestK * l2.bestK * l3.bestK;
+						const rate = B / K;
+						const T = amount * rate;
+						results.push({
+							method: 1, nLegs: 3, betType: 'cash',
+							B, rate, loss: amount * (1 - rate),
+							gaps: [l2.dateTime - l1.dateTime, l3.dateTime - l2.dateTime],
+							legs: [
+								{ ...l1, cover: l1.bestCover, ...stakeAndLiabilityCash(T, l1.bestCover) },
+								{ ...l2, cover: l2.bestCover, ...stakeAndLiabilityCash(T, l2.bestCover) },
+								{ ...l3, cover: l3.bestCover, ...stakeAndLiabilityCash(T, l3.bestCover) },
+							],
+						});
+					}
+				}
+			}
+		}
+		return results.sort((a, b) => b.rate - a.rate);
+	}
+
+	// Pour multileg : garder seulement les meilleurs legs individuels
+	// (le taux multi-leg ≈ produit des taux individuels → top legs → top combos)
+	const legsForMulti = nLegs > 1
+		? [...legs].sort((a, b) => (b.b - 1) / b.bestK - (a.b - 1) / a.bestK).slice(0, TOP_MULTI_M1)
+		: legs;
 
 	if (nLegs === 1) {
 		for (const leg of legs) {
@@ -278,12 +379,12 @@ function computeM1(data, fbSite, amount, nLegs) {
 			}
 		}
 	} else if (nLegs === 2) {
-		for (let i = 0; i < legs.length; i++) {
-			const l1 = legs[i];
+		for (let i = 0; i < legsForMulti.length; i++) {
+			const l1 = legsForMulti[i];
 			if (!l1.dateTime) continue;
-			for (let j = 0; j < legs.length; j++) {
+			for (let j = 0; j < legsForMulti.length; j++) {
 				if (i === j) continue;
-				const l2 = legs[j];
+				const l2 = legsForMulti[j];
 				if (l2.eventKey === l1.eventKey) continue;
 				if (!l2.dateTime || l2.dateTime <= l1.dateTime) continue;
 				if (l2.dateTime - l1.dateTime < MIN_GAP_MS) continue;
@@ -306,18 +407,18 @@ function computeM1(data, fbSite, amount, nLegs) {
 			}
 		}
 	} else if (nLegs === 3) {
-		for (let i = 0; i < legs.length; i++) {
-			const l1 = legs[i];
+		for (let i = 0; i < legsForMulti.length; i++) {
+			const l1 = legsForMulti[i];
 			if (!l1.dateTime) continue;
-			for (let j = 0; j < legs.length; j++) {
+			for (let j = 0; j < legsForMulti.length; j++) {
 				if (i === j) continue;
-				const l2 = legs[j];
+				const l2 = legsForMulti[j];
 				if (l2.eventKey === l1.eventKey) continue;
 				if (!l2.dateTime || l2.dateTime <= l1.dateTime) continue;
 				if (l2.dateTime - l1.dateTime < MIN_GAP_MS) continue;
-				for (let m = 0; m < legs.length; m++) {
+				for (let m = 0; m < legsForMulti.length; m++) {
 					if (m === i || m === j) continue;
-					const l3 = legs[m];
+					const l3 = legsForMulti[m];
 					if (l3.eventKey === l1.eventKey || l3.eventKey === l2.eventKey) continue;
 					if (!l3.dateTime || l3.dateTime <= l2.dateTime) continue;
 					if (l3.dateTime - l2.dateTime < MIN_GAP_MS) continue;
@@ -348,6 +449,69 @@ function computeM1(data, fbSite, amount, nLegs) {
 }
 
 // ===== METHOD 2: ALL-FREEBET COVERING SETS =====
+
+// Profit égal sur toutes les issues : stake_i = P/(o_i-1), total = ∑stake_i = amount
+// → P = amount / ∑(1/(o_i-1))  ;  rate = P/amount = 1/∑(1/(o_i-1))
+function finalizeM2Bets(rawBets, totalAmount) {
+	const sumInv = rawBets.reduce((s, b) => s + 1 / (b.odds - 1), 0);
+	if (!isFinite(sumInv) || sumInv <= 0) return null;
+	const rate = 1 / sumInv;
+	const profit = totalAmount * rate;
+	const bets = rawBets.map(b => ({ ...b, stake: profit / (b.odds - 1) }));
+	return { rate, profit, bets };
+}
+
+// Cash: retour égal sur toutes les issues : stake_i = T/o_i, total = ∑stake_i = amount
+// → T = amount / ∑(1/o_i)  ;  rate = T/amount = 1/∑(1/o_i)
+function finalizeM2CashBets(rawBets, totalAmount) {
+	const sumInv = rawBets.reduce((s, b) => s + 1 / b.odds, 0);
+	if (!isFinite(sumInv) || sumInv <= 0) return null;
+	const rate = 1 / sumInv;
+	const totalReturn = totalAmount * rate;
+	const bets = rawBets.map(b => ({ ...b, stake: totalReturn / b.odds }));
+	return { rate, loss: totalAmount * (1 - rate), bets };
+}
+
+function finalizeBets(rawBets, amount, betType) {
+	return betType === 'cash' ? finalizeM2CashBets(rawBets, amount) : finalizeM2Bets(rawBets, amount);
+}
+
+const TOP_EVENTS_M2 = 30; // matchs conservés pour les boucles multi-match M2
+
+// Score d'un match pour M2 : meilleur taux single-match sur ses partitions DC
+// Fallback sur 1X2 si aucun marché DC disponible.
+function scoreEventM2(data, eventKey) {
+	let best = 0;
+	for (const p of dcPartitions(data, eventKey)) {
+		const oDC   = bestCombinedOdds(data, [{ eventKey, marketName: p.dcMarket,   outcomeName: p.dcOutcome   }]);
+		const oComp = bestCombinedOdds(data, [{ eventKey, marketName: p.compMarket, outcomeName: p.compOutcome }]);
+		if (!oDC || !oComp) continue;
+		const r = 1 / (1 / (oDC.odds - 1) + 1 / (oComp.odds - 1));
+		if (r > best) best = r;
+	}
+	// Fallback : score depuis le marché 1X2 direct
+	if (best === 0) {
+		const res12 = findRes12Market(data[eventKey]?.markets || {});
+		if (res12) {
+			const [mkt, map] = res12;
+			const outs = Object.keys(map);
+			if (outs.length === 3) {
+				const arr = outs.map(o => bestCombinedOdds(data, [{ eventKey, marketName: mkt, outcomeName: o }]));
+				if (arr.every(Boolean)) best = 1 / arr.reduce((s, b) => s + 1 / (b.odds - 1), 0);
+			}
+		}
+	}
+	return best;
+}
+
+function topEventsForM2(data) {
+	return Object.keys(data)
+		.map(ek => ({ ek, score: scoreEventM2(data, ek) }))
+		.filter(x => x.score > 0)
+		.sort((a, b) => b.score - a.score)
+		.slice(0, TOP_EVENTS_M2)
+		.map(x => x.ek);
+}
 
 // Best combined odds for a list of legs [{eventKey, marketName, outcomeName}]
 // Each site must offer ALL legs. Returns {site, odds} or null.
@@ -420,46 +584,47 @@ function dcPartitions(data, eventKey) {
 	return partitions; // should be 3 (one per DC outcome)
 }
 
-function computeM2(data, amount, nMatches) {
-	const eventKeys = Object.keys(data);
+function computeM2(data, amount, nMatches, betType = 'fb') {
+	const allEventKeys = Object.keys(data);
+	// Pour nMatches=1 on utilise tous les matchs ; pour multi on filtre top-N
+	const eventKeys = nMatches === 1 ? allEventKeys : topEventsForM2(data);
 	const results = [];
+	// Déduplication : garder seulement le meilleur taux par combinaison de matchs
+	const bestPerCombo = new Map();
 
 	if (nMatches === 1) {
 		for (const eventKey of eventKeys) {
 			const event = data[eventKey];
-			const evName = eventDisplayName(eventKey, event);
-			const evDate = formatDate(event.dateTime);
-			const evComp = event.competition || event.tournoi || '';
 
 			const partitions = dcPartitions(data, eventKey);
 			// Pattern A: DC + single (2 freebets) — one per partition
 			for (const p of partitions) {
-				const betDC = [{ eventKey, marketName: p.dcMarket, outcomeName: p.dcOutcome }];
-				const betSingle = [{ eventKey, marketName: p.compMarket, outcomeName: p.compOutcome }];
-				const oDC = bestCombinedOdds(data, betDC);
-				const oSingle = bestCombinedOdds(data, betSingle);
+				const oDC = bestCombinedOdds(data, [{ eventKey, marketName: p.dcMarket, outcomeName: p.dcOutcome }]);
+				const oSingle = bestCombinedOdds(data, [{ eventKey, marketName: p.compMarket, outcomeName: p.compOutcome }]);
 				if (!oDC || !oSingle) continue;
-
-				const bets = [
-					{ legs: betDC, site: oDC.site, odds: oDC.odds, amount },
-					{ legs: betSingle, site: oSingle.site, odds: oSingle.odds, amount },
+				const raw = [
+					{ legs: [{ eventKey, marketName: p.dcMarket, outcomeName: p.dcOutcome }], site: oDC.site, odds: oDC.odds },
+					{ legs: [{ eventKey, marketName: p.compMarket, outcomeName: p.compOutcome }], site: oSingle.site, odds: oSingle.odds },
 				];
-				const minPayout = Math.min(...bets.map(b => b.odds - 1));
-				const rate = minPayout / bets.length;
-				results.push({ method: 2, nMatches: 1, nBets: 2, rate, minPayout, amount, bets, eventKeys: [eventKey] });
+				const fin = finalizeBets(raw, amount, betType);
+				if (!fin) continue;
+				results.push({ method: 2, nMatches: 1, nBets: 2, ...fin, totalAmount: amount, eventKeys: [eventKey], betType });
 			}
 
 			// Pattern B: 1 + X + 2 (3 freebets)
 			const res12Entry = findRes12Market(event.markets || {});
 			if (res12Entry) {
 				const [res12Market, res12Map] = res12Entry;
-				const betsList = Object.keys(res12Map).map(o => [{ eventKey, marketName: res12Market, outcomeName: o }]);
-				const oddsArr = betsList.map(b => bestCombinedOdds(data, b));
-				if (oddsArr.every(o => o !== null)) {
-					const bets = betsList.map((b, i) => ({ legs: b, site: oddsArr[i].site, odds: oddsArr[i].odds, amount }));
-					const minPayout = Math.min(...bets.map(b => b.odds - 1));
-					const rate = minPayout / bets.length;
-					results.push({ method: 2, nMatches: 1, nBets: 3, rate, minPayout, amount, bets, eventKeys: [eventKey] });
+				const raw = [];
+				let valid = true;
+				for (const o of Object.keys(res12Map)) {
+					const best = bestCombinedOdds(data, [{ eventKey, marketName: res12Market, outcomeName: o }]);
+					if (!best) { valid = false; break; }
+					raw.push({ legs: [{ eventKey, marketName: res12Market, outcomeName: o }], site: best.site, odds: best.odds });
+				}
+				if (valid && raw.length === 3) {
+					const fin = finalizeBets(raw, amount, betType);
+					if (fin) results.push({ method: 2, nMatches: 1, nBets: 3, ...fin, totalAmount: amount, eventKeys: [eventKey], betType });
 				}
 			}
 		}
@@ -467,13 +632,10 @@ function computeM2(data, amount, nMatches) {
 		for (let i = 0; i < eventKeys.length; i++) {
 			const ek1 = eventKeys[i];
 			const ev1 = data[ek1];
-			const dt1 = ev1.dateTime ? new Date(ev1.dateTime).getTime() : null;
-			for (let j = 0; j < eventKeys.length; j++) {
-				if (i === j) continue;
+			for (let j = i + 1; j < eventKeys.length; j++) {
 				const ek2 = eventKeys[j];
 				const ev2 = data[ek2];
-				const dt2 = ev2.dateTime ? new Date(ev2.dateTime).getTime() : null;
-				// No time gap required for method 2 (all bets placed simultaneously)
+				const comboKey = [ek1, ek2].sort().join('|');
 
 				const parts1 = dcPartitions(data, ek1);
 				const parts2 = dcPartitions(data, ek2);
@@ -482,27 +644,29 @@ function computeM2(data, amount, nMatches) {
 				for (const p1 of parts1) {
 					for (const p2 of parts2) {
 						const betsSpec = generateCoveringBets([ek1, ek2], [p1, p2]);
-						const bets = [];
+						const raw = [];
 						let valid = true;
 						for (const betLegs of betsSpec) {
 							const best = bestCombinedOdds(data, betLegs);
 							if (!best) { valid = false; break; }
-							bets.push({ legs: betLegs, site: best.site, odds: best.odds, amount });
+							raw.push({ legs: betLegs, site: best.site, odds: best.odds });
 						}
 						if (!valid) continue;
-						const minPayout = Math.min(...bets.map(b => b.odds - 1));
-						const rate = minPayout / bets.length;
-						results.push({ method: 2, nMatches: 2, nBets: 4, rate, minPayout, amount, bets, eventKeys: [ek1, ek2] });
+						const fin = finalizeBets(raw, amount, betType);
+						if (!fin) continue;
+						const entry = { method: 2, nMatches: 2, nBets: 4, ...fin, totalAmount: amount, eventKeys: [ek1, ek2], betType };
+						const prev = bestPerCombo.get(comboKey);
+						if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
 					}
 				}
 
-				// 1X2 × 1X2 (9 bets) — only add if we have both res12 markets
+				// 1X2 × 1X2 (9 bets)
 				const res1 = findRes12Market(ev1.markets || {});
 				const res2 = findRes12Market(ev2.markets || {});
 				if (res1 && res2) {
 					const [r1name, r1map] = res1;
 					const [r2name, r2map] = res2;
-					const bets = [];
+					const raw = [];
 					let valid = true;
 					for (const o1 of Object.keys(r1map)) {
 						for (const o2 of Object.keys(r2map)) {
@@ -512,14 +676,17 @@ function computeM2(data, amount, nMatches) {
 							];
 							const best = bestCombinedOdds(data, betLegs);
 							if (!best) { valid = false; break; }
-							bets.push({ legs: betLegs, site: best.site, odds: best.odds, amount });
+							raw.push({ legs: betLegs, site: best.site, odds: best.odds });
 						}
 						if (!valid) break;
 					}
-					if (valid && bets.length === 9) {
-						const minPayout = Math.min(...bets.map(b => b.odds - 1));
-						const rate = minPayout / bets.length;
-						results.push({ method: 2, nMatches: 2, nBets: 9, rate, minPayout, amount, bets, eventKeys: [ek1, ek2] });
+					if (valid && raw.length === 9) {
+						const fin = finalizeBets(raw, amount, betType);
+						if (fin) {
+							const entry = { method: 2, nMatches: 2, nBets: 9, ...fin, totalAmount: amount, eventKeys: [ek1, ek2], betType };
+							const prev = bestPerCombo.get(comboKey);
+							if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
+						}
 					}
 				}
 			}
@@ -527,12 +694,11 @@ function computeM2(data, amount, nMatches) {
 	} else if (nMatches === 3) {
 		for (let i = 0; i < eventKeys.length; i++) {
 			const ek1 = eventKeys[i];
-			for (let j = 0; j < eventKeys.length; j++) {
-				if (j === i) continue;
+			for (let j = i + 1; j < eventKeys.length; j++) {
 				const ek2 = eventKeys[j];
-				for (let m = 0; m < eventKeys.length; m++) {
-					if (m === i || m === j) continue;
+				for (let m = j + 1; m < eventKeys.length; m++) {
 					const ek3 = eventKeys[m];
+					const comboKey = [ek1, ek2, ek3].sort().join('|');
 
 					// DC × DC × DC (8 bets)
 					const parts1 = dcPartitions(data, ek1);
@@ -543,17 +709,55 @@ function computeM2(data, amount, nMatches) {
 						for (const p2 of parts2) {
 							for (const p3 of parts3) {
 								const betsSpec = generateCoveringBets([ek1, ek2, ek3], [p1, p2, p3]);
-								const bets = [];
+								const raw = [];
 								let valid = true;
 								for (const betLegs of betsSpec) {
 									const best = bestCombinedOdds(data, betLegs);
 									if (!best) { valid = false; break; }
-									bets.push({ legs: betLegs, site: best.site, odds: best.odds, amount });
+									raw.push({ legs: betLegs, site: best.site, odds: best.odds });
 								}
 								if (!valid) continue;
-								const minPayout = Math.min(...bets.map(b => b.odds - 1));
-								const rate = minPayout / bets.length;
-								results.push({ method: 2, nMatches: 3, nBets: 8, rate, minPayout, amount, bets, eventKeys: [ek1, ek2, ek3] });
+								const fin = finalizeBets(raw, amount, betType);
+								if (!fin) continue;
+								const entry = { method: 2, nMatches: 3, nBets: 8, ...fin, totalAmount: amount, eventKeys: [ek1, ek2, ek3], betType };
+								const prev = bestPerCombo.get(comboKey);
+								if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
+							}
+						}
+					}
+
+					// 1X2 × 1X2 × 1X2 (27 bets)
+					const res1 = findRes12Market(data[ek1]?.markets || {});
+					const res2 = findRes12Market(data[ek2]?.markets || {});
+					const res3 = findRes12Market(data[ek3]?.markets || {});
+					if (res1 && res2 && res3) {
+						const [r1n, r1m] = res1;
+						const [r2n, r2m] = res2;
+						const [r3n, r3m] = res3;
+						const raw = [];
+						let valid = true;
+						for (const o1 of Object.keys(r1m)) {
+							for (const o2 of Object.keys(r2m)) {
+								for (const o3 of Object.keys(r3m)) {
+									const betLegs = [
+										{ eventKey: ek1, marketName: r1n, outcomeName: o1 },
+										{ eventKey: ek2, marketName: r2n, outcomeName: o2 },
+										{ eventKey: ek3, marketName: r3n, outcomeName: o3 },
+									];
+									const best = bestCombinedOdds(data, betLegs);
+									if (!best) { valid = false; break; }
+									raw.push({ legs: betLegs, site: best.site, odds: best.odds });
+								}
+								if (!valid) break;
+							}
+							if (!valid) break;
+						}
+						if (valid && raw.length === 27) {
+							const fin = finalizeBets(raw, amount, betType);
+							if (fin) {
+								const entry = { method: 2, nMatches: 3, nBets: 27, ...fin, totalAmount: amount, eventKeys: [ek1, ek2, ek3], betType };
+								const prev = bestPerCombo.get(comboKey);
+								if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
 							}
 						}
 					}
@@ -562,7 +766,165 @@ function computeM2(data, amount, nMatches) {
 		}
 	}
 
-	return results.sort((a, b) => b.rate - a.rate);
+	return [...results, ...bestPerCombo.values()].sort((a, b) => b.rate - a.rate);
+}
+
+// ===== METHOD 3: MIXED (1 cash cover + FB covering set) =====
+//
+// 1 match couvert en cash (facteur k), les N-1 autres en FB simultanés.
+// Les paris FB contiennent tous la bonne issue DC du match couvert en cash.
+// rate_M3 = rate_M2(2^(N-1) paris FB) / k_cash
+//
+function computeM3(data, amount, nMatches, betType = 'fb') {
+	if (nMatches < 2) return [];
+
+	const eventKeys = topEventsForM2(data);
+	const bestPerCombo = new Map();
+
+	function saveIfBetter(comboKey, entry) {
+		const prev = bestPerCombo.get(comboKey);
+		if (!prev || entry.rate > prev.rate) bestPerCombo.set(comboKey, entry);
+	}
+
+	function buildM3Entry(cashEk, fbEks, cashPartition, cashCover, fin) {
+		const k = cashCover.k;
+		const rate = fin.rate / k;
+		if (rate <= 0) return null;
+		const gain = cashCover.type === 'lay' ? (1 - cashCover.c) : (cashCover.odds - 1);
+		let cashStake, cashLiability;
+		if (betType === 'cash') {
+			// For cash: cover must pay total return T = amount × fin.rate
+			const T = amount * fin.rate;
+			cashStake = T / gain;
+		} else {
+			// For freebet: cover must pay profit = amount × rate
+			cashStake = (amount * rate) / gain;
+		}
+		cashLiability = cashCover.type === 'lay' ? cashStake * (cashCover.lGross - 1) : null;
+		const profit = amount * rate;
+		return { method: 3, nMatches, betType, rate, profit,
+			loss: betType === 'cash' ? amount * (1 - rate) : undefined,
+			totalAmount: amount,
+			cashEk, cashPartition, cashCover, cashStake, cashLiability,
+			fbBets: fin.bets, eventKeys: [cashEk, ...fbEks] };
+	}
+
+	function tryCashFb(cashEk, fbEks) {
+		const cashEvent = data[cashEk];
+		const comboKey = [...fbEks, cashEk].sort().join('|') + '|c=' + cashEk;
+
+		// --- Chemin DC (partitions double chance) ---
+		const cashParts = dcPartitions(data, cashEk);
+		const fbPartsList = fbEks.map(ek => dcPartitions(data, ek));
+		if (cashParts.length > 0 && !fbPartsList.some(ps => !ps.length)) {
+			for (const p_cash of cashParts) {
+				const oddsMap = cashEvent?.markets?.[p_cash.dcMarket]?.[p_cash.dcOutcome];
+				if (!oddsMap) continue;
+				const covers = findCoversForOutcome(cashEvent, p_cash.dcMarket, p_cash.dcOutcome, oddsMap, '');
+				if (!covers.length) continue;
+				const bestCover = covers.reduce((best, c) => c.k < best.k ? c : best);
+
+				function iterParts(idx, chosen) {
+					if (idx === fbEks.length) {
+						const raw = [];
+						let valid = true;
+						for (let mask = 0; mask < (1 << fbEks.length); mask++) {
+							const betLegs = [
+								{ eventKey: cashEk, marketName: p_cash.dcMarket, outcomeName: p_cash.dcOutcome },
+								...chosen.map((p, i) => ({
+									eventKey: fbEks[i],
+									marketName: (mask >> i) & 1 ? p.compMarket : p.dcMarket,
+									outcomeName: (mask >> i) & 1 ? p.compOutcome : p.dcOutcome,
+								})),
+							];
+							const best = bestCombinedOdds(data, betLegs);
+							if (!best) { valid = false; break; }
+							raw.push({ legs: betLegs, site: best.site, odds: best.odds });
+						}
+						if (!valid) return;
+						const fin = finalizeBets(raw, amount, betType);
+						if (!fin) return;
+						const entry = buildM3Entry(cashEk, fbEks, p_cash, bestCover, fin);
+						if (entry) saveIfBetter(comboKey, entry);
+						return;
+					}
+					for (const p of fbPartsList[idx]) iterParts(idx + 1, [...chosen, p]);
+				}
+				iterParts(0, []);
+			}
+		}
+
+		// --- Chemin 1X2 (fallback sans marché DC) ---
+		const res12Cash = findRes12Market(cashEvent?.markets || {});
+		const fbRes12List = fbEks.map(ek => findRes12Market(data[ek]?.markets || {}));
+		if (res12Cash && !fbRes12List.some(r => !r)) {
+			const [r12mkt, r12map] = res12Cash;
+			const allCashOuts = Object.keys(r12map);
+			if (allCashOuts.length === 3) {
+				for (const compOutcome of allCashOuts) {
+					const nonComp = allCashOuts.filter(o => o !== compOutcome);
+					const oddsMapComp = r12map[compOutcome];
+					if (!oddsMapComp) continue;
+					let bestCashCover = null;
+					for (const [site, val] of Object.entries(oddsMapComp)) {
+						let o = typeof val === 'number' ? val
+							: (isExchange(val) ? (val.Back?.odds_net ?? val.Back?.odds) : (val?.odds ?? null));
+						if (!o || o <= 1) continue;
+						const k = kFromBk(o);
+						if (!bestCashCover || k < bestCashCover.k)
+							bestCashCover = { type: 'bk', site, marketName: r12mkt, outcomeName: compOutcome, odds: o, lGross: null, c: null, k };
+					}
+					if (!bestCashCover) continue;
+
+					// FB bets : chaque non-comp de A × toutes issues des matchs FB
+					function iterFb(fbIdx, tail) {
+						if (fbIdx === fbEks.length)
+							return nonComp.map(nc => [{ eventKey: cashEk, marketName: r12mkt, outcomeName: nc }, ...tail]);
+						const [fm, fmap] = fbRes12List[fbIdx];
+						return Object.keys(fmap).flatMap(fo =>
+							iterFb(fbIdx + 1, [...tail, { eventKey: fbEks[fbIdx], marketName: fm, outcomeName: fo }])
+						);
+					}
+					const allBetLegs = iterFb(0, []);
+					const raw = [];
+					let valid = true;
+					for (const betLegs of allBetLegs) {
+						const best = bestCombinedOdds(data, betLegs);
+						if (!best) { valid = false; break; }
+						raw.push({ legs: betLegs, site: best.site, odds: best.odds });
+					}
+					if (!valid) continue;
+					const fin = finalizeBets(raw, amount, betType);
+					if (!fin) continue;
+					const syntheticPartition = { dcMarket: r12mkt, dcOutcome: nonComp.join('/'), compMarket: r12mkt, compOutcome };
+					const entry = buildM3Entry(cashEk, fbEks, syntheticPartition, bestCashCover, fin);
+					if (entry) saveIfBetter(comboKey, entry);
+				}
+			}
+		}
+	}
+
+	if (nMatches === 2) {
+		for (let i = 0; i < eventKeys.length; i++) {
+			for (let j = i + 1; j < eventKeys.length; j++) {
+				tryCashFb(eventKeys[i], [eventKeys[j]]);
+				tryCashFb(eventKeys[j], [eventKeys[i]]);
+			}
+		}
+	} else if (nMatches === 3) {
+		for (let i = 0; i < eventKeys.length; i++) {
+			for (let j = i + 1; j < eventKeys.length; j++) {
+				for (let m = j + 1; m < eventKeys.length; m++) {
+					const [e1, e2, e3] = [eventKeys[i], eventKeys[j], eventKeys[m]];
+					tryCashFb(e1, [e2, e3]);
+					tryCashFb(e2, [e1, e3]);
+					tryCashFb(e3, [e1, e2]);
+				}
+			}
+		}
+	}
+
+	return [...bestPerCombo.values()].sort((a, b) => b.rate - a.rate);
 }
 
 // ===== RENDERING =====
@@ -620,6 +982,11 @@ function buildM1Card(result) {
 	const coverLabel = result.nLegs === 1
 		? result.legs[0].cover.type === 'lay' ? 'Lay EX' : (result.legs[0].cover.type === 'dc' ? 'DC BK' : 'Back BK')
 		: `${result.nLegs} legs séq.`;
+	const isCash = result.betType === 'cash';
+	const valueHtml = isCash
+		? `<span class="ff-card-profit neg"><strong>−${fmt(result.loss)}\u00a0€</strong></span>`
+		: `<span class="ff-card-profit pos"><strong>${fmt(result.profit)}\u00a0€</strong></span>`;
+	const rateHtml = `<span class="${isCash ? rateClassCash(result.rate) : rateClass(result.rate)} ff-card-rate">${fmt(result.rate * 100, 1)}\u00a0%</span>`;
 
 	return `
 	<div class="ff-card ff-card-m1">
@@ -627,45 +994,100 @@ function buildM1Card(result) {
 			<span class="ff-card-type">M1 · ${esc(coverLabel)}</span>
 			<span class="ff-card-b">Cote\u00a0: <strong>${fmt(result.B)}</strong></span>
 			${liabHtml}
-			<span class="ff-card-profit pos"><strong>${fmt(result.profit)}\u00a0€</strong></span>
-			<span class="${rateClass(result.rate)} ff-card-rate">${fmt(result.rate * 100, 1)}\u00a0%</span>
+			${valueHtml}
+			${rateHtml}
 		</div>
 		<div class="ff-legs">${legRows}</div>
 	</div>`;
 }
 
-function buildM2BetRow(bet, idx) {
+function buildM2BetRow(bet, idx, betType = 'fb') {
 	const legLabels = bet.legs.map(l => {
 		const ev = _data?.[l.eventKey];
 		const evName = ev ? eventDisplayName(l.eventKey, ev) : l.eventKey;
 		return `${esc(evName)}\u00a0<strong>${esc(l.outcomeName)}</strong>`;
 	}).join(' + ');
+	const returnDetail = betType === 'cash'
+		? `${fmt(bet.stake)}\u00a0€ \u00d7 ${fmt(bet.odds)} = <strong>${fmt(bet.stake * bet.odds)}\u00a0€</strong>`
+		: `${fmt(bet.stake)}\u00a0€ \u00d7 (${fmt(bet.odds)}\u2212\u20611) = <strong>${fmt(bet.stake * (bet.odds - 1))}\u00a0€</strong>`;
 	return `
 	<div class="ff-bet">
 		<span class="ff-bet-num">FB${idx + 1}</span>
 		<div class="ff-bet-desc">
 			<span class="ff-bet-legs">${legLabels}</span>
-			<span class="ff-bet-site">${esc(bet.site)} · cote <strong>${fmt(bet.odds)}</strong> · mise <strong>${fmt(bet.amount)}\u00a0€</strong></span>
+			<span class="ff-bet-site">${esc(bet.site)} · cote <strong>${fmt(bet.odds)}</strong> · mise <strong>${fmt(bet.stake)}\u00a0€</strong></span>
 		</div>
-		<span class="ff-bet-profit">${fmt(bet.odds - 1, 2)} \u00d7 ${fmt(bet.amount)}\u00a0€ = <strong>${fmt((bet.odds - 1) * bet.amount)}\u00a0€</strong></span>
+		<span class="ff-bet-profit">${returnDetail}</span>
 	</div>`;
 }
 
 function buildM2Card(result) {
-	const betRows = result.bets.map((b, i) => buildM2BetRow(b, i)).join('');
-	const totalFb = result.nBets * result.amount;
-	const guaranteedProfit = result.minPayout * result.amount;
+	const isCash = result.betType === 'cash';
+	const betRows = result.bets.map((b, i) => buildM2BetRow(b, i, result.betType)).join('');
 	const minOdds = Math.min(...result.bets.map(b => b.odds));
 	const maxOdds = Math.max(...result.bets.map(b => b.odds));
+	const valueHtml = isCash
+		? `<span class="ff-card-profit neg"><strong>−${fmt(result.loss)}\u00a0€</strong> perte</span>`
+		: `<span class="ff-card-profit pos"><strong>${fmt(result.profit)}\u00a0€</strong> garanti</span>`;
+	const rateHtml = `<span class="${isCash ? rateClassCash(result.rate) : rateClass(result.rate)} ff-card-rate">${fmt(result.rate * 100, 1)}\u00a0%</span>`;
 	return `
 	<div class="ff-card ff-card-m2">
 		<div class="ff-card-header">
-			<span class="ff-card-type">M2 · ${result.nBets}\u00a0FB · ${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
+			<span class="ff-card-type">M2 · ${result.nBets}\u00a0Paris · ${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
 			<span class="ff-card-b">Cotes\u00a0: ${fmt(minOdds)}\u2013${fmt(maxOdds)}</span>
-			<span class="ff-card-totalfb">Total FB\u00a0: <strong>${fmt(totalFb)}\u00a0€</strong></span>
-			<span class="ff-card-profit pos"><strong>${fmt(guaranteedProfit)}\u00a0€</strong> garanti</span>
-			<span class="${rateClass(result.rate)} ff-card-rate">${fmt(result.rate * 100, 1)}\u00a0%</span>
+			<span class="ff-card-totalfb">Total\u00a0: <strong>${fmt(result.totalAmount)}\u00a0€</strong></span>
+			${valueHtml}
+			${rateHtml}
 		</div>
+		<div class="ff-bets">${betRows}</div>
+	</div>`;
+}
+
+function buildM3CashRow(result) {
+	const ev = _data?.[result.cashEk];
+	const evName = ev ? eventDisplayName(result.cashEk, ev) : result.cashEk;
+	const p = result.cashPartition;
+	const cover = result.cashCover;
+	const stakeDetail = result.cashLiability != null
+		? `${fmt(result.cashStake)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(result.cashLiability)}\u00a0€)</span>`
+		: `${fmt(result.cashStake)}\u00a0€`;
+	const oddsDetail = cover.lGross != null
+		? `${fmt(cover.odds)} <span class="ff-sub">brut\u00a0${fmt(cover.lGross)}</span>`
+		: `${fmt(cover.odds)}`;
+	return `
+	<div class="ff-leg ff-leg-cash">
+		<div class="ff-leg-left">
+			<span class="ff-leg-num ff-leg-num-cash">CASH</span>
+			<div class="ff-ev-wrap"><span class="ff-ev-name">${esc(evName)}</span></div>
+		</div>
+		<div class="ff-leg-right">
+			<span class="ff-leg-market">${esc(p.dcMarket)} · <strong>${esc(p.dcOutcome)}</strong> <span class="ff-sub">(en FB)</span></span>
+			<span class="ff-leg-cover">${esc(cover.site)} ${coverBadge(cover)} ${esc(cover.outcomeName)} · ${oddsDetail}</span>
+			<span class="ff-leg-stake">Mise couv.\u00a0: <strong>${stakeDetail}</strong></span>
+		</div>
+	</div>`;
+}
+
+function buildM3Card(result) {
+	const isCash = result.betType === 'cash';
+	const cashRow = buildM3CashRow(result);
+	const betRows = result.fbBets.map((b, i) => buildM2BetRow(b, i, result.betType)).join('');
+	const nFb = result.fbBets.length;
+	const valueHtml = isCash
+		? `<span class="ff-card-profit neg"><strong>−${fmt(result.loss)}\u00a0€</strong> perte</span>`
+		: `<span class="ff-card-profit pos"><strong>${fmt(result.profit)}\u00a0€</strong> garanti</span>`;
+	const rateHtml = `<span class="${isCash ? rateClassCash(result.rate) : rateClass(result.rate)} ff-card-rate">${fmt(result.rate * 100, 1)}\u00a0%</span>`;
+	return `
+	<div class="ff-card ff-card-m3">
+		<div class="ff-card-header">
+			<span class="ff-card-type">M3 · ${nFb}\u00a0Paris + cash</span>
+			<span class="ff-card-b">${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
+			<span class="ff-card-totalfb">Total\u00a0: <strong>${fmt(result.totalAmount)}\u00a0€</strong></span>
+			${valueHtml}
+			${rateHtml}
+		</div>
+		<div class="ff-legs">${cashRow}</div>
+		<div class="ff-m3-divider"></div>
 		<div class="ff-bets">${betRows}</div>
 	</div>`;
 }
@@ -682,12 +1104,14 @@ function renderResults(results) {
 	}
 
 	const best = results[0].rate;
+	const isCash = _betType === 'cash';
 	const label = _method === 1
 		? `${results.length} opportunité${results.length > 1 ? 's' : ''}`
 		: `${results.length} ensemble${results.length > 1 ? 's' : ''} couvrants`;
+	const metricLabel = isCash ? 'meilleur retour' : 'meilleur taux';
 
 	el.innerHTML = `
-		<p class="ff-summary">${label} — meilleur taux\u00a0: <strong>${fmt(best * 100, 1)}\u00a0%</strong></p>
+		<p class="ff-summary">${label} — ${metricLabel}\u00a0: <strong>${fmt(best * 100, 1)}\u00a0%</strong></p>
 		<div class="ff-search-row">
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 			<input id="ff-search" class="ff-search-input" placeholder="Rechercher un match…" oninput="renderPage()" />
@@ -706,17 +1130,17 @@ function renderPage() {
 	const filtered = _results.filter(r => {
 		if (!q) return true;
 		if (r.method === 1) return r.legs.some(l => l.evName.toLowerCase().includes(q) || l.evComp.toLowerCase().includes(q));
-		if (r.method === 2) return r.eventKeys.some(ek => {
+		return r.eventKeys.some(ek => {
 			const ev = _data?.[ek];
 			if (!ev) return false;
-			const evName = eventDisplayName(ek, ev).toLowerCase();
-			return evName.includes(q);
+			return eventDisplayName(ek, ev).toLowerCase().includes(q);
 		});
-		return true;
 	});
 
 	const visible = filtered.slice(0, q ? filtered.length : _visibleCount);
-	cards.innerHTML = visible.map(r => r.method === 1 ? buildM1Card(r) : buildM2Card(r)).join('');
+	cards.innerHTML = visible.map(r =>
+		r.method === 1 ? buildM1Card(r) : r.method === 3 ? buildM3Card(r) : buildM2Card(r)
+	).join('');
 
 	if (more) {
 		const remaining = filtered.length - _visibleCount;
@@ -735,11 +1159,10 @@ function setMethod(m) {
 	document.querySelectorAll('.ff-method-btn').forEach(b =>
 		b.classList.toggle('ff-btn--active', +b.dataset.method === m)
 	);
-	// For method 2, nLegs means nMatches
 	const legsLabel = document.getElementById('ff-legs-label');
-	if (legsLabel) legsLabel.textContent = m === 2 ? 'Matchs à couvrir' : 'Sélections';
+	if (legsLabel) legsLabel.textContent = m === 1 ? 'Sélections' : 'Matchs à couvrir';
 	const siteRow = document.getElementById('ff-site-row');
-	if (siteRow) siteRow.hidden = m === 2;
+	if (siteRow) siteRow.hidden = m !== 1;
 	tryRender();
 }
 
@@ -751,15 +1174,25 @@ function setLegs(n) {
 	tryRender();
 }
 
+function setBetType(t) {
+	_betType = t;
+	document.querySelectorAll('.ff-bettype-btn').forEach(b =>
+		b.classList.toggle('ff-btn--active', b.dataset.bettype === t)
+	);
+	tryRender();
+}
+
 function tryRender() {
 	if (!_data) return;
 	_amount = parseFloat(document.getElementById('ff-amount')?.value) || 10;
 	if (_method === 1) {
 		_fbSite = document.getElementById('ff-site-select')?.value ?? '';
 		if (!_fbSite) return;
-		renderResults(computeM1(_data, _fbSite, _amount, _nLegs));
+		renderResults(computeM1(_data, _fbSite, _amount, _nLegs, _betType));
+	} else if (_method === 2) {
+		renderResults(computeM2(_data, _amount, _nLegs, _betType));
 	} else {
-		renderResults(computeM2(_data, _amount, _nLegs));
+		renderResults(computeM3(_data, _amount, _nLegs, _betType));
 	}
 }
 
