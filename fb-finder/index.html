@@ -23,25 +23,6 @@
 			<!-- Panneau config -->
 			<div class="ff-config card">
 
-				<!-- Méthode -->
-				<div class="ff-field">
-					<label class="ff-label">Méthode</label>
-					<div class="ff-toggle">
-						<button class="ff-method-btn ff-btn ff-btn--active" data-method="1" onclick="setMethod(1)">
-							<span>M1 — Dutching séquentiel</span>
-							<span class="ff-btn-sub">FB + cash covers</span>
-						</button>
-						<button class="ff-method-btn ff-btn" data-method="2" onclick="setMethod(2)">
-							<span>M2 — Tout en Freebet</span>
-							<span class="ff-btn-sub">Couverture simultanée</span>
-						</button>
-						<button class="ff-method-btn ff-btn" data-method="3" onclick="setMethod(3)">
-							<span>M3 — Mixte Dutching + FB</span>
-							<span class="ff-btn-sub">1 cash cover + FB simultanés</span>
-						</button>
-					</div>
-				</div>
-
 				<!-- Type de mise -->
 				<div class="ff-field">
 					<label class="ff-label">Type de mise</label>
@@ -51,22 +32,12 @@
 					</div>
 				</div>
 
-				<!-- Nombre de sélections / matchs -->
-				<div class="ff-field">
-					<label class="ff-label" id="ff-legs-label">Sélections</label>
-					<div class="ff-legs-toggle">
-						<button class="ff-legs-btn ff-btn ff-btn--active" data-legs="1" onclick="setLegs(1)">1</button>
-						<button class="ff-legs-btn ff-btn" data-legs="2" onclick="setLegs(2)">2</button>
-						<button class="ff-legs-btn ff-btn" data-legs="3" onclick="setLegs(3)">3</button>
-					</div>
-				</div>
-
 				<!-- Montant -->
 				<div class="ff-field">
 					<label class="ff-label" for="ff-amount">Montant freebet</label>
 					<div class="numinput">
 						<input type="number" id="ff-amount" value="10" min="1" step="5"
-							onclick="this.select()" oninput="tryRender()" />
+							onclick="this.select()" />
 						<span class="unit">€</span>
 						<div class="nbtn-wrap">
 							<button class="nbtn" onclick="stepAmount(5)">▲</button>
@@ -97,17 +68,49 @@
 					</div>
 				</div>
 
+				<!-- Bouton calculer -->
+				<button id="ff-calc-btn" class="ff-calc-btn" onclick="tryRender()" disabled>
+					Calculer
+				</button>
+
 			</div>
 
 			<!-- Résultats -->
 			<div class="ff-right">
+
+				<!-- Onglets méthode + nombre de matchs -->
+				<div class="ff-tabs-bar">
+					<div class="ff-method-tabs">
+						<button class="ff-method-btn ff-tab ff-btn ff-btn--active" data-method="1" onclick="setMethod(1)">
+							<span>M1</span>
+							<span class="ff-tab-sub">Séquentiel</span>
+						</button>
+						<button class="ff-method-btn ff-tab ff-btn" data-method="2" onclick="setMethod(2)">
+							<span>M2</span>
+							<span class="ff-tab-sub">Tout FB</span>
+						</button>
+						<button class="ff-method-btn ff-tab ff-btn" data-method="3" onclick="setMethod(3)">
+							<span>M3</span>
+							<span class="ff-tab-sub">Mixte</span>
+						</button>
+					</div>
+					<div class="ff-count-section">
+						<span class="ff-label" id="ff-legs-label">Sélections</span>
+						<div class="ff-legs-toggle">
+							<button class="ff-legs-btn ff-btn ff-btn--active" data-legs="1" onclick="setLegs(1)">1</button>
+							<button class="ff-legs-btn ff-btn" data-legs="2" onclick="setLegs(2)">2</button>
+							<button class="ff-legs-btn ff-btn" data-legs="3" onclick="setLegs(3)">3</button>
+						</div>
+					</div>
+				</div>
+
 				<div id="ff-results" hidden></div>
 			</div>
 
 		</div>
 
 		<footer class="page-footer">
-			<span class="footer-version">v2.0.0</span>
+			<span class="footer-version">v2.1.1</span>
 		</footer>
 
 	</div>

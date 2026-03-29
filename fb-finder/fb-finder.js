@@ -3,12 +3,95 @@
 // ===== STATE =====
 let _data = null;
 let _results = [];
+let _allResults = {};   // cache: key = `${method}_${nLegs}` → results array
 let _method = 1;   // 1 | 2 | 3
 let _betType = 'fb'; // 'fb' | 'cash'
 let _nLegs = 1;
 let _amount = 10;
 let _fbSite = '';
 let _visibleCount = 20;
+
+// Coverage rules — loaded from coverage-rules.json, embedded here as default fallback
+let _coverageRules = [
+	{ "issues": 2,
+		"A": [
+			{ "market": "Résultats", "issue": "1", "betType": "Back" },
+			{ "market": "Double Chance", "issue": "X2", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Résultats", "issue": "1", "betType": "Lay" },
+			{ "market": "Double Chance", "issue": "X2", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Back" }
+		]
+	},
+	{ "issues": 2,
+		"A": [
+			{ "market": "Résultats", "issue": "X", "betType": "Back" },
+			{ "market": "Double Chance", "issue": "12", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Résultats", "issue": "X", "betType": "Lay" },
+			{ "market": "Double Chance", "issue": "12", "betType": "Back" }
+		]
+	},
+	{ "issues": 2,
+		"A": [
+			{ "market": "Résultats", "issue": "2", "betType": "Back" },
+			{ "market": "Double Chance", "issue": "1X", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Résultats", "issue": "2", "betType": "Lay" },
+			{ "market": "Double Chance", "issue": "1X", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Back" }
+		]
+	},
+	{ "issues": 2,
+		"A": [
+			{ "market": "Vainqueur", "issue": "1", "betType": "Back" },
+			{ "market": "Vainqueur", "issue": "2", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Vainqueur", "issue": "2", "betType": "Back" },
+			{ "market": "Vainqueur", "issue": "1", "betType": "Lay" }
+		]
+	},
+	{ "issues": 2,
+		"A": [
+			{ "market": "BTTS", "issue": "Oui", "betType": "Back" },
+			{ "market": "BTTS", "issue": "Non", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "BTTS", "issue": "Oui", "betType": "Lay" },
+			{ "market": "BTTS", "issue": "Non", "betType": "Back" }
+		]
+	},
+	{ "issues": 2,
+		"A": [
+			{ "market": "/^Total \\w+$/", "issue": "/^(\\d+,\\d+)([+-])$/", "betType": "Back" },
+			{ "market": "$market", "issue": "$1$2~+-", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "$market", "issue": "$1$2", "betType": "Lay" },
+			{ "market": "$market", "issue": "$1$2~+-", "betType": "Back" }
+		]
+	},
+	{ "issues": 2,
+		"A": [
+			{ "market": "Asian Handicap", "issue": "/^(1|2) \\(\\+(\\d+,\\d+)\\)$/", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "$1~12 (-$2)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Asian Handicap", "issue": "$1 (+$2)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "$1~12 (-$2)", "betType": "Back" }
+		]
+	}
+];
 
 const MIN_GAP_MS = 90 * 60 * 1000;
 
@@ -109,124 +192,130 @@ function rateClassCash(rate) {
 	return 'ff-rate-bad';
 }
 
+// ===== COVERAGE RULES ENGINE =====
+
+function isRegexStr(s) { return typeof s === 'string' && s.startsWith('/'); }
+
+function parseRegexStr(s) {
+	const m = s.match(/^\/(.*)\/([gimsuy]*)$/);
+	return m ? new RegExp(m[1], m[2] || 'i') : null;
+}
+
+// Resolve a template: substitutes $market, $1, $2 etc., with optional ~12 or ~+- transforms.
+function resolveTemplate(template, bindings) {
+	return template.replace(/\$(\w+)(~[^\s$]+)?/g, (_, ref, transform) => {
+		let val = ref === 'market' ? (bindings.$market || '') : (bindings[`$${ref}`] ?? '');
+		if (transform === '~12')
+			val = val.replace(/1/g, '\x00').replace(/2/g, '1').replace(/\x00/g, '2');
+		else if (transform === '~+-')
+			val = val.replace(/\+/g, '\x00').replace(/-/g, '+').replace(/\x00/g, '-');
+		return val;
+	});
+}
+
+// Match a rule bet-spec against (marketName, outcomeName).
+// Returns bindings {$market, $1, ...} or null if no match.
+function matchBetSpec(spec, marketName, outcomeName) {
+	let bindings = {};
+	if (isRegexStr(spec.market)) {
+		const re = parseRegexStr(spec.market);
+		const m = re && marketName.match(re);
+		if (!m) return null;
+		bindings.$market = marketName;
+		for (let i = 1; i < m.length; i++) bindings[`$m${i}`] = m[i];
+	} else if (spec.market.includes('$')) {
+		return null; // template market — not usable as a primary match spec
+	} else {
+		if (norm(spec.market) !== norm(marketName)) return null;
+		bindings.$market = marketName;
+	}
+	if (isRegexStr(spec.issue)) {
+		const re = parseRegexStr(spec.issue);
+		const m = re && outcomeName.match(re);
+		if (!m) return null;
+		for (let i = 1; i < m.length; i++) bindings[`$${i}`] = m[i];
+	} else if (spec.issue.includes('$')) {
+		if (norm(resolveTemplate(spec.issue, bindings)) !== norm(outcomeName)) return null;
+	} else {
+		if (norm(spec.issue) !== norm(outcomeName)) return null;
+	}
+	return bindings;
+}
+
+// Resolve a cover spec using bindings. Returns {market, issue, betType} or null.
+function resolveCoverSpec(spec, bindings) {
+	if (isRegexStr(spec.market)) return null;
+	const market = resolveTemplate(spec.market, bindings);
+	const issue  = resolveTemplate(spec.issue,  bindings);
+	return (market && issue) ? { market, issue, betType: spec.betType } : null;
+}
+
+// Find a market in event.markets by normalised name. Returns [name, market] or null.
+function findMarketEntry(markets, marketName) {
+	const n = norm(marketName);
+	for (const [name, market] of Object.entries(markets))
+		if (norm(name) === n) return [name, market];
+	return null;
+}
+
+// Find an outcome in a market by normalised name. Returns [name, oddsMap] or null.
+function findOutcomeEntry(market, outcomeName) {
+	const n = norm(outcomeName);
+	for (const [name, oddsMap] of Object.entries(market))
+		if (norm(name) === n) return [name, oddsMap];
+	return null;
+}
+
 // ===== COVER SEARCH (Method 1) =====
 
-// For a given main bet outcome in a given market, find all possible covers.
+// For a given main bet outcome, find all covers based on coverage rules.
 // Returns array of cover objects: { type, site, marketName, outcomeName, odds, lGross, c, k }
-function findCoversForOutcome(event, mainMarketName, mainOutcomeName, mainOddsMap, fbSite) {
+function findCoversForOutcome(event, mainMarketName, mainOutcomeName, _mainOddsMap, fbSite) {
 	const covers = [];
+	const seen = new Set();
 
-	// 1) Exchange Lay on the same market/outcome (lay the same thing the FB backs)
-	for (const [site, val] of Object.entries(mainOddsMap)) {
-		if (site === fbSite) continue;
-		const lay = getLayInfo(val);
-		if (!lay) continue;
-		covers.push({
-			type: 'lay',
-			site,
-			marketName: mainMarketName,
-			outcomeName: mainOutcomeName,
-			odds: lay.lNet,
-			lGross: lay.lGross,
-			c: lay.c,
-			k: lay.k,
-		});
-	}
-
-	// 2) Bookmaker cover on the complementary DC outcome
-	const dcEntry = findDcMarket(event.markets || {});
-	if (dcEntry) {
-		const [dcMarketName, dcMarket] = dcEntry;
-		// Find the DC outcome that does NOT contain the backed outcome
-		const backedNorm = norm(mainOutcomeName);
-		for (const [dcOutcome, dcOddsMap] of Object.entries(dcMarket)) {
-			const parts = dcOutcome.toLowerCase().split(/\s+ou\s+|\s*\/\s*/).map(norm);
-			const containsBacked = parts.some(p => p === backedNorm || p.includes(backedNorm) || backedNorm.includes(p));
-			if (containsBacked) continue; // skip DC outcomes that include the backed outcome
-			// This DC outcome is complementary
-			if (!dcOddsMap || typeof dcOddsMap !== 'object') continue;
-			for (const [site, val] of Object.entries(dcOddsMap)) {
-				if (site === fbSite) continue;
-				if (isExchange(val)) {
-					// Exchange lay of the DC (equivalent to backing complement)
-					const lay = getLayInfo(val);
-					if (!lay) continue;
-					covers.push({
-						type: 'lay',
-						site,
-						marketName: dcMarketName,
-						outcomeName: dcOutcome,
-						odds: lay.lNet,
-						lGross: lay.lGross,
-						c: lay.c,
-						k: lay.k,
-					});
-				} else {
-					const c = typeof val === 'number' ? val : (val?.odds ?? null);
-					if (!c || c <= 1) continue;
-					covers.push({
-						type: 'dc',
-						site,
-						marketName: dcMarketName,
-						outcomeName: dcOutcome,
-						odds: c,
-						lGross: null,
-						c: null,
-						k: kFromBk(c),
-					});
-				}
-			}
-		}
-	}
-
-	// 3) If main bet is on a DC outcome: bookmaker back on the single complement
-	if (/double.?chance|chance\s+double/i.test(mainMarketName)) {
-		const res12Entry = findRes12Market(event.markets || {});
-		if (res12Entry) {
-			const [res12Name, res12Market] = res12Entry;
-			// Find the 1X2 outcome not covered by this DC
-			const dcParts = mainOutcomeName.toLowerCase().split(/\s+ou\s+|\s*\/\s*/).map(norm);
-			for (const [singleOutcome, singleOddsMap] of Object.entries(res12Market)) {
-				const sn = norm(singleOutcome);
-				const covered = dcParts.some(p => p === sn || p.includes(sn) || sn.includes(p));
-				if (covered) continue;
-				// singleOutcome is the complement
-				if (!singleOddsMap || typeof singleOddsMap !== 'object') continue;
-				for (const [site, val] of Object.entries(singleOddsMap)) {
-					if (site === fbSite) continue;
-					if (isExchange(val)) {
-						// Back on exchange is valid too
-						const b = getBackOdds(val);
-						if (!b || b <= 1) continue;
-						covers.push({
-							type: 'bk',
-							site,
-							marketName: res12Name,
-							outcomeName: singleOutcome,
-							odds: b,
-							lGross: null,
-							c: null,
-							k: kFromBk(b),
-						});
-					} else {
-						const c = typeof val === 'number' ? val : (val?.odds ?? null);
-						if (!c || c <= 1) continue;
-						covers.push({
-							type: 'bk',
-							site,
-							marketName: res12Name,
-							outcomeName: singleOutcome,
-							odds: c,
-							lGross: null,
-							c: null,
-							k: kFromBk(c),
-						});
+	for (const rule of _coverageRules) {
+		if (rule.issues !== 2) continue;
+		const sideKeys = ['A', 'B'].filter(k => rule[k]);
+		for (const sideAKey of sideKeys) {
+			const sideBKey = sideKeys.find(k => k !== sideAKey);
+			for (const opt of rule[sideAKey]) {
+				if (opt.betType !== 'Back') continue;
+				const bindings = matchBetSpec(opt, mainMarketName, mainOutcomeName);
+				if (!bindings) continue;
+				// Main bet matched sideA — all sideB options are valid covers
+				for (const coverOpt of rule[sideBKey]) {
+					const resolved = resolveCoverSpec(coverOpt, bindings);
+					if (!resolved) continue;
+					const mEntry = findMarketEntry(event.markets || {}, resolved.market);
+					if (!mEntry) continue;
+					const [mName, mData] = mEntry;
+					const oEntry = findOutcomeEntry(mData, resolved.issue);
+					if (!oEntry) continue;
+					const [oName, oddsMap] = oEntry;
+					for (const [site, val] of Object.entries(oddsMap)) {
+						if (site === fbSite) continue;
+						if (resolved.betType === 'Lay') {
+							const lay = getLayInfo(val);
+							if (!lay) continue;
+							const key = `L:${mName}:${oName}:${site}`;
+							if (seen.has(key)) continue; seen.add(key);
+							covers.push({ type: 'lay', site, marketName: mName, outcomeName: oName,
+								odds: lay.lNet, lGross: lay.lGross, c: lay.c, k: lay.k });
+						} else {
+							const o = getBackOdds(val);
+							if (!o || o <= 1) continue;
+							const key = `B:${mName}:${oName}:${site}`;
+							if (seen.has(key)) continue; seen.add(key);
+							covers.push({ type: 'bk', site, marketName: mName, outcomeName: oName,
+								odds: o, lGross: null, c: null, k: kFromBk(o) });
+						}
 					}
 				}
+				break; // First matching Back option per side is enough
 			}
 		}
 	}
-
 	return covers;
 }
 
@@ -558,30 +647,59 @@ function generateCoveringBets(eventKeys, partitions) {
 	return bets;
 }
 
-// DC partition options for a single match
+// 2-way covering partitions for a single match, based on coverage rules.
+// Returns [{dcMarket, dcOutcome, compMarket, compOutcome}] (same interface as before).
 function dcPartitions(data, eventKey) {
 	const event = data[eventKey];
 	if (!event) return [];
-	const dcEntry = findDcMarket(event.markets || {});
-	const res12Entry = findRes12Market(event.markets || {});
-	if (!dcEntry || !res12Entry) return [];
-	const [dcMarket, dcMap] = dcEntry;
-	const [res12Market, res12Map] = res12Entry;
 	const partitions = [];
+	const seen = new Set();
 
-	for (const dcOutcome of Object.keys(dcMap)) {
-		const dcParts = dcOutcome.toLowerCase().split(/\s+ou\s+|\s*\/\s*/).map(norm);
-		for (const singleOutcome of Object.keys(res12Map)) {
-			const sn = norm(singleOutcome);
-			const covered = dcParts.some(p => p === sn || p.includes(sn) || sn.includes(p));
-			if (covered) continue;
-			partitions.push({
-				dcMarket, dcOutcome,
-				compMarket: res12Market, compOutcome: singleOutcome,
-			});
+	for (const rule of _coverageRules) {
+		if (rule.issues !== 2) continue;
+		const sideKeys = ['A', 'B'].filter(k => rule[k]);
+		if (sideKeys.length !== 2) continue;
+
+		for (let ai = 0; ai < 2; ai++) {
+			const sideAKey = sideKeys[ai];
+			const sideBKey = sideKeys[1 - ai];
+			for (const [marketName, market] of Object.entries(event.markets || {})) {
+				for (const [outcomeName] of Object.entries(market)) {
+					// Find first Back option in sideA that matches this (market, outcome)
+					let bindings = null;
+					for (const opt of rule[sideAKey]) {
+						if (opt.betType !== 'Back') continue;
+						bindings = matchBetSpec(opt, marketName, outcomeName);
+						if (bindings) break;
+					}
+					if (!bindings) continue;
+					// Find best available Back option from sideB
+					let bestB = null;
+					for (const coverOpt of rule[sideBKey]) {
+						if (coverOpt.betType !== 'Back') continue;
+						const resolved = resolveCoverSpec(coverOpt, bindings);
+						if (!resolved) continue;
+						const mEntry = findMarketEntry(event.markets, resolved.market);
+						if (!mEntry) continue;
+						const [bMkt, bMktData] = mEntry;
+						const oEntry = findOutcomeEntry(bMktData, resolved.issue);
+						if (!oEntry) continue;
+						const [bOut] = oEntry;
+						const best = bestCombinedOdds(data, [{ eventKey, marketName: bMkt, outcomeName: bOut }]);
+						if (!best) continue;
+						if (!bestB || best.odds > bestB.odds)
+							bestB = { marketName: bMkt, outcomeName: bOut };
+					}
+					if (!bestB) continue;
+					const key = [marketName + ':' + outcomeName, bestB.marketName + ':' + bestB.outcomeName].sort().join('|');
+					if (seen.has(key)) continue; seen.add(key);
+					partitions.push({ dcMarket: marketName, dcOutcome: outcomeName,
+						compMarket: bestB.marketName, compOutcome: bestB.outcomeName });
+				}
+			}
 		}
 	}
-	return partitions; // should be 3 (one per DC outcome)
+	return partitions;
 }
 
 function computeM2(data, amount, nMatches, betType = 'fb') {
@@ -1161,9 +1279,7 @@ function setMethod(m) {
 	);
 	const legsLabel = document.getElementById('ff-legs-label');
 	if (legsLabel) legsLabel.textContent = m === 1 ? 'Sélections' : 'Matchs à couvrir';
-	const siteRow = document.getElementById('ff-site-row');
-	if (siteRow) siteRow.hidden = m !== 1;
-	tryRender();
+	if (Object.keys(_allResults).length) showCurrentResults();
 }
 
 function setLegs(n) {
@@ -1171,7 +1287,7 @@ function setLegs(n) {
 	document.querySelectorAll('.ff-legs-btn').forEach(b =>
 		b.classList.toggle('ff-btn--active', +b.dataset.legs === n)
 	);
-	tryRender();
+	if (Object.keys(_allResults).length) showCurrentResults();
 }
 
 function setBetType(t) {
@@ -1179,44 +1295,66 @@ function setBetType(t) {
 	document.querySelectorAll('.ff-bettype-btn').forEach(b =>
 		b.classList.toggle('ff-btn--active', b.dataset.bettype === t)
 	);
-	tryRender();
+	_allResults = {};
+	document.getElementById('ff-results').hidden = true;
+}
+
+function showCurrentResults() {
+	const key = `${_method}_${_nLegs}`;
+	const results = _allResults[key];
+	if (results === undefined) {
+		const el = document.getElementById('ff-results');
+		el.hidden = false;
+		el.innerHTML = '<p class="ff-empty">Sélectionnez un site freebet pour calculer M1.</p>';
+		return;
+	}
+	renderResults(results);
 }
 
 function tryRender() {
 	if (!_data) return;
 	_amount = parseFloat(document.getElementById('ff-amount')?.value) || 10;
-	if (_method === 1) {
-		_fbSite = document.getElementById('ff-site-select')?.value ?? '';
-		if (!_fbSite) return;
-		renderResults(computeM1(_data, _fbSite, _amount, _nLegs, _betType));
-	} else if (_method === 2) {
-		renderResults(computeM2(_data, _amount, _nLegs, _betType));
-	} else {
-		renderResults(computeM3(_data, _amount, _nLegs, _betType));
+	_fbSite = document.getElementById('ff-site-select')?.value ?? '';
+	_allResults = {};
+
+	// M2 et M3 ne nécessitent pas de site
+	for (const n of [1, 2, 3])
+		_allResults[`2_${n}`] = computeM2(_data, _amount, n, _betType);
+	_allResults[`3_1`] = [];
+	for (const n of [2, 3])
+		_allResults[`3_${n}`] = computeM3(_data, _amount, n, _betType);
+
+	// M1 seulement si un site est sélectionné
+	if (_fbSite) {
+		for (const n of [1, 2, 3])
+			_allResults[`1_${n}`] = computeM1(_data, _fbSite, _amount, n, _betType);
 	}
+
+	showCurrentResults();
 }
 
 function onJsonChange() {
 	const raw = document.getElementById('ff-json')?.value.trim();
 	const errEl = document.getElementById('ff-json-error');
+	_allResults = {};
 	document.getElementById('ff-results').hidden = true;
 	if (!raw) {
 		_data = null;
 		errEl.hidden = true;
 		updateSiteSelect([]);
-		return;
+	} else {
+		try {
+			_data = JSON.parse(raw);
+			errEl.hidden = true;
+			updateSiteSelect(collectSites(_data));
+		} catch (e) {
+			_data = null;
+			errEl.textContent = 'JSON invalide : ' + e.message;
+			errEl.hidden = false;
+			updateSiteSelect([]);
+		}
 	}
-	try {
-		_data = JSON.parse(raw);
-		errEl.hidden = true;
-		updateSiteSelect(collectSites(_data));
-		tryRender();
-	} catch (e) {
-		_data = null;
-		errEl.textContent = 'JSON invalide : ' + e.message;
-		errEl.hidden = false;
-		updateSiteSelect([]);
-	}
+	document.getElementById('ff-calc-btn').disabled = !_data;
 }
 
 function updateSiteSelect(sites) {
@@ -1236,21 +1374,31 @@ function updateSiteSelect(sites) {
 function stepAmount(delta) {
 	const input = document.getElementById('ff-amount');
 	input.value = Math.max(1, (parseFloat(input.value) || 0) + delta);
-	tryRender();
 }
 
 async function pasteFromClipboard() {
+	const el = document.getElementById('ff-json');
+	el.focus();
+	el.select();
+	// execCommand('paste') est silencieux (pas de dialog) mais déprécié
+	if (document.execCommand('paste')) {
+		onJsonChange();
+		return;
+	}
+	// Fallback : API clipboard moderne (peut demander une permission la 1ère fois)
 	try {
 		const text = await navigator.clipboard.readText();
-		document.getElementById('ff-json').value = text;
+		el.value = text;
 		onJsonChange();
-	} catch {
-		document.getElementById('ff-json').focus();
-	}
+	} catch {}
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-	document.getElementById('ff-site-select')?.addEventListener('change', tryRender);
+	// Load coverage rules from external JSON (overrides embedded defaults if successful)
+	try {
+		const r = await fetch('../assets/coverage-rules.json');
+		if (r.ok) _coverageRules = await r.json();
+	} catch {}
 
 	if (new URLSearchParams(location.search).get('autopaste') === '1') {
 		try {
