@@ -47,8 +47,8 @@
 			{ "market": "Vainqueur", "issue": "2", "betType": "Lay" }
 		],
 		"B": [
-			{ "market": "Vainqueur", "issue": "2", "betType": "Lay" },
-			{ "market": "Vainqueur", "issue": "1", "betType": "Back" }
+			{ "market": "Vainqueur", "issue": "2", "betType": "Back" },
+			{ "market": "Vainqueur", "issue": "1", "betType": "Lay" }
 		
 		]
 	},

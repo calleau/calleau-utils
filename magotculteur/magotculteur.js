@@ -11,6 +11,25 @@ let _amount = 10;
 let _fbSite = '';
 let _visibleCount = 20;
 
+// ===== PREFS (localStorage) =====
+const _PREFS_KEY = 'ff_prefs';
+
+function savePrefs() {
+	try {
+		localStorage.setItem(_PREFS_KEY, JSON.stringify({
+			betType: _betType,
+			amount: parseFloat(document.getElementById('ff-amount')?.value) || _amount,
+			method: _method,
+			nLegs: _nLegs,
+			site: document.getElementById('ff-site-select')?.value ?? '',
+		}));
+	} catch {}
+}
+
+function loadPrefs() {
+	try { return JSON.parse(localStorage.getItem(_PREFS_KEY) || '{}'); } catch { return {}; }
+}
+
 // Coverage rules — loaded from coverage-rules.json, embedded here as default fallback
 let _coverageRules = [
 	{ "issues": 2,
@@ -349,7 +368,7 @@ function collectLegs(data, fbSite) {
 
 // ===== METHOD 1: SEQUENTIAL DUTCHING =====
 
-const TOP_MULTI_M1 = 50; // legs conservés pour les boucles multileg
+const TOP_MULTI_SEQ = 50; // legs conservés pour les boucles multileg
 
 function stakeAndLiability(profit, kPrev, cover) {
 	const gain = cover.type === 'lay' ? (1 - cover.c) : (cover.odds - 1);
@@ -366,13 +385,13 @@ function stakeAndLiabilityCash(T, cover) {
 	return { stake, liability };
 }
 
-function computeM1(data, fbSite, amount, nLegs, betType = 'fb') {
+function computeSeq(data, fbSite, amount, nLegs, betType = 'fb') {
 	const legs = collectLegs(data, fbSite);
 	const results = [];
 
 	if (betType === 'cash') {
 		const legsForMulti = nLegs > 1
-			? [...legs].sort((a, b) => b.b / b.bestK - a.b / a.bestK).slice(0, TOP_MULTI_M1)
+			? [...legs].sort((a, b) => b.b / b.bestK - a.b / a.bestK).slice(0, TOP_MULTI_SEQ)
 			: legs;
 
 		if (nLegs === 1) {
@@ -451,7 +470,7 @@ function computeM1(data, fbSite, amount, nLegs, betType = 'fb') {
 	// Pour multileg : garder seulement les meilleurs legs individuels
 	// (le taux multi-leg ≈ produit des taux individuels → top legs → top combos)
 	const legsForMulti = nLegs > 1
-		? [...legs].sort((a, b) => (b.b - 1) / b.bestK - (a.b - 1) / a.bestK).slice(0, TOP_MULTI_M1)
+		? [...legs].sort((a, b) => (b.b - 1) / b.bestK - (a.b - 1) / a.bestK).slice(0, TOP_MULTI_SEQ)
 		: legs;
 
 	if (nLegs === 1) {
@@ -541,7 +560,7 @@ function computeM1(data, fbSite, amount, nLegs, betType = 'fb') {
 
 // Profit égal sur toutes les issues : stake_i = P/(o_i-1), total = ∑stake_i = amount
 // → P = amount / ∑(1/(o_i-1))  ;  rate = P/amount = 1/∑(1/(o_i-1))
-function finalizeM2Bets(rawBets, totalAmount) {
+function finalizeToutFBBets(rawBets, totalAmount) {
 	const sumInv = rawBets.reduce((s, b) => s + 1 / (b.odds - 1), 0);
 	if (!isFinite(sumInv) || sumInv <= 0) return null;
 	const rate = 1 / sumInv;
@@ -552,7 +571,7 @@ function finalizeM2Bets(rawBets, totalAmount) {
 
 // Cash: retour égal sur toutes les issues : stake_i = T/o_i, total = ∑stake_i = amount
 // → T = amount / ∑(1/o_i)  ;  rate = T/amount = 1/∑(1/o_i)
-function finalizeM2CashBets(rawBets, totalAmount) {
+function finalizeToutFBCashBets(rawBets, totalAmount) {
 	const sumInv = rawBets.reduce((s, b) => s + 1 / b.odds, 0);
 	if (!isFinite(sumInv) || sumInv <= 0) return null;
 	const rate = 1 / sumInv;
@@ -562,14 +581,14 @@ function finalizeM2CashBets(rawBets, totalAmount) {
 }
 
 function finalizeBets(rawBets, amount, betType) {
-	return betType === 'cash' ? finalizeM2CashBets(rawBets, amount) : finalizeM2Bets(rawBets, amount);
+	return betType === 'cash' ? finalizeToutFBCashBets(rawBets, amount) : finalizeToutFBBets(rawBets, amount);
 }
 
-const TOP_EVENTS_M2 = 30; // matchs conservés pour les boucles multi-match M2
+const TOP_EVENTS_TOUTFB = 30; // matchs conservés pour les boucles multi-match Couverture classique
 
-// Score d'un match pour M2 : meilleur taux single-match sur ses partitions DC
+// Score d'un match pour Couverture classique : meilleur taux single-match sur ses partitions DC
 // Fallback sur 1X2 si aucun marché DC disponible.
-function scoreEventM2(data, eventKey) {
+function scoreEventToutFB(data, eventKey) {
 	let best = 0;
 	for (const p of dcPartitions(data, eventKey)) {
 		const oDC   = bestCombinedOdds(data, [{ eventKey, marketName: p.dcMarket,   outcomeName: p.dcOutcome   }]);
@@ -593,12 +612,12 @@ function scoreEventM2(data, eventKey) {
 	return best;
 }
 
-function topEventsForM2(data) {
+function topEventsForToutFB(data) {
 	return Object.keys(data)
-		.map(ek => ({ ek, score: scoreEventM2(data, ek) }))
+		.map(ek => ({ ek, score: scoreEventToutFB(data, ek) }))
 		.filter(x => x.score > 0)
 		.sort((a, b) => b.score - a.score)
-		.slice(0, TOP_EVENTS_M2)
+		.slice(0, TOP_EVENTS_TOUTFB)
 		.map(x => x.ek);
 }
 
@@ -702,10 +721,10 @@ function dcPartitions(data, eventKey) {
 	return partitions;
 }
 
-function computeM2(data, amount, nMatches, betType = 'fb') {
+function computeToutFB(data, amount, nMatches, betType = 'fb') {
 	const allEventKeys = Object.keys(data);
 	// Pour nMatches=1 on utilise tous les matchs ; pour multi on filtre top-N
-	const eventKeys = nMatches === 1 ? allEventKeys : topEventsForM2(data);
+	const eventKeys = nMatches === 1 ? allEventKeys : topEventsForToutFB(data);
 	const results = [];
 	// Déduplication : garder seulement le meilleur taux par combinaison de matchs
 	const bestPerCombo = new Map();
@@ -891,12 +910,12 @@ function computeM2(data, amount, nMatches, betType = 'fb') {
 //
 // 1 match couvert en cash (facteur k), les N-1 autres en FB simultanés.
 // Les paris FB contiennent tous la bonne issue DC du match couvert en cash.
-// rate_M3 = rate_M2(2^(N-1) paris FB) / k_cash
+// rate_Mixte = rate_ToutFB(2^(N-1) paris FB) / k_cash
 //
-function computeM3(data, amount, nMatches, betType = 'fb') {
+function computeMixte(data, amount, nMatches, betType = 'fb') {
 	if (nMatches < 2) return [];
 
-	const eventKeys = topEventsForM2(data);
+	const eventKeys = topEventsForToutFB(data);
 	const bestPerCombo = new Map();
 
 	function saveIfBetter(comboKey, entry) {
@@ -904,7 +923,7 @@ function computeM3(data, amount, nMatches, betType = 'fb') {
 		if (!prev || entry.rate > prev.rate) bestPerCombo.set(comboKey, entry);
 	}
 
-	function buildM3Entry(cashEk, fbEks, cashPartition, cashCover, fin) {
+	function buildMixteEntry(cashEk, fbEks, cashPartition, cashCover, fin) {
 		const k = cashCover.k;
 		const rate = fin.rate / k;
 		if (rate <= 0) return null;
@@ -962,7 +981,7 @@ function computeM3(data, amount, nMatches, betType = 'fb') {
 						if (!valid) return;
 						const fin = finalizeBets(raw, amount, betType);
 						if (!fin) return;
-						const entry = buildM3Entry(cashEk, fbEks, p_cash, bestCover, fin);
+						const entry = buildMixteEntry(cashEk, fbEks, p_cash, bestCover, fin);
 						if (entry) saveIfBetter(comboKey, entry);
 						return;
 					}
@@ -1015,7 +1034,7 @@ function computeM3(data, amount, nMatches, betType = 'fb') {
 					const fin = finalizeBets(raw, amount, betType);
 					if (!fin) continue;
 					const syntheticPartition = { dcMarket: r12mkt, dcOutcome: nonComp.join('/'), compMarket: r12mkt, compOutcome };
-					const entry = buildM3Entry(cashEk, fbEks, syntheticPartition, bestCashCover, fin);
+					const entry = buildMixteEntry(cashEk, fbEks, syntheticPartition, bestCashCover, fin);
 					if (entry) saveIfBetter(comboKey, entry);
 				}
 			}
@@ -1066,7 +1085,7 @@ function coverBadge(cover) {
 	return `<span class="ff-badge ff-badge-bk">Back</span>`;
 }
 
-function buildM1LegRow(leg, idx, gap) {
+function buildSeqLegRow(leg, idx, gap) {
 	const gapHtml = gap ? `<span class="ff-gap">+${formatGap(gap)}</span>` : '';
 	const stakeDetail = leg.liability != null
 		? `${fmt(leg.stake)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(leg.liability)}\u00a0€)</span>`
@@ -1090,9 +1109,9 @@ function buildM1LegRow(leg, idx, gap) {
 	</div>`;
 }
 
-function buildM1Card(result) {
+function buildSeqCard(result) {
 	const legRows = result.legs.map((leg, i) =>
-		buildM1LegRow(leg, i, i > 0 ? result.gaps[i - 1] : null)
+		buildSeqLegRow(leg, i, i > 0 ? result.gaps[i - 1] : null)
 	).join('');
 	const totalLiab = result.legs.reduce((s, l) => s + (l.liability ?? 0), 0);
 	const liabHtml = totalLiab > 0
@@ -1109,7 +1128,7 @@ function buildM1Card(result) {
 	return `
 	<div class="ff-card ff-card-m1">
 		<div class="ff-card-header">
-			<span class="ff-card-type">M1 · ${esc(coverLabel)}</span>
+			<span class="ff-card-type">Cash séquentiel · ${esc(coverLabel)}</span>
 			<span class="ff-card-b">Cote\u00a0: <strong>${fmt(result.B)}</strong></span>
 			${liabHtml}
 			${valueHtml}
@@ -1119,7 +1138,7 @@ function buildM1Card(result) {
 	</div>`;
 }
 
-function buildM2BetRow(bet, idx, betType = 'fb') {
+function buildToutFBBetRow(bet, idx, betType = 'fb') {
 	const legLabels = bet.legs.map(l => {
 		const ev = _data?.[l.eventKey];
 		const evName = ev ? eventDisplayName(l.eventKey, ev) : l.eventKey;
@@ -1139,9 +1158,9 @@ function buildM2BetRow(bet, idx, betType = 'fb') {
 	</div>`;
 }
 
-function buildM2Card(result) {
+function buildToutFBCard(result) {
 	const isCash = result.betType === 'cash';
-	const betRows = result.bets.map((b, i) => buildM2BetRow(b, i, result.betType)).join('');
+	const betRows = result.bets.map((b, i) => buildToutFBBetRow(b, i, result.betType)).join('');
 	const minOdds = Math.min(...result.bets.map(b => b.odds));
 	const maxOdds = Math.max(...result.bets.map(b => b.odds));
 	const valueHtml = isCash
@@ -1151,7 +1170,7 @@ function buildM2Card(result) {
 	return `
 	<div class="ff-card ff-card-m2">
 		<div class="ff-card-header">
-			<span class="ff-card-type">M2 · ${result.nBets}\u00a0Paris · ${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
+			<span class="ff-card-type">Couverture classique · ${result.nBets}\u00a0Paris · ${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
 			<span class="ff-card-b">Cotes\u00a0: ${fmt(minOdds)}\u2013${fmt(maxOdds)}</span>
 			<span class="ff-card-totalfb">Total\u00a0: <strong>${fmt(result.totalAmount)}\u00a0€</strong></span>
 			${valueHtml}
@@ -1161,7 +1180,7 @@ function buildM2Card(result) {
 	</div>`;
 }
 
-function buildM3CashRow(result) {
+function buildMixteCashRow(result) {
 	const ev = _data?.[result.cashEk];
 	const evName = ev ? eventDisplayName(result.cashEk, ev) : result.cashEk;
 	const p = result.cashPartition;
@@ -1186,10 +1205,10 @@ function buildM3CashRow(result) {
 	</div>`;
 }
 
-function buildM3Card(result) {
+function buildMixteCard(result) {
 	const isCash = result.betType === 'cash';
-	const cashRow = buildM3CashRow(result);
-	const betRows = result.fbBets.map((b, i) => buildM2BetRow(b, i, result.betType)).join('');
+	const cashRow = buildMixteCashRow(result);
+	const betRows = result.fbBets.map((b, i) => buildToutFBBetRow(b, i, result.betType)).join('');
 	const nFb = result.fbBets.length;
 	const valueHtml = isCash
 		? `<span class="ff-card-profit neg"><strong>−${fmt(result.loss)}\u00a0€</strong> perte</span>`
@@ -1198,7 +1217,7 @@ function buildM3Card(result) {
 	return `
 	<div class="ff-card ff-card-m3">
 		<div class="ff-card-header">
-			<span class="ff-card-type">M3 · ${nFb}\u00a0Paris + cash</span>
+			<span class="ff-card-type">Mixte · ${nFb}\u00a0Paris + cash</span>
 			<span class="ff-card-b">${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
 			<span class="ff-card-totalfb">Total\u00a0: <strong>${fmt(result.totalAmount)}\u00a0€</strong></span>
 			${valueHtml}
@@ -1208,6 +1227,187 @@ function buildM3Card(result) {
 		<div class="ff-m3-divider"></div>
 		<div class="ff-bets">${betRows}</div>
 	</div>`;
+}
+
+// ===== TABLE RENDERING =====
+
+function rowMethod(result) {
+	if (result.method === 1) return 'Cash séq.';
+	if (result.method === 2) return 'Couv. classique';
+	if (result.method === 3) {
+		const keys = result.eventKeys || [];
+		const cashEk = result.cashEk;
+		const t = result.cashCover?.type;
+		const cashLabel = t === 'lay' ? 'Cash séq. · Lay' : t === 'back' ? 'Cash séq. · Back' : 'Cash séq.';
+		return keys.map(ek =>
+			`<span>${esc(ek === cashEk ? cashLabel : 'Couv. classique')}</span>`
+		).join('');
+	}
+	return '';
+}
+
+function rowMatches(result) {
+	if (result.method === 1) return new Set(result.legs.map(l => l.eventKey)).size;
+	return result.nMatches ?? '-';
+}
+
+function resultEventKeys(result) {
+	if (result.method === 1) return [...new Set(result.legs.map(l => l.eventKey))];
+	return result.eventKeys || [];
+}
+
+function rowMarketsHtml(result) {
+	if (result.method === 1) {
+		return resultEventKeys(result).map(ek => {
+			const mkts = [...new Set(result.legs.filter(l => l.eventKey === ek).map(l => l.marketName))];
+			return `<span>${esc(mkts.join(', '))}</span>`;
+		}).join('');
+	}
+	if (result.method === 2) {
+		return resultEventKeys(result).map(ek => {
+			const mkts = [...new Set(result.bets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
+			return `<span>${esc(mkts.join(', '))}</span>`;
+		}).join('');
+	}
+	if (result.method === 3) {
+		const cashMkt = result.cashPartition?.dcMarket ?? '';
+		const fbEks = resultEventKeys(result).slice(1);
+		const fbSpans = fbEks.map(ek => {
+			const mkts = [...new Set(result.fbBets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
+			return `<span>${esc(mkts.join(', '))}</span>`;
+		});
+		return [`<span>${esc(cashMkt)}</span>`, ...fbSpans].join('');
+	}
+	return '';
+}
+
+function coverTypeLabel(cover) {
+	if (!cover) return '';
+	const suffix = cover.type === 'lay' ? ' Lay' : cover.type === 'dc' ? '' : ' Back';
+	return (cover.site || '') + suffix;
+}
+
+function outcomesPerEvent(bets, ek) {
+	return new Set(bets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.outcomeName))).size;
+}
+
+function rowTypeHtml(result) {
+	if (result.method === 1) {
+		return resultEventKeys(result).map(ek => {
+			const leg = result.legs.find(l => l.eventKey === ek);
+			return `<span>${esc(leg ? coverTypeLabel(leg.cover) : '')}</span>`;
+		}).join('');
+	}
+	if (result.method === 2) {
+		return resultEventKeys(result).map(ek => {
+			const n = outcomesPerEvent(result.bets, ek);
+			return `<span>${n}\u00a0issues</span>`;
+		}).join('');
+	}
+	if (result.method === 3) {
+		const cashLabel = coverTypeLabel(result.cashCover);
+		const fbEks = resultEventKeys(result).slice(1);
+		return [`<span>${esc(cashLabel)}</span>`, ...fbEks.map(ek => {
+			const n = outcomesPerEvent(result.fbBets, ek);
+			return `<span>${n}\u00a0issues</span>`;
+		})].join('');
+	}
+	return '';
+}
+
+function eventsLines(result) {
+	const keys = result.method === 1
+		? [...new Set(result.legs.map(l => l.eventKey))]
+		: (result.eventKeys || []);
+	return keys.map(ek => {
+		const ev = _data?.[ek];
+		return `<span>${esc(ev ? eventDisplayName(ek, ev) : ek)}</span>`;
+	}).join('');
+}
+
+function eventsLabel(result) {
+	const keys = result.method === 1
+		? [...new Set(result.legs.map(l => l.eventKey))]
+		: (result.eventKeys || []);
+	return keys.map(ek => {
+		const ev = _data?.[ek];
+		return ev ? eventDisplayName(ek, ev) : ek;
+	}).join(' + ');
+}
+
+
+function rowParis(result) {
+	if (result.method === 1) return result.legs.length * 2;
+	if (result.method === 2) return result.nBets;
+	if (result.method === 3) return result.fbBets.length + 1;
+	return '-';
+}
+
+function rowCashEngaged(result) {
+	if (result.method === 1) return result.legs.reduce((s, l) => s + (l.liability ?? l.stake), 0);
+	if (result.method === 3) return result.cashLiability ?? result.cashStake;
+	return null; // Couverture classique : pas de cash engagé
+}
+
+function rowCote(result) {
+	if (result.method === 1) return fmt(result.B);
+	if (result.method === 2) {
+		const odds = result.bets.map(b => b.odds);
+		const min = Math.min(...odds), max = Math.max(...odds);
+		return Math.abs(max - min) < 0.01 ? fmt(min) : `${fmt(min)}\u2013${fmt(max)}`;
+	}
+	return '\u2013';
+}
+
+function buildDetailContent(result) {
+	if (result.method === 1) {
+		const rows = result.legs.map((leg, i) =>
+			buildSeqLegRow(leg, i, i > 0 ? result.gaps[i - 1] : null)
+		).join('');
+		return `<div class="ff-detail-legs">${rows}</div>`;
+	}
+	if (result.method === 2) {
+		const rows = result.bets.map((b, i) => buildToutFBBetRow(b, i, result.betType)).join('');
+		return `<div class="ff-detail-bets">${rows}</div>`;
+	}
+	if (result.method === 3) {
+		const cashRow = buildMixteCashRow(result);
+		const betRows = result.fbBets.map((b, i) => buildToutFBBetRow(b, i, result.betType)).join('');
+		return `<div class="ff-detail-legs">${cashRow}</div><div class="ff-m3-divider"></div><div class="ff-detail-bets">${betRows}</div>`;
+	}
+	return '';
+}
+
+function buildTableRow(result, idx) {
+	const isCash = result.betType === 'cash';
+	const liab = rowCashEngaged(result);
+	const profitClass = isCash ? 'neg' : 'pos';
+	const valueStr = isCash
+		? `\u2212${fmt(result.loss)}\u00a0\u20ac`
+		: `+${fmt(result.profit)}\u00a0\u20ac`;
+	const liabStr = liab !== null ? `${fmt(liab)}\u00a0\u20ac` : '\u2013';
+	const rClass = isCash ? rateClassCash(result.rate) : rateClass(result.rate);
+	return `
+		<button class="ff-row-expand" id="ff-expand-${idx}" onclick="toggleDetail(${idx})" aria-label="Détails"><span class="ff-expand-icon">&#9654;</span></button>
+		<div class="ff-td ff-td-muted${result.method === 3 ? ' ff-td-events' : ''}">${result.method === 3 ? rowMethod(result) : esc(rowMethod(result))}</div>
+		<div class="ff-td ff-td-center">${rowMatches(result)}</div>
+		<div class="ff-td ff-td-events">${eventsLines(result)}</div>
+		<div class="ff-td ff-td-muted ff-td-events">${rowMarketsHtml(result)}</div>
+		<div class="ff-td ff-td-muted ff-td-events">${rowTypeHtml(result)}</div>
+		<div class="ff-td ff-td-center">${rowParis(result)}</div>
+		<div class="ff-td ff-td-mono">${esc(liabStr)}</div>
+		<div class="ff-td ff-td-mono">${esc(rowCote(result))}</div>
+		<div class="ff-td ff-td-mono ${profitClass}">${esc(valueStr)}</div>
+		<div class="ff-td ${rClass} ff-td-bold">${fmt(result.rate * 100, 1)}\u00a0%</div>
+		<div class="ff-tr-detail" id="ff-detail-${idx}" hidden>${buildDetailContent(result)}</div>`;
+}
+
+function toggleDetail(idx) {
+	const detail = document.getElementById(`ff-detail-${idx}`);
+	const btn = document.getElementById(`ff-expand-${idx}`);
+	if (!detail) return;
+	detail.hidden = !detail.hidden;
+	btn.classList.toggle('ff-expand-open', !detail.hidden);
 }
 
 function renderResults(results) {
@@ -1256,9 +1456,27 @@ function renderPage() {
 	});
 
 	const visible = filtered.slice(0, q ? filtered.length : _visibleCount);
-	cards.innerHTML = visible.map(r =>
-		r.method === 1 ? buildM1Card(r) : r.method === 3 ? buildM3Card(r) : buildM2Card(r)
-	).join('');
+
+	if (!visible.length) {
+		cards.innerHTML = `<p class="ff-empty">Aucun match correspondant.</p>`;
+		if (more) more.innerHTML = '';
+		return;
+	}
+
+	const headers = `
+		<div class="ff-th"></div>
+		<div class="ff-th">Méthode</div>
+		<div class="ff-th ff-th-center">Matchs</div>
+		<div class="ff-th">Événement(s)</div>
+		<div class="ff-th">Marchés</div>
+		<div class="ff-th">Type</div>
+		<div class="ff-th ff-th-center">Paris</div>
+		<div class="ff-th">Cash engagé</div>
+		<div class="ff-th">Cote</div>
+		<div class="ff-th">Résultat</div>
+		<div class="ff-th">Taux</div>`;
+
+	cards.innerHTML = `<div class="ff-table-wrap"><div class="ff-table">${headers}${visible.map((r, i) => buildTableRow(r, i)).join('')}</div></div>`;
 
 	if (more) {
 		const remaining = filtered.length - _visibleCount;
@@ -1272,23 +1490,56 @@ function showMore() { _visibleCount += 20; renderPage(); }
 
 // ===== UI =====
 
-function setMethod(m) {
-	_method = m;
-	document.querySelectorAll('.ff-method-btn').forEach(b =>
-		b.classList.toggle('ff-btn--active', +b.dataset.method === m)
-	);
-	const legsLabel = document.getElementById('ff-legs-label');
-	if (legsLabel) legsLabel.textContent = m === 1 ? 'Sélections' : 'Matchs à couvrir';
-	if (Object.keys(_allResults).length) showCurrentResults();
+function updateTabSummaries() {
+	document.querySelectorAll('.ff-count-btn[data-method][data-legs]').forEach(btn => {
+		const m = +btn.dataset.method;
+		const n = +btn.dataset.legs;
+		const res = _allResults[`${m}_${n}`];
+		const num = btn.dataset.legs;
+		if (!res || !res.length) { btn.innerHTML = esc(num); return; }
+		const best = res[0];
+		const isCash = best.betType === 'cash';
+		const valueStr = isCash ? `\u2212${fmt(best.loss, 2)}\u00a0\u20ac` : `+${fmt(best.profit, 2)}\u00a0\u20ac`;
+		btn.innerHTML = `${esc(num)}<span class="ff-count-summary">${fmt(best.rate * 100, 1)}\u00a0%<br>${valueStr}</span>`;
+	});
+
+	// Résumé global pour l'onglet "Tout"
+	const toutLabel = document.querySelector('.ff-method-label[data-name="Tout"]');
+	if (toutLabel) {
+		const all = Object.values(_allResults).flat();
+		if (all.length) {
+			const best = all.reduce((b, r) => r.rate > b.rate ? r : b);
+			const isCash = best.betType === 'cash';
+			const valueStr = isCash ? `\u2212${fmt(best.loss, 2)}\u00a0\u20ac` : `+${fmt(best.profit, 2)}\u00a0\u20ac`;
+			toutLabel.innerHTML = `Tout<span class="ff-count-summary">${fmt(best.rate * 100, 1)}\u00a0%<br>${valueStr}</span>`;
+		}
+	}
 }
 
-function setLegs(n) {
+function clearTabSummaries() {
+	document.querySelectorAll('.ff-count-btn[data-legs]').forEach(btn => {
+		btn.innerHTML = esc(btn.dataset.legs);
+	});
+	document.querySelectorAll('.ff-method-label[data-name]').forEach(label => {
+		label.innerHTML = esc(label.dataset.name);
+	});
+}
+
+function setMethodLegs(m, n) {
+	_method = m;
 	_nLegs = n;
-	document.querySelectorAll('.ff-legs-btn').forEach(b =>
-		b.classList.toggle('ff-btn--active', +b.dataset.legs === n)
+	document.querySelectorAll('.ff-method-group').forEach(g =>
+		g.classList.toggle('ff-method-group--active', +g.dataset.method === m)
+	);
+	document.querySelectorAll('.ff-count-btn').forEach(b =>
+		b.classList.toggle('ff-count-btn--active', +b.dataset.method === m && +b.dataset.legs === n)
 	);
 	if (Object.keys(_allResults).length) showCurrentResults();
+	savePrefs();
 }
+
+function setMethod(m) { setMethodLegs(m, m === 3 ? Math.max(2, _nLegs) : _nLegs); }
+function setLegs(n) { setMethodLegs(_method, n); }
 
 function setBetType(t) {
 	_betType = t;
@@ -1296,40 +1547,89 @@ function setBetType(t) {
 		b.classList.toggle('ff-btn--active', b.dataset.bettype === t)
 	);
 	_allResults = {};
+	clearTabSummaries();
 	document.getElementById('ff-results').hidden = true;
+	savePrefs();
 }
 
 function showCurrentResults() {
+	const el = document.getElementById('ff-results');
+	if (_method === 0) {
+		const all = Object.values(_allResults).flat();
+		if (!all.length) {
+			el.hidden = false;
+			el.innerHTML = '<p class="ff-empty">Cliquez sur Calculer pour voir toutes les combinaisons.</p>';
+			return;
+		}
+		all.sort((a, b) => b.rate - a.rate);
+		renderResults(all);
+		return;
+	}
 	const key = `${_method}_${_nLegs}`;
 	const results = _allResults[key];
 	if (results === undefined) {
-		const el = document.getElementById('ff-results');
 		el.hidden = false;
-		el.innerHTML = '<p class="ff-empty">Sélectionnez un site freebet pour calculer M1.</p>';
+		el.innerHTML = '<p class="ff-empty">Sélectionnez un site freebet pour calculer Cash séquentiel.</p>';
 		return;
 	}
 	renderResults(results);
 }
 
-function tryRender() {
+function yieldToUI() { return new Promise(r => setTimeout(r, 0)); }
+
+async function tryRender() {
 	if (!_data) return;
 	_amount = parseFloat(document.getElementById('ff-amount')?.value) || 10;
 	_fbSite = document.getElementById('ff-site-select')?.value ?? '';
 	_allResults = {};
 
-	// M2 et M3 ne nécessitent pas de site
-	for (const n of [1, 2, 3])
-		_allResults[`2_${n}`] = computeM2(_data, _amount, n, _betType);
-	_allResults[`3_1`] = [];
-	for (const n of [2, 3])
-		_allResults[`3_${n}`] = computeM3(_data, _amount, n, _betType);
+	const btn = document.getElementById('ff-calc-btn');
+	const progressWrap = document.getElementById('ff-progress-wrap');
+	const progressBar = document.getElementById('ff-progress-bar');
+	const hasSeq = !!_fbSite;
+	const totalSteps = 5 + (hasSeq ? 3 : 0); // ToutFB×3 + Mixte×2 [+ Séq×3]
+	let step = 0;
 
-	// M1 seulement si un site est sélectionné
-	if (_fbSite) {
-		for (const n of [1, 2, 3])
-			_allResults[`1_${n}`] = computeM1(_data, _fbSite, _amount, n, _betType);
+	function setProgress(label) {
+		step++;
+		btn.textContent = label;
+		progressBar.style.width = `${Math.round(step / totalSteps * 100)}%`;
 	}
 
+	btn.disabled = true;
+	btn.classList.add('ff-loading');
+	progressWrap.hidden = false;
+	progressBar.style.width = '0%';
+	await yieldToUI();
+
+	if (hasSeq) {
+		for (const n of [1, 2, 3]) {
+			setProgress(`Calcul de Cash séquentiel – ${n} sélection${n > 1 ? 's' : ''}…`);
+			await yieldToUI();
+			_allResults[`1_${n}`] = computeSeq(_data, _fbSite, _amount, n, _betType);
+		}
+	}
+
+	_allResults[`3_1`] = [];
+	for (const n of [2, 3]) {
+		setProgress(`Calcul de Mixte – ${n} sélections…`);
+		await yieldToUI();
+		_allResults[`3_${n}`] = computeMixte(_data, _amount, n, _betType);
+	}
+
+	for (const n of [1, 2, 3]) {
+		setProgress(`Calcul de Couverture classique – ${n} sélection${n > 1 ? 's' : ''}…`);
+		await yieldToUI();
+		_allResults[`2_${n}`] = computeToutFB(_data, _amount, n, _betType);
+	}
+
+	progressBar.style.width = '100%';
+	btn.textContent = 'Calculer';
+	btn.classList.remove('ff-loading');
+	btn.disabled = false;
+	setTimeout(() => { progressWrap.hidden = true; progressBar.style.width = '0%'; }, 500);
+
+	updateTabSummaries();
 	showCurrentResults();
 }
 
@@ -1337,6 +1637,7 @@ function onJsonChange() {
 	const raw = document.getElementById('ff-json')?.value.trim();
 	const errEl = document.getElementById('ff-json-error');
 	_allResults = {};
+	clearTabSummaries();
 	document.getElementById('ff-results').hidden = true;
 	if (!raw) {
 		_data = null;
@@ -1368,12 +1669,15 @@ function updateSiteSelect(sites) {
 	}
 	sel.innerHTML = '<option value="">— Sélectionner un site —</option>'
 		+ sites.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+	const savedSite = loadPrefs().site;
+	if (savedSite && sites.includes(savedSite)) sel.value = savedSite;
 	field.hidden = false;
 }
 
 function stepAmount(delta) {
 	const input = document.getElementById('ff-amount');
 	input.value = Math.max(1, (parseFloat(input.value) || 0) + delta);
+	savePrefs();
 }
 
 async function pasteFromClipboard() {
@@ -1394,6 +1698,17 @@ async function pasteFromClipboard() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+	// Restore saved preferences
+	const prefs = loadPrefs();
+	if (prefs.betType) setBetType(prefs.betType);
+	if (prefs.amount) {
+		const input = document.getElementById('ff-amount');
+		if (input) input.value = prefs.amount;
+	}
+	if (prefs.method && prefs.nLegs) setMethodLegs(prefs.method, prefs.nLegs);
+	document.getElementById('ff-amount')?.addEventListener('change', savePrefs);
+	document.getElementById('ff-site-select')?.addEventListener('change', savePrefs);
+
 	// Load coverage rules from external JSON (overrides embedded defaults if successful)
 	try {
 		const r = await fetch('../assets/coverage-rules.json');
@@ -1415,4 +1730,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 			onJsonChange();
 		} catch {}
 	}
+
+	// Le browser peut restaurer le textarea après DOMContentLoaded
+	setTimeout(() => {
+		if (document.getElementById('ff-json').value.trim()) onJsonChange();
+	}, 100);
 });
