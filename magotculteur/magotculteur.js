@@ -1421,21 +1421,16 @@ function renderResults(results) {
 		return;
 	}
 
-	const best = results[0].rate;
-	const isCash = _betType === 'cash';
-	const label = _method === 1
-		? `${results.length} opportunité${results.length > 1 ? 's' : ''}`
-		: `${results.length} ensemble${results.length > 1 ? 's' : ''} couvrants`;
-	const metricLabel = isCash ? 'meilleur retour' : 'meilleur taux';
-
-	el.innerHTML = `
-		<p class="ff-summary">${label} — ${metricLabel}\u00a0: <strong>${fmt(best * 100, 1)}\u00a0%</strong></p>
-		<div class="ff-search-row">
+	const isTout = _method === 0;
+	const topHtml = isTout
+		? `<div class="ff-search-row">
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-			<input id="ff-search" class="ff-search-input" placeholder="Rechercher un match…" oninput="renderPage()" />
+			<input id="ff-search" class="ff-search-input" placeholder="Rechercher un match…" oninput="onSearchInput()" />
 		</div>
-		<div id="ff-cards"></div>
-		<div id="ff-more"></div>`;
+		<p id="ff-summary" class="ff-summary"></p>`
+		: `<p id="ff-count" class="ff-summary"></p>`;
+
+	el.innerHTML = `${topHtml}<div id="ff-cards"></div><div id="ff-more"></div>`;
 	renderPage();
 }
 
@@ -1455,7 +1450,20 @@ function renderPage() {
 		});
 	});
 
-	const visible = filtered.slice(0, q ? filtered.length : _visibleCount);
+	const visible = filtered.slice(0, 20);
+
+	// Compteur — seulement hors onglet Tout
+	const summaryEl = document.getElementById('ff-summary');
+	if (summaryEl) {
+		if (q) {
+			summaryEl.textContent = `${filtered.length} combinaison${filtered.length > 1 ? 's' : ''} trouvée${filtered.length > 1 ? 's' : ''} — affichage des 20 meilleures`;
+		} else {
+			summaryEl.textContent = `${_results.length} combinaison${_results.length > 1 ? 's' : ''} — 20 meilleures affichées`;
+		}
+	} else {
+		const countEl = document.getElementById('ff-count');
+		if (countEl) countEl.textContent = `${_results.length} combinaison${_results.length > 1 ? 's' : ''}`;
+	}
 
 	if (!visible.length) {
 		cards.innerHTML = `<p class="ff-empty">Aucun match correspondant.</p>`;
@@ -1479,9 +1487,9 @@ function renderPage() {
 	cards.innerHTML = `<div class="ff-table-wrap"><div class="ff-table">${headers}${visible.map((r, i) => buildTableRow(r, i)).join('')}</div></div>`;
 
 	if (more) {
-		const remaining = filtered.length - _visibleCount;
-		more.innerHTML = !q && remaining > 0
-			? `<button class="ff-more-btn" onclick="showMore()">Voir plus (${Math.min(remaining, 20)} sur ${remaining} restants)</button>`
+		const remaining = filtered.length - 20;
+		more.innerHTML = remaining > 0
+			? `<span class="ff-more-info">${remaining} combinaison${remaining > 1 ? 's' : ''} supplémentaire${remaining > 1 ? 's' : ''} non affichée${remaining > 1 ? 's' : ''} — affinez la recherche</span>`
 			: '';
 	}
 }
