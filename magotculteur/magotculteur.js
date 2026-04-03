@@ -7,7 +7,12 @@ let _allResults = {};   // cache: key = `${method}_${nLegs}` → results array
 let _method = 1;   // 1 | 2 | 3
 let _betType = 'fb'; // 'fb' | 'cash'
 let _nLegs = 1;
-let _amount = 10;
+let _amount = 10;      // compute amount, toujours = _amountTotal
+let _amountTotal = 10;
+let _amountMin = 2;
+let _amountMode = 'total'; // 'total' | 'min'
+let _cashObjective = 'miser'; // 'miser' | 'gagner' | 'perdre'
+let _filterMinOdds = 0;
 let _fbSite = '';
 let _visibleCount = 20;
 
@@ -18,7 +23,10 @@ function savePrefs() {
 	try {
 		localStorage.setItem(_PREFS_KEY, JSON.stringify({
 			betType: _betType,
-			amount: parseFloat(document.getElementById('ff-amount')?.value) || _amount,
+			cashObjective: _cashObjective,
+			amountTotal: parseFloat(document.getElementById('ff-amount-total')?.value) || _amountTotal,
+			amountMin: parseFloat(document.getElementById('ff-amount-min')?.value) || _amountMin,
+			amountMode: _amountMode,
 			method: _method,
 			nLegs: _nLegs,
 			site: document.getElementById('ff-site-select')?.value ?? '',
@@ -397,12 +405,44 @@ function computeSeq(data, fbSite, amount, nLegs, betType = 'fb') {
 		if (nLegs === 1) {
 			for (const leg of legs) {
 				for (const cover of leg.covers) {
-					const rate = leg.b / cover.k;
-					const T = amount * rate;
-					const { stake, liability } = stakeAndLiabilityCash(T, cover);
+					const gain = cover.type === 'lay' ? (1 - cover.c) : (cover.odds - 1);
+					let stake, liability, rate, loss, netIfWins, netIfLoses;
+
+					if (_cashObjective === 'gagner') {
+						// Cover rembourse amount si back perd
+						stake = amount / gain;
+						liability = cover.type === 'lay' ? stake * (cover.lGross - 1) : null;
+						netIfLoses = 0;
+						// Si back gagne : lay perd sa liability (pas juste le stake)
+						const coverCostGagner = cover.type === 'lay' ? liability : stake;
+						netIfWins = amount * (leg.b - 1) - coverCostGagner;
+						rate = netIfWins / amount;
+						loss = -Math.min(netIfWins, 0);
+					} else if (_cashObjective === 'perdre') {
+						// Cover neutralise le gain si back gagne
+						// Pour un lay : la liability doit absorber le gain → stake = amount*(b-1)/(lGross-1)
+						const gainForStake = cover.type === 'lay' ? (cover.lGross - 1) : (cover.odds - 1);
+						stake = amount * (leg.b - 1) / gainForStake;
+						liability = cover.type === 'lay' ? stake * (cover.lGross - 1) : null;
+						// netIfWins = amount*(b-1) - liability = 0 par construction
+						netIfWins = 0;
+						// Si back perd : cover gagne (lay gagne stake*gain, back cover gagne stake*(odds-1))
+						netIfLoses = cover.type === 'lay' ? (stake * gain - amount) : (stake * (cover.odds - 1) - amount);
+						rate = 1 + netIfLoses / amount;    // fraction de amount récupérée si back perd
+						loss = -netIfLoses;
+					} else {
+						// miser : équilibré
+						rate = leg.b / cover.k;
+						const T = amount * rate;
+						({ stake, liability } = stakeAndLiabilityCash(T, cover));
+						netIfWins = netIfLoses = -amount * (1 - rate);
+						loss = amount * (1 - rate);
+					}
+
 					results.push({
-						method: 1, nLegs: 1, betType: 'cash',
-						B: leg.b, rate, loss: amount * (1 - rate),
+						method: 1, nLegs: 1, betType: 'cash', _cashObjective,
+						B: leg.b, rate, loss,
+						netIfWins, netIfLoses,
 						legs: [{ ...leg, cover, stake, liability }],
 					});
 				}
@@ -1085,11 +1125,11 @@ function coverBadge(cover) {
 	return `<span class="ff-badge ff-badge-bk">Back</span>`;
 }
 
-function buildSeqLegRow(leg, idx, gap) {
+function buildSeqLegRow(leg, idx, gap, scale = 1) {
 	const gapHtml = gap ? `<span class="ff-gap">+${formatGap(gap)}</span>` : '';
 	const stakeDetail = leg.liability != null
-		? `${fmt(leg.stake)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(leg.liability)}\u00a0€)</span>`
-		: `${fmt(leg.stake)}\u00a0€`;
+		? `${fmt(leg.stake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(leg.liability * scale)}\u00a0€)</span>`
+		: `${fmt(leg.stake * scale)}\u00a0€`;
 	const coverOddsDetail = leg.cover.lGross != null
 		? `${fmt(leg.cover.odds)} <span class="ff-sub">brut\u00a0${fmt(leg.cover.lGross)}</span>`
 		: `${fmt(leg.cover.odds)}`;
@@ -1102,7 +1142,7 @@ function buildSeqLegRow(leg, idx, gap) {
 		</div>
 		<div class="ff-leg-right">
 			<span class="ff-leg-market">${esc(leg.marketName)} · <strong>${esc(leg.outcomeName)}</strong></span>
-			<span class="ff-leg-back">Back\u00a0: <strong>${fmt(leg.b)}</strong> sur ${esc(leg.cover.type !== 'lay' ? _fbSite : _fbSite)}</span>
+			<span class="ff-leg-back">Back\u00a0: <strong>${fmt(_amount * scale)}\u00a0€</strong> \u00d7 cote <strong>${fmt(leg.b)}</strong> sur ${esc(_fbSite)}</span>
 			<span class="ff-leg-cover">${esc(leg.cover.site)} ${coverBadge(leg.cover)} ${esc(leg.cover.outcomeName)} · ${coverOddsDetail}</span>
 			<span class="ff-leg-stake">Mise couv.\u00a0: <strong>${stakeDetail}</strong></span>
 		</div>
@@ -1138,21 +1178,22 @@ function buildSeqCard(result) {
 	</div>`;
 }
 
-function buildToutFBBetRow(bet, idx, betType = 'fb') {
+function buildToutFBBetRow(bet, idx, betType = 'fb', scale = 1) {
 	const legLabels = bet.legs.map(l => {
 		const ev = _data?.[l.eventKey];
 		const evName = ev ? eventDisplayName(l.eventKey, ev) : l.eventKey;
 		return `${esc(evName)}\u00a0<strong>${esc(l.outcomeName)}</strong>`;
 	}).join(' + ');
+	const s = bet.stake * scale;
 	const returnDetail = betType === 'cash'
-		? `${fmt(bet.stake)}\u00a0€ \u00d7 ${fmt(bet.odds)} = <strong>${fmt(bet.stake * bet.odds)}\u00a0€</strong>`
-		: `${fmt(bet.stake)}\u00a0€ \u00d7 (${fmt(bet.odds)}\u2212\u20611) = <strong>${fmt(bet.stake * (bet.odds - 1))}\u00a0€</strong>`;
+		? `${fmt(s)}\u00a0€ \u00d7 ${fmt(bet.odds)} = <strong>${fmt(s * bet.odds)}\u00a0€</strong>`
+		: `${fmt(s)}\u00a0€ \u00d7 (${fmt(bet.odds)}\u2212\u20611) = <strong>${fmt(s * (bet.odds - 1))}\u00a0€</strong>`;
 	return `
 	<div class="ff-bet">
 		<span class="ff-bet-num">FB${idx + 1}</span>
 		<div class="ff-bet-desc">
 			<span class="ff-bet-legs">${legLabels}</span>
-			<span class="ff-bet-site">${esc(bet.site)} · cote <strong>${fmt(bet.odds)}</strong> · mise <strong>${fmt(bet.stake)}\u00a0€</strong></span>
+			<span class="ff-bet-site">${esc(bet.site)} · cote <strong>${fmt(bet.odds)}</strong> · mise <strong>${fmt(s)}\u00a0€</strong></span>
 		</div>
 		<span class="ff-bet-profit">${returnDetail}</span>
 	</div>`;
@@ -1180,14 +1221,14 @@ function buildToutFBCard(result) {
 	</div>`;
 }
 
-function buildMixteCashRow(result) {
+function buildMixteCashRow(result, scale = 1) {
 	const ev = _data?.[result.cashEk];
 	const evName = ev ? eventDisplayName(result.cashEk, ev) : result.cashEk;
 	const p = result.cashPartition;
 	const cover = result.cashCover;
 	const stakeDetail = result.cashLiability != null
-		? `${fmt(result.cashStake)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(result.cashLiability)}\u00a0€)</span>`
-		: `${fmt(result.cashStake)}\u00a0€`;
+		? `${fmt(result.cashStake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(result.cashLiability * scale)}\u00a0€)</span>`
+		: `${fmt(result.cashStake * scale)}\u00a0€`;
 	const oddsDetail = cover.lGross != null
 		? `${fmt(cover.odds)} <span class="ff-sub">brut\u00a0${fmt(cover.lGross)}</span>`
 		: `${fmt(cover.odds)}`;
@@ -1249,6 +1290,20 @@ function rowMethod(result) {
 function rowMatches(result) {
 	if (result.method === 1) return new Set(result.legs.map(l => l.eventKey)).size;
 	return result.nMatches ?? '-';
+}
+
+function rowFirstDate(result) {
+	if (result.method === 1) {
+		const first = result.legs.reduce((min, l) => (l.dateTime && (!min || l.dateTime < min)) ? l.dateTime : min, null);
+		return first ? formatDate(first) : '—';
+	}
+	const keys = result.eventKeys || [];
+	let first = null;
+	for (const ek of keys) {
+		const dt = _data?.[ek]?.dateTime;
+		if (dt && (!first || dt < first)) first = dt;
+	}
+	return first ? formatDate(first) : '—';
 }
 
 function resultEventKeys(result) {
@@ -1359,20 +1414,20 @@ function rowCote(result) {
 	return '\u2013';
 }
 
-function buildDetailContent(result) {
+function buildDetailContent(result, scale = 1) {
 	if (result.method === 1) {
 		const rows = result.legs.map((leg, i) =>
-			buildSeqLegRow(leg, i, i > 0 ? result.gaps[i - 1] : null)
+			buildSeqLegRow(leg, i, i > 0 ? result.gaps[i - 1] : null, scale)
 		).join('');
 		return `<div class="ff-detail-legs">${rows}</div>`;
 	}
 	if (result.method === 2) {
-		const rows = result.bets.map((b, i) => buildToutFBBetRow(b, i, result.betType)).join('');
+		const rows = result.bets.map((b, i) => buildToutFBBetRow(b, i, result.betType, scale)).join('');
 		return `<div class="ff-detail-bets">${rows}</div>`;
 	}
 	if (result.method === 3) {
-		const cashRow = buildMixteCashRow(result);
-		const betRows = result.fbBets.map((b, i) => buildToutFBBetRow(b, i, result.betType)).join('');
+		const cashRow = buildMixteCashRow(result, scale);
+		const betRows = result.fbBets.map((b, i) => buildToutFBBetRow(b, i, result.betType, scale)).join('');
 		return `<div class="ff-detail-legs">${cashRow}</div><div class="ff-m3-divider"></div><div class="ff-detail-bets">${betRows}</div>`;
 	}
 	return '';
@@ -1380,17 +1435,31 @@ function buildDetailContent(result) {
 
 function buildTableRow(result, idx) {
 	const isCash = result.betType === 'cash';
+	const scale = getDisplayScale(result);
 	const liab = rowCashEngaged(result);
-	const profitClass = isCash ? 'neg' : 'pos';
-	const valueStr = isCash
-		? `\u2212${fmt(result.loss)}\u00a0\u20ac`
-		: `+${fmt(result.profit)}\u00a0\u20ac`;
-	const liabStr = liab !== null ? `${fmt(liab)}\u00a0\u20ac` : '\u2013';
+	const obj = result._cashObjective;
+	let profitClass, valueStr;
+	if (obj === 'gagner') {
+		const n = (result.netIfWins ?? 0) * scale;
+		profitClass = n >= 0 ? 'pos' : 'neg';
+		valueStr = `${n >= 0 ? '+' : '\u2212'}${fmt(Math.abs(n))}\u00a0\u20ac`;
+	} else if (obj === 'perdre') {
+		const n = (result.netIfLoses ?? 0) * scale;
+		profitClass = 'neg';
+		valueStr = `si\u00a0perdu\u00a0: \u2212${fmt(Math.abs(n))}\u00a0\u20ac`;
+	} else {
+		profitClass = isCash ? 'neg' : 'pos';
+		valueStr = isCash
+			? `\u2212${fmt(result.loss * scale)}\u00a0\u20ac`
+			: `+${fmt(result.profit * scale)}\u00a0\u20ac`;
+	}
+	const liabStr = liab !== null ? `${fmt(liab * scale)}\u00a0\u20ac` : '\u2013';
 	const rClass = isCash ? rateClassCash(result.rate) : rateClass(result.rate);
 	return `
 		<button class="ff-row-expand" id="ff-expand-${idx}" onclick="toggleDetail(${idx})" aria-label="Détails"><span class="ff-expand-icon">&#9654;</span></button>
 		<div class="ff-td ff-td-muted${result.method === 3 ? ' ff-td-events' : ''}">${result.method === 3 ? rowMethod(result) : esc(rowMethod(result))}</div>
 		<div class="ff-td ff-td-center">${rowMatches(result)}</div>
+		<div class="ff-td ff-td-mono ff-td-date">${esc(rowFirstDate(result))}</div>
 		<div class="ff-td ff-td-events">${eventsLines(result)}</div>
 		<div class="ff-td ff-td-muted ff-td-events">${rowMarketsHtml(result)}</div>
 		<div class="ff-td ff-td-muted ff-td-events">${rowTypeHtml(result)}</div>
@@ -1399,7 +1468,7 @@ function buildTableRow(result, idx) {
 		<div class="ff-td ff-td-mono">${esc(rowCote(result))}</div>
 		<div class="ff-td ff-td-mono ${profitClass}">${esc(valueStr)}</div>
 		<div class="ff-td ${rClass} ff-td-bold">${fmt(result.rate * 100, 1)}\u00a0%</div>
-		<div class="ff-tr-detail" id="ff-detail-${idx}" hidden>${buildDetailContent(result)}</div>`;
+		<div class="ff-tr-detail" id="ff-detail-${idx}" hidden>${buildDetailContent(result, scale)}</div>`;
 }
 
 function toggleDetail(idx) {
@@ -1413,6 +1482,7 @@ function toggleDetail(idx) {
 function renderResults(results) {
 	_results = results;
 	_visibleCount = 20;
+	document.getElementById('ff-filters').hidden = false;
 	const el = document.getElementById('ff-results');
 	el.hidden = false;
 
@@ -1441,6 +1511,7 @@ function renderPage() {
 	const q = (document.getElementById('ff-search')?.value ?? '').trim().toLowerCase();
 
 	const filtered = _results.filter(r => {
+		if (_filterMinOdds > 0 && resultMinOdds(r) < _filterMinOdds) return false;
 		if (!q) return true;
 		if (r.method === 1) return r.legs.some(l => l.evName.toLowerCase().includes(q) || l.evComp.toLowerCase().includes(q));
 		return r.eventKeys.some(ek => {
@@ -1475,6 +1546,7 @@ function renderPage() {
 		<div class="ff-th"></div>
 		<div class="ff-th">Méthode</div>
 		<div class="ff-th ff-th-center">Matchs</div>
+		<div class="ff-th">Date event</div>
 		<div class="ff-th">Événement(s)</div>
 		<div class="ff-th">Marchés</div>
 		<div class="ff-th">Type</div>
@@ -1499,27 +1571,33 @@ function showMore() { _visibleCount += 20; renderPage(); }
 // ===== UI =====
 
 function updateTabSummaries() {
+	const applyFilter = arr => _filterMinOdds > 0 ? arr.filter(r => resultMinOdds(r) >= _filterMinOdds) : arr;
+
 	document.querySelectorAll('.ff-count-btn[data-method][data-legs]').forEach(btn => {
 		const m = +btn.dataset.method;
 		const n = +btn.dataset.legs;
-		const res = _allResults[`${m}_${n}`];
+		const res = applyFilter(_allResults[`${m}_${n}`] ?? []);
 		const num = btn.dataset.legs;
-		if (!res || !res.length) { btn.innerHTML = esc(num); return; }
+		if (!res.length) { btn.innerHTML = esc(num); return; }
 		const best = res[0];
+		const scale = getDisplayScale(best);
 		const isCash = best.betType === 'cash';
-		const valueStr = isCash ? `\u2212${fmt(best.loss, 2)}\u00a0\u20ac` : `+${fmt(best.profit, 2)}\u00a0\u20ac`;
+		const valueStr = isCash ? `\u2212${fmt(best.loss * scale, 2)}\u00a0\u20ac` : `+${fmt(best.profit * scale, 2)}\u00a0\u20ac`;
 		btn.innerHTML = `${esc(num)}<span class="ff-count-summary">${fmt(best.rate * 100, 1)}\u00a0%<br>${valueStr}</span>`;
 	});
 
 	// Résumé global pour l'onglet "Tout"
 	const toutLabel = document.querySelector('.ff-method-label[data-name="Tout"]');
 	if (toutLabel) {
-		const all = Object.values(_allResults).flat();
+		const all = applyFilter(Object.values(_allResults).flat());
 		if (all.length) {
 			const best = all.reduce((b, r) => r.rate > b.rate ? r : b);
+			const scale = getDisplayScale(best);
 			const isCash = best.betType === 'cash';
-			const valueStr = isCash ? `\u2212${fmt(best.loss, 2)}\u00a0\u20ac` : `+${fmt(best.profit, 2)}\u00a0\u20ac`;
+			const valueStr = isCash ? `\u2212${fmt(best.loss * scale, 2)}\u00a0\u20ac` : `+${fmt(best.profit * scale, 2)}\u00a0\u20ac`;
 			toutLabel.innerHTML = `Tout<span class="ff-count-summary">${fmt(best.rate * 100, 1)}\u00a0%<br>${valueStr}</span>`;
+		} else {
+			toutLabel.innerHTML = 'Tout';
 		}
 	}
 }
@@ -1531,6 +1609,33 @@ function clearTabSummaries() {
 	document.querySelectorAll('.ff-method-label[data-name]').forEach(label => {
 		label.innerHTML = esc(label.dataset.name);
 	});
+}
+
+function resultMinOdds(result) {
+	if (result.method === 1) return result.B;
+	if (result.method === 2) return Math.min(...result.bets.map(b => b.odds));
+	if (result.method === 3) return Math.min(result.cashCover?.odds ?? Infinity, ...result.fbBets.map(b => b.odds));
+	return 0;
+}
+
+function resultMinStake(result) {
+	if (result.method === 1) return _amount; // back bet = toujours _amount sur le site sélectionné
+	if (result.method === 2) return Math.min(...result.bets.map(b => b.stake));
+	if (result.method === 3) return Math.min(...result.fbBets.map(b => b.stake));
+	return _amount;
+}
+
+function getDisplayScale(result) {
+	if (_amountMode !== 'min') return 1;
+	const ms = resultMinStake(result);
+	return ms > 0 ? _amountMin / ms : 1;
+}
+
+function setMinOddsFilter(val) {
+	_filterMinOdds = parseFloat(val) || 0;
+	const badge = document.getElementById('ff-filter-odds-badge');
+	if (badge) badge.textContent = _filterMinOdds > 0 ? `≥ ${fmt(_filterMinOdds)}` : '';
+	if (Object.keys(_allResults).length) showCurrentResults();
 }
 
 function setMethodLegs(m, n) {
@@ -1554,6 +1659,19 @@ function setBetType(t) {
 	document.querySelectorAll('.ff-bettype-btn').forEach(b =>
 		b.classList.toggle('ff-btn--active', b.dataset.bettype === t)
 	);
+	const objField = document.getElementById('ff-objective-field');
+	if (objField) objField.hidden = t !== 'cash';
+	_allResults = {};
+	clearTabSummaries();
+	document.getElementById('ff-results').hidden = true;
+	savePrefs();
+}
+
+function setObjective(obj) {
+	_cashObjective = obj;
+	document.querySelectorAll('.ff-objective-btn').forEach(b =>
+		b.classList.toggle('ff-btn--active', b.dataset.objective === obj)
+	);
 	_allResults = {};
 	clearTabSummaries();
 	document.getElementById('ff-results').hidden = true;
@@ -1561,6 +1679,7 @@ function setBetType(t) {
 }
 
 function showCurrentResults() {
+	updateTabSummaries();
 	const el = document.getElementById('ff-results');
 	if (_method === 0) {
 		const all = Object.values(_allResults).flat();
@@ -1587,7 +1706,9 @@ function yieldToUI() { return new Promise(r => setTimeout(r, 0)); }
 
 async function tryRender() {
 	if (!_data) return;
-	_amount = parseFloat(document.getElementById('ff-amount')?.value) || 10;
+	_amountTotal = parseFloat(document.getElementById('ff-amount-total')?.value) || 10;
+	_amountMin = parseFloat(document.getElementById('ff-amount-min')?.value) || 2;
+	_amount = _amountTotal;
 	_fbSite = document.getElementById('ff-site-select')?.value ?? '';
 	_allResults = {};
 
@@ -1637,7 +1758,6 @@ async function tryRender() {
 	btn.disabled = false;
 	setTimeout(() => { progressWrap.hidden = true; progressBar.style.width = '0%'; }, 500);
 
-	updateTabSummaries();
 	showCurrentResults();
 }
 
@@ -1682,10 +1802,27 @@ function updateSiteSelect(sites) {
 	field.hidden = false;
 }
 
-function stepAmount(delta) {
-	const input = document.getElementById('ff-amount');
+function stepAmountTotal(delta) {
+	const input = document.getElementById('ff-amount-total');
 	input.value = Math.max(1, (parseFloat(input.value) || 0) + delta);
 	savePrefs();
+}
+
+function stepAmountMin(delta) {
+	const input = document.getElementById('ff-amount-min');
+	input.value = Math.max(0.5, (parseFloat(input.value) || 0) + delta);
+	savePrefs();
+}
+
+function setAmountMode(mode) {
+	_amountMode = mode;
+	document.querySelectorAll('.ff-amountmode-btn').forEach(b =>
+		b.classList.toggle('ff-btn--active', b.dataset.mode === mode)
+	);
+	document.getElementById('ff-amount-total-wrap').hidden = mode !== 'total';
+	document.getElementById('ff-amount-min-wrap').hidden = mode !== 'min';
+	savePrefs();
+	if (Object.keys(_allResults).length) showCurrentResults();
 }
 
 async function pasteFromClipboard() {
@@ -1709,12 +1846,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 	// Restore saved preferences
 	const prefs = loadPrefs();
 	if (prefs.betType) setBetType(prefs.betType);
-	if (prefs.amount) {
-		const input = document.getElementById('ff-amount');
-		if (input) input.value = prefs.amount;
-	}
+	if (prefs.cashObjective) setObjective(prefs.cashObjective);
+	if (prefs.amountMode) setAmountMode(prefs.amountMode);
+	const savedTotal = prefs.amountTotal ?? prefs.amount; // compat ancienne clé
+	if (savedTotal) { const i = document.getElementById('ff-amount-total'); if (i) i.value = savedTotal; }
+	if (prefs.amountMin) { const i = document.getElementById('ff-amount-min'); if (i) i.value = prefs.amountMin; }
 	if (prefs.method && prefs.nLegs) setMethodLegs(prefs.method, prefs.nLegs);
-	document.getElementById('ff-amount')?.addEventListener('change', savePrefs);
+	document.getElementById('ff-amount-total')?.addEventListener('change', savePrefs);
+	document.getElementById('ff-amount-min')?.addEventListener('change', savePrefs);
 	document.getElementById('ff-site-select')?.addEventListener('change', savePrefs);
 
 	// Load coverage rules from external JSON (overrides embedded defaults if successful)
