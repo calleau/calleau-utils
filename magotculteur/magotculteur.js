@@ -1336,21 +1336,96 @@ function rowCote(result) {
 	return '\u2013';
 }
 
+function buildSeqDetailFlat(result, scale = 1) {
+	const amount = _amount * scale;
+	// Combined back row
+	const legTitles = result.legs.map(leg =>
+		`${esc(leg.evName)}\u00a0<strong>${esc(leg.outcomeName)}</strong>`
+	).join(' + ');
+	const backRow = `
+	<div class="ff-betrow">
+		<span class="ff-betrow-badge ff-betrow-badge--back">BACK</span>
+		<div class="ff-betrow-body">
+			<span class="ff-betrow-title">${legTitles}</span>
+			<span class="ff-betrow-detail">${esc(_fbSite)} · cote <strong>${fmt(result.B)}</strong> · mise <strong>${fmt(amount)}\u00a0€</strong></span>
+		</div>
+	</div>`;
+
+	// One cover row per leg
+	const coverRows = result.legs.map(leg => {
+		const cover = leg.cover;
+		const badgeClass = cover.type === 'lay' ? 'lay' : 'back';
+		const badgeLabel = cover.type === 'lay' ? 'LAY' : 'BACK';
+		const stakeStr = leg.liability != null
+			? `${fmt(leg.stake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(leg.liability * scale)}\u00a0€)</span>`
+			: `${fmt(leg.stake * scale)}\u00a0€`;
+		const oddsStr = cover.lGross != null
+			? `${fmt(cover.odds)} <span class="ff-sub">brut\u00a0${fmt(cover.lGross)}</span>`
+			: `${fmt(cover.odds)}`;
+		return `
+	<div class="ff-betrow">
+		<span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">${badgeLabel}</span>
+		<div class="ff-betrow-body">
+			<span class="ff-betrow-title">${esc(leg.evName)}\u00a0<strong>${esc(cover.outcomeName)}</strong></span>
+			<span class="ff-betrow-detail">${esc(cover.site)} · ${esc(leg.marketName)} · cote ${oddsStr} · mise ${stakeStr}</span>
+		</div>
+	</div>`;
+	}).join('');
+
+	return `<div class="ff-betlist">${backRow}${coverRows}</div>`;
+}
+
+function buildMixteDetailFlat(result, scale = 1) {
+	const ev = _data?.[result.cashEk];
+	const evName = ev ? eventDisplayName(result.cashEk, ev) : result.cashEk;
+	const p = result.cashPartition;
+	const cover = result.cashCover;
+	const amount = _amount * scale;
+
+	// FB back row (DC part placed as freebet on fbSite)
+	const fbRow = `
+	<div class="ff-betrow">
+		<span class="ff-betrow-badge ff-betrow-badge--fb">FB</span>
+		<div class="ff-betrow-body">
+			<span class="ff-betrow-title">${esc(evName)}\u00a0<strong>${esc(p.dcOutcome)}</strong></span>
+			<span class="ff-betrow-detail">${esc(_fbSite)} · ${esc(p.dcMarket)} · mise <strong>${fmt(amount)}\u00a0€</strong></span>
+		</div>
+	</div>`;
+
+	// Cash cover row
+	const badgeClass = cover.type === 'lay' ? 'lay' : 'back';
+	const badgeLabel = cover.type === 'lay' ? 'LAY' : 'BACK';
+	const stakeStr = result.cashLiability != null
+		? `${fmt(result.cashStake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(result.cashLiability * scale)}\u00a0€)</span>`
+		: `${fmt(result.cashStake * scale)}\u00a0€`;
+	const oddsStr = cover.lGross != null
+		? `${fmt(cover.odds)} <span class="ff-sub">brut\u00a0${fmt(cover.lGross)}</span>`
+		: `${fmt(cover.odds)}`;
+	const coverRow = `
+	<div class="ff-betrow">
+		<span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">${badgeLabel}</span>
+		<div class="ff-betrow-body">
+			<span class="ff-betrow-title">${esc(evName)}\u00a0<strong>${esc(cover.outcomeName)}</strong></span>
+			<span class="ff-betrow-detail">${esc(cover.site)} · cote ${oddsStr} · mise ${stakeStr}</span>
+		</div>
+	</div>`;
+
+	// FB bet rows (other freebets)
+	const betRows = result.fbBets.map((b, i) => buildToutFBBetRow(b, i, result.betType, scale)).join('');
+
+	return `<div class="ff-betlist">${fbRow}${coverRow}</div><div class="ff-m3-divider"></div><div class="ff-detail-bets">${betRows}</div>`;
+}
+
 function buildDetailContent(result, scale = 1) {
 	if (result.method === 1) {
-		const rows = result.legs.map((leg, i) =>
-			buildSeqLegRow(leg, i, i > 0 ? result.gaps[i - 1] : null, scale)
-		).join('');
-		return `<div class="ff-detail-legs">${rows}</div>`;
+		return buildSeqDetailFlat(result, scale);
 	}
 	if (result.method === 2) {
 		const rows = result.bets.map((b, i) => buildToutFBBetRow(b, i, result.betType, scale)).join('');
 		return `<div class="ff-detail-bets">${rows}</div>`;
 	}
 	if (result.method === 3) {
-		const cashRow = buildMixteCashRow(result, scale);
-		const betRows = result.fbBets.map((b, i) => buildToutFBBetRow(b, i, result.betType, scale)).join('');
-		return `<div class="ff-detail-legs">${cashRow}</div><div class="ff-m3-divider"></div><div class="ff-detail-bets">${betRows}</div>`;
+		return buildMixteDetailFlat(result, scale);
 	}
 	return '';
 }
