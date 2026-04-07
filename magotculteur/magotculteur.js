@@ -38,87 +38,8 @@ function loadPrefs() {
 	try { return JSON.parse(localStorage.getItem(_PREFS_KEY) || '{}'); } catch { return {}; }
 }
 
-// Coverage rules — loaded from coverage-rules.json, embedded here as default fallback
-let _coverageRules = [
-	{ "issues": 2,
-		"A": [
-			{ "market": "Résultats", "issue": "1", "betType": "Back" },
-			{ "market": "Double Chance", "issue": "X2", "betType": "Lay" },
-			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Lay" }
-		],
-		"B": [
-			{ "market": "Résultats", "issue": "1", "betType": "Lay" },
-			{ "market": "Double Chance", "issue": "X2", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Lay" },
-			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Back" }
-		]
-	},
-	{ "issues": 2,
-		"A": [
-			{ "market": "Résultats", "issue": "X", "betType": "Back" },
-			{ "market": "Double Chance", "issue": "12", "betType": "Lay" }
-		],
-		"B": [
-			{ "market": "Résultats", "issue": "X", "betType": "Lay" },
-			{ "market": "Double Chance", "issue": "12", "betType": "Back" }
-		]
-	},
-	{ "issues": 2,
-		"A": [
-			{ "market": "Résultats", "issue": "2", "betType": "Back" },
-			{ "market": "Double Chance", "issue": "1X", "betType": "Lay" },
-			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Lay" }
-		],
-		"B": [
-			{ "market": "Résultats", "issue": "2", "betType": "Lay" },
-			{ "market": "Double Chance", "issue": "1X", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Lay" },
-			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Back" }
-		]
-	},
-	{ "issues": 2,
-		"A": [
-			{ "market": "Vainqueur", "issue": "1", "betType": "Back" },
-			{ "market": "Vainqueur", "issue": "2", "betType": "Lay" }
-		],
-		"B": [
-			{ "market": "Vainqueur", "issue": "2", "betType": "Back" },
-			{ "market": "Vainqueur", "issue": "1", "betType": "Lay" }
-		]
-	},
-	{ "issues": 2,
-		"A": [
-			{ "market": "BTTS", "issue": "Oui", "betType": "Back" },
-			{ "market": "BTTS", "issue": "Non", "betType": "Lay" }
-		],
-		"B": [
-			{ "market": "BTTS", "issue": "Oui", "betType": "Lay" },
-			{ "market": "BTTS", "issue": "Non", "betType": "Back" }
-		]
-	},
-	{ "issues": 2,
-		"A": [
-			{ "market": "/^Total \\w+$/", "issue": "/^(\\d+,\\d+)([+-])$/", "betType": "Back" },
-			{ "market": "$market", "issue": "$1$2~+-", "betType": "Lay" }
-		],
-		"B": [
-			{ "market": "$market", "issue": "$1$2", "betType": "Lay" },
-			{ "market": "$market", "issue": "$1$2~+-", "betType": "Back" }
-		]
-	},
-	{ "issues": 2,
-		"A": [
-			{ "market": "Asian Handicap", "issue": "/^(1|2) \\(\\+(\\d+,\\d+)\\)$/", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "$1~12 (-$2)", "betType": "Lay" }
-		],
-		"B": [
-			{ "market": "Asian Handicap", "issue": "$1 (+$2)", "betType": "Lay" },
-			{ "market": "Asian Handicap", "issue": "$1~12 (-$2)", "betType": "Back" }
-		]
-	}
-];
+// Coverage rules — chargées depuis coverage-rules.json au démarrage (requis)
+let _coverageRules = [];
 
 const MIN_GAP_MS = 90 * 60 * 1000;
 
@@ -321,7 +242,8 @@ function findCoversForOutcome(event, mainMarketName, mainOutcomeName, _mainOddsM
 					if (!oEntry) continue;
 					const [oName, oddsMap] = oEntry;
 					for (const [site, val] of Object.entries(oddsMap)) {
-						if (site === fbSite) continue;
+						// Pour un Lay, on ne peut pas couvrir sur le même site que le back
+						if (resolved.betType === 'Lay' && site === fbSite) continue;
 						if (resolved.betType === 'Lay') {
 							const lay = getLayInfo(val);
 							if (!lay) continue;
@@ -1521,6 +1443,7 @@ function renderPage() {
 		});
 	});
 
+	filtered.sort((a, b) => resultSortKey(b) - resultSortKey(a));
 	const visible = filtered.slice(0, 20);
 
 	// Compteur — seulement hors onglet Tout
@@ -1623,6 +1546,15 @@ function resultMinStake(result) {
 	if (result.method === 2) return Math.min(...result.bets.map(b => b.stake));
 	if (result.method === 3) return Math.min(...result.fbBets.map(b => b.stake));
 	return _amount;
+}
+
+function resultSortKey(result) {
+	const scale = getDisplayScale(result);
+	if (result.betType !== 'cash') return (result.profit ?? 0) * scale;
+	const obj = result._cashObjective;
+	if (obj === 'gagner') return (result.netIfWins ?? 0) * scale;
+	if (obj === 'perdre') return (result.netIfLoses ?? 0) * scale;
+	return -(result.loss * scale); // miser : moins de perte = mieux
 }
 
 function getDisplayScale(result) {
@@ -1826,17 +1758,9 @@ function setAmountMode(mode) {
 }
 
 async function pasteFromClipboard() {
-	const el = document.getElementById('ff-json');
-	el.focus();
-	el.select();
-	// execCommand('paste') est silencieux (pas de dialog) mais déprécié
-	if (document.execCommand('paste')) {
-		onJsonChange();
-		return;
-	}
-	// Fallback : API clipboard moderne (peut demander une permission la 1ère fois)
 	try {
 		const text = await navigator.clipboard.readText();
+		const el = document.getElementById('ff-json');
 		el.value = text;
 		onJsonChange();
 	} catch {}
@@ -1856,11 +1780,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 	document.getElementById('ff-amount-min')?.addEventListener('change', savePrefs);
 	document.getElementById('ff-site-select')?.addEventListener('change', savePrefs);
 
-	// Load coverage rules from external JSON (overrides embedded defaults if successful)
+	// Chargement obligatoire des règles de couverture
 	try {
 		const r = await fetch('../assets/coverage-rules.json');
-		if (r.ok) _coverageRules = await r.json();
-	} catch {}
+		if (!r.ok) throw new Error(`HTTP ${r.status}`);
+		_coverageRules = await r.json();
+	} catch (e) {
+		document.getElementById('ff-json-error').textContent =
+			`Erreur : impossible de charger coverage-rules.json (${e.message}). Ouvrez la page via un serveur local.`;
+		document.getElementById('ff-json-error').hidden = false;
+		return;
+	}
 
 	if (new URLSearchParams(location.search).get('autopaste') === '1') {
 		try {
