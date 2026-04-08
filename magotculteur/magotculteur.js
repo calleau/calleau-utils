@@ -14,7 +14,7 @@ let _amountMode = 'total'; // 'total' | 'min'
 let _cashObjective = 'miser'; // 'miser' | 'gagner' | 'perdre'
 let _filterMinOdds = 0;
 let _fbSite = '';
-let _visibleCount = 20;
+let _visibleCount = 50;
 
 // ===== PREFS (localStorage) =====
 const _PREFS_KEY = 'ff_prefs';
@@ -1053,7 +1053,27 @@ function sitePill(name, isLay = false) {
 	const key = _SITE_KEYS.find(k => name.toLowerCase().includes(k));
 	const dataSite = key ? ` data-site="${key}"` : '';
 	const layClass = isLay && key === 'piwi' ? ' ff-site-pill--lay' : '';
-	return `<span class="ff-site-pill${layClass}"${dataSite}>${esc(name)}</span>`;
+	const label = key === 'piwi' ? `PIWI ${isLay ? 'Lay' : 'Back'}` : esc(name);
+	return `<span class="ff-site-pill${layClass}"${dataSite}>${label}</span>`;
+}
+
+function miseTag(type) {
+	return type === 'fb'
+		? `<span class="ff-mise-tag ff-mise-tag--fb">Freebet</span>`
+		: `<span class="ff-mise-tag ff-mise-tag--cash">Cash</span>`;
+}
+
+function resolveOutcome(outcomeName, eventKey, marketName) {
+	const ev = _data?.[eventKey];
+	const opp = ev?.opponents;
+	if (!opp) return `${esc(marketName)} · ${esc(outcomeName)}`;
+	let label;
+	const k = outcomeName.trim();
+	if (k === '1') label = esc(opp['1'] ?? outcomeName);
+	else if (k === '2') label = esc(opp['2'] ?? outcomeName);
+	else if (k === 'X') label = 'Nul';
+	else label = esc(outcomeName);
+	return `${esc(marketName)} · ${label}`;
 }
 
 function buildSeqLegRow(leg, idx, gap, scale = 1) {
@@ -1062,7 +1082,7 @@ function buildSeqLegRow(leg, idx, gap, scale = 1) {
 		? `${fmt(leg.stake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(leg.liability * scale)}\u00a0€)</span>`
 		: `${fmt(leg.stake * scale)}\u00a0€`;
 	const coverOddsDetail = leg.cover.lGross != null
-		? `${fmt(leg.cover.odds)} <span class="ff-sub">brut\u00a0${fmt(leg.cover.lGross)}</span>`
+		? `${fmt(leg.cover.lGross)}`
 		: `${fmt(leg.cover.odds)}`;
 	return `
 	<div class="ff-leg">
@@ -1110,23 +1130,20 @@ function buildSeqCard(result) {
 }
 
 function buildToutFBBetRow(bet, idx, betType = 'fb', scale = 1) {
-	const legLabels = bet.legs.map(l => {
+	const titleParts = bet.legs.map(l => {
 		const ev = _data?.[l.eventKey];
-		const evName = ev ? eventDisplayName(l.eventKey, ev) : l.eventKey;
-		return `${esc(evName)}\u00a0<strong>${esc(l.outcomeName)}</strong>`;
+		return esc(ev ? eventDisplayName(l.eventKey, ev) : l.eventKey);
 	}).join(' + ');
+	const outcomeParts = bet.legs.map(l => resolveOutcome(l.outcomeName, l.eventKey, l.marketName)).join(' + ');
 	const s = bet.stake * scale;
-	const returnDetail = betType === 'cash'
-		? `${fmt(s)}\u00a0€ \u00d7 ${fmt(bet.odds)} = <strong>${fmt(s * bet.odds)}\u00a0€</strong>`
-		: `${fmt(s)}\u00a0€ \u00d7 (${fmt(bet.odds)}\u2212\u20611) = <strong>${fmt(s * (bet.odds - 1))}\u00a0€</strong>`;
+	const detail = `${sitePill(bet.site)} · ${outcomeParts} · Mise <strong>${fmt(s)}\u00a0€</strong> ${miseTag(betType)} · Cote <strong>${fmt(bet.odds)}</strong>`;
 	return `
 	<div class="ff-bet">
-		<span class="ff-bet-num">FB${idx + 1}</span>
+		<span class="ff-bet-num">Pari\u00a0${idx + 1}</span>
 		<div class="ff-bet-desc">
-			<span class="ff-bet-legs">${legLabels}</span>
-			<span class="ff-bet-site">${sitePill(bet.site)} · cote <strong>${fmt(bet.odds)}</strong> · mise <strong>${fmt(s)}\u00a0€</strong></span>
+			<span class="ff-bet-legs">${titleParts}</span>
+			<span class="ff-bet-site">${detail}</span>
 		</div>
-		<span class="ff-bet-profit">${returnDetail}</span>
 	</div>`;
 }
 
@@ -1161,7 +1178,7 @@ function buildMixteCashRow(result, scale = 1) {
 		? `${fmt(result.cashStake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(result.cashLiability * scale)}\u00a0€)</span>`
 		: `${fmt(result.cashStake * scale)}\u00a0€`;
 	const oddsDetail = cover.lGross != null
-		? `${fmt(cover.odds)} <span class="ff-sub">brut\u00a0${fmt(cover.lGross)}</span>`
+		? `${fmt(cover.lGross)}`
 		: `${fmt(cover.odds)}`;
 	return `
 	<div class="ff-leg ff-leg-cash">
@@ -1348,35 +1365,34 @@ function rowCote(result) {
 function buildSeqDetailFlat(result, scale = 1) {
 	const amount = _amount * scale;
 	// Combined back row
-	const legTitles = result.legs.map(leg =>
-		`${esc(leg.evName)}\u00a0<strong>${esc(leg.outcomeName)}</strong>`
-	).join(' + ');
+	const backTitles = result.legs.map(leg => esc(leg.evName)).join(' + ');
+	const backOutcomes = result.legs.map(leg => resolveOutcome(leg.outcomeName, leg.eventKey, leg.marketName)).join(' + ');
 	const backRow = `
 	<div class="ff-betrow">
-		<span class="ff-betrow-badge ff-betrow-badge--back">BACK</span>
+		<span class="ff-betrow-badge ff-betrow-badge--back">Seq.\u00a01</span>
 		<div class="ff-betrow-body">
-			<span class="ff-betrow-title">${legTitles}</span>
-			<span class="ff-betrow-detail">${sitePill(_fbSite)} · cote <strong>${fmt(result.B)}</strong> · mise <strong>${fmt(amount)}\u00a0€</strong></span>
+			<span class="ff-betrow-title">${backTitles}</span>
+			<span class="ff-betrow-detail">${sitePill(_fbSite)} · ${backOutcomes} · Mise <strong>${fmt(amount)}\u00a0€</strong> ${miseTag('fb')} · Cote <strong>${fmt(result.B)}</strong></span>
 		</div>
 	</div>`;
 
 	// One cover row per leg
-	const coverRows = result.legs.map(leg => {
+	const coverRows = result.legs.map((leg, i) => {
 		const cover = leg.cover;
 		const badgeClass = cover.type === 'lay' ? 'lay' : 'back';
-		const badgeLabel = cover.type === 'lay' ? 'LAY' : 'BACK';
-		const stakeStr = leg.liability != null
-			? `${fmt(leg.stake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(leg.liability * scale)}\u00a0€)</span>`
-			: `${fmt(leg.stake * scale)}\u00a0€`;
 		const oddsStr = cover.lGross != null
-			? `${fmt(cover.odds)} <span class="ff-sub">brut\u00a0${fmt(cover.lGross)}</span>`
-			: `${fmt(cover.odds)}`;
+			? `<strong>${fmt(cover.lGross)}</strong>`
+			: `<strong>${fmt(cover.odds)}</strong>`;
+		const liabilityStr = leg.liability != null
+			? ` · Liability <strong>${fmt(leg.liability * scale)}\u00a0€</strong>`
+			: '';
+		const coverOutcome = resolveOutcome(cover.outcomeName, leg.eventKey, leg.marketName);
 		return `
 	<div class="ff-betrow">
-		<span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">${badgeLabel}</span>
+		<span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">Seq.\u00a0${i + 2}</span>
 		<div class="ff-betrow-body">
-			<span class="ff-betrow-title">${esc(leg.evName)}\u00a0<strong>${esc(cover.outcomeName)}</strong></span>
-			<span class="ff-betrow-detail">${sitePill(cover.site, cover.type === 'lay')} · ${esc(leg.marketName)} · cote ${oddsStr} · mise ${stakeStr}</span>
+			<span class="ff-betrow-title">${esc(leg.evName)}</span>
+			<span class="ff-betrow-detail">${sitePill(cover.site, cover.type === 'lay')} · ${coverOutcome} · Mise <strong>${fmt(leg.stake * scale)}\u00a0€</strong> ${miseTag('cash')} · Cote ${oddsStr}${liabilityStr}</span>
 		</div>
 	</div>`;
 	}).join('');
@@ -1392,30 +1408,32 @@ function buildMixteDetailFlat(result, scale = 1) {
 	const amount = _amount * scale;
 
 	// FB back row (DC part placed as freebet on fbSite)
+	const fbOutcome = resolveOutcome(p.dcOutcome, result.cashEk, p.dcMarket);
 	const fbRow = `
 	<div class="ff-betrow">
 		<span class="ff-betrow-badge ff-betrow-badge--fb">FB</span>
 		<div class="ff-betrow-body">
-			<span class="ff-betrow-title">${esc(evName)}\u00a0<strong>${esc(p.dcOutcome)}</strong></span>
-			<span class="ff-betrow-detail">${sitePill(_fbSite)} · ${esc(p.dcMarket)} · mise <strong>${fmt(amount)}\u00a0€</strong></span>
+			<span class="ff-betrow-title">${esc(evName)}</span>
+			<span class="ff-betrow-detail">${sitePill(_fbSite)} · ${fbOutcome} · Mise <strong>${fmt(amount)}\u00a0€</strong> ${miseTag('fb')}</span>
 		</div>
 	</div>`;
 
 	// Cash cover row
 	const badgeClass = cover.type === 'lay' ? 'lay' : 'back';
 	const badgeLabel = cover.type === 'lay' ? 'LAY' : 'BACK';
-	const stakeStr = result.cashLiability != null
-		? `${fmt(result.cashStake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(result.cashLiability * scale)}\u00a0€)</span>`
-		: `${fmt(result.cashStake * scale)}\u00a0€`;
 	const oddsStr = cover.lGross != null
-		? `${fmt(cover.odds)} <span class="ff-sub">brut\u00a0${fmt(cover.lGross)}</span>`
-		: `${fmt(cover.odds)}`;
+		? `<strong>${fmt(cover.lGross)}</strong>`
+		: `<strong>${fmt(cover.odds)}</strong>`;
+	const liabilityStr = result.cashLiability != null
+		? ` · Liability <strong>${fmt(result.cashLiability * scale)}\u00a0€</strong>`
+		: '';
+	const coverOutcome = resolveOutcome(cover.outcomeName, result.cashEk, '1X2');
 	const coverRow = `
 	<div class="ff-betrow">
 		<span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">${badgeLabel}</span>
 		<div class="ff-betrow-body">
-			<span class="ff-betrow-title">${esc(evName)}\u00a0<strong>${esc(cover.outcomeName)}</strong></span>
-			<span class="ff-betrow-detail">${sitePill(cover.site, cover.type === 'lay')} · cote ${oddsStr} · mise ${stakeStr}</span>
+			<span class="ff-betrow-title">${esc(evName)}</span>
+			<span class="ff-betrow-detail">${sitePill(cover.site, cover.type === 'lay')} · ${coverOutcome} · Mise <strong>${fmt(result.cashStake * scale)}\u00a0€</strong> ${miseTag('cash')} · Cote ${oddsStr}${liabilityStr}</span>
 		</div>
 	</div>`;
 
@@ -1424,6 +1442,7 @@ function buildMixteDetailFlat(result, scale = 1) {
 
 	return `<div class="ff-betlist">${fbRow}${coverRow}</div><div class="ff-m3-divider"></div><div class="ff-detail-bets">${betRows}</div>`;
 }
+
 
 function buildDetailContent(result, scale = 1) {
 	if (result.method === 1) {
@@ -1487,7 +1506,7 @@ function toggleDetail(idx) {
 
 function renderResults(results) {
 	_results = results;
-	_visibleCount = 20;
+	_visibleCount = 50;
 	document.getElementById('ff-filters').hidden = false;
 	const el = document.getElementById('ff-results');
 	el.hidden = false;
@@ -1528,15 +1547,15 @@ function renderPage() {
 	});
 
 	filtered.sort((a, b) => resultSortKey(b) - resultSortKey(a));
-	const visible = filtered.slice(0, 20);
+	const visible = filtered.slice(0, _visibleCount);
 
 	// Compteur — seulement hors onglet Tout
 	const summaryEl = document.getElementById('ff-summary');
 	if (summaryEl) {
 		if (q) {
-			summaryEl.textContent = `${filtered.length} combinaison${filtered.length > 1 ? 's' : ''} trouvée${filtered.length > 1 ? 's' : ''} — affichage des 20 meilleures`;
+			summaryEl.textContent = `${filtered.length} combinaison${filtered.length > 1 ? 's' : ''} trouvée${filtered.length > 1 ? 's' : ''} — affichage des ${Math.min(_visibleCount, filtered.length)} meilleures`;
 		} else {
-			summaryEl.textContent = `${_results.length} combinaison${_results.length > 1 ? 's' : ''} — 20 meilleures affichées`;
+			summaryEl.textContent = `${_results.length} combinaison${_results.length > 1 ? 's' : ''} — ${Math.min(_visibleCount, filtered.length)} affichées`;
 		}
 	} else {
 		const countEl = document.getElementById('ff-count');
@@ -1566,14 +1585,14 @@ function renderPage() {
 	cards.innerHTML = `<div class="ff-table-wrap"><div class="ff-table">${headers}${visible.map((r, i) => buildTableRow(r, i)).join('')}</div></div>`;
 
 	if (more) {
-		const remaining = filtered.length - 20;
+		const remaining = filtered.length - _visibleCount;
 		more.innerHTML = remaining > 0
-			? `<span class="ff-more-info">${remaining} combinaison${remaining > 1 ? 's' : ''} supplémentaire${remaining > 1 ? 's' : ''} non affichée${remaining > 1 ? 's' : ''} — affinez la recherche</span>`
+			? `<button class="ff-more-btn" onclick="showMore()">Voir ${Math.min(remaining, 50)} de plus (${remaining} restant${remaining > 1 ? 's' : ''})</button>`
 			: '';
 	}
 }
 
-function showMore() { _visibleCount += 20; renderPage(); }
+function showMore() { _visibleCount += 50; renderPage(); }
 
 // ===== UI =====
 
