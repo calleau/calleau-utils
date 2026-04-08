@@ -1047,6 +1047,15 @@ function coverBadge(cover) {
 	return `<span class="ff-badge ff-badge-bk">Back</span>`;
 }
 
+const _SITE_KEYS = ['piwi', 'olybet', 'betclic', 'winamax', 'bwin', 'unibet', 'feelingbet', 'pokerstars'];
+
+function sitePill(name, isLay = false) {
+	const key = _SITE_KEYS.find(k => name.toLowerCase().includes(k));
+	const dataSite = key ? ` data-site="${key}"` : '';
+	const layClass = isLay && key === 'piwi' ? ' ff-site-pill--lay' : '';
+	return `<span class="ff-site-pill${layClass}"${dataSite}>${esc(name)}</span>`;
+}
+
 function buildSeqLegRow(leg, idx, gap, scale = 1) {
 	const gapHtml = gap ? `<span class="ff-gap">+${formatGap(gap)}</span>` : '';
 	const stakeDetail = leg.liability != null
@@ -1115,7 +1124,7 @@ function buildToutFBBetRow(bet, idx, betType = 'fb', scale = 1) {
 		<span class="ff-bet-num">FB${idx + 1}</span>
 		<div class="ff-bet-desc">
 			<span class="ff-bet-legs">${legLabels}</span>
-			<span class="ff-bet-site">${esc(bet.site)} · cote <strong>${fmt(bet.odds)}</strong> · mise <strong>${fmt(s)}\u00a0€</strong></span>
+			<span class="ff-bet-site">${sitePill(bet.site)} · cote <strong>${fmt(bet.odds)}</strong> · mise <strong>${fmt(s)}\u00a0€</strong></span>
 		</div>
 		<span class="ff-bet-profit">${returnDetail}</span>
 	</div>`;
@@ -1347,7 +1356,7 @@ function buildSeqDetailFlat(result, scale = 1) {
 		<span class="ff-betrow-badge ff-betrow-badge--back">BACK</span>
 		<div class="ff-betrow-body">
 			<span class="ff-betrow-title">${legTitles}</span>
-			<span class="ff-betrow-detail">${esc(_fbSite)} · cote <strong>${fmt(result.B)}</strong> · mise <strong>${fmt(amount)}\u00a0€</strong></span>
+			<span class="ff-betrow-detail">${sitePill(_fbSite)} · cote <strong>${fmt(result.B)}</strong> · mise <strong>${fmt(amount)}\u00a0€</strong></span>
 		</div>
 	</div>`;
 
@@ -1367,7 +1376,7 @@ function buildSeqDetailFlat(result, scale = 1) {
 		<span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">${badgeLabel}</span>
 		<div class="ff-betrow-body">
 			<span class="ff-betrow-title">${esc(leg.evName)}\u00a0<strong>${esc(cover.outcomeName)}</strong></span>
-			<span class="ff-betrow-detail">${esc(cover.site)} · ${esc(leg.marketName)} · cote ${oddsStr} · mise ${stakeStr}</span>
+			<span class="ff-betrow-detail">${sitePill(cover.site, cover.type === 'lay')} · ${esc(leg.marketName)} · cote ${oddsStr} · mise ${stakeStr}</span>
 		</div>
 	</div>`;
 	}).join('');
@@ -1388,7 +1397,7 @@ function buildMixteDetailFlat(result, scale = 1) {
 		<span class="ff-betrow-badge ff-betrow-badge--fb">FB</span>
 		<div class="ff-betrow-body">
 			<span class="ff-betrow-title">${esc(evName)}\u00a0<strong>${esc(p.dcOutcome)}</strong></span>
-			<span class="ff-betrow-detail">${esc(_fbSite)} · ${esc(p.dcMarket)} · mise <strong>${fmt(amount)}\u00a0€</strong></span>
+			<span class="ff-betrow-detail">${sitePill(_fbSite)} · ${esc(p.dcMarket)} · mise <strong>${fmt(amount)}\u00a0€</strong></span>
 		</div>
 	</div>`;
 
@@ -1406,7 +1415,7 @@ function buildMixteDetailFlat(result, scale = 1) {
 		<span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">${badgeLabel}</span>
 		<div class="ff-betrow-body">
 			<span class="ff-betrow-title">${esc(evName)}\u00a0<strong>${esc(cover.outcomeName)}</strong></span>
-			<span class="ff-betrow-detail">${esc(cover.site)} · cote ${oddsStr} · mise ${stakeStr}</span>
+			<span class="ff-betrow-detail">${sitePill(cover.site, cover.type === 'lay')} · cote ${oddsStr} · mise ${stakeStr}</span>
 		</div>
 	</div>`;
 

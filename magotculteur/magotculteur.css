@@ -507,6 +507,31 @@
 .ff-detail-legs { display: flex; flex-direction: column; gap: 6px; }
 .ff-detail-bets { display: flex; flex-direction: column; gap: 4px; }
 
+/* Site pills */
+
+.ff-site-pill {
+	display: inline-block;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	padding: 1px 7px;
+	border-radius: 4px;
+	background: var(--color-surface-2);
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+.ff-site-pill[data-site="piwi"]       { background: var(--site-piwi-bg);       color: var(--site-piwi-text); }
+.ff-site-pill[data-site="piwi"].ff-site-pill--lay { color: var(--site-piwi-lay); }
+.ff-site-pill[data-site="olybet"]     { background: var(--site-olybet-bg);     color: var(--site-olybet-text); outline: 1px solid #ddd; }
+.ff-site-pill[data-site="betclic"]    { background: var(--site-betclic-bg);    color: var(--site-betclic-text); }
+.ff-site-pill[data-site="winamax"]    { background: var(--site-winamax-bg);    color: var(--site-winamax-text); }
+.ff-site-pill[data-site="bwin"]       { background: var(--site-bwin-bg);       color: var(--site-bwin-text); }
+.ff-site-pill[data-site="unibet"]     { background: var(--site-unibet-bg);     color: var(--site-unibet-text); }
+.ff-site-pill[data-site="feelingbet"] { background: var(--site-feelingbet-bg); color: var(--site-feelingbet-text); }
+.ff-site-pill[data-site="pokerstars"] { background: var(--site-pokerstars-bg); color: var(--site-pokerstars-text); }
+
 /* Flat bet list (M1 / M3) */
 
 .ff-betlist { display: flex; flex-direction: column; }
