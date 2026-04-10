@@ -12,6 +12,7 @@ let _amountTotal = 10;
 let _amountMin = 2;
 let _amountMode = 'total'; // 'total' | 'min'
 let _cashObjective = 'miser'; // 'miser' | 'gagner' | 'perdre'
+let _asymCov = false;         // couvertures asymétriques (single + combinés)
 let _filterMinOdds = 0;
 let _fbSite = '';
 let _visibleCount = 50;
@@ -29,6 +30,8 @@ function savePrefs() {
 			amountMode: _amountMode,
 			method: _method,
 			nLegs: _nLegs,
+			asymCov: _asymCov,
+			filterMinOdds: _filterMinOdds,
 			site: document.getElementById('ff-site-select')?.value ?? '',
 		}));
 	} catch {}
@@ -284,6 +287,7 @@ function collectLegs(data, fbSite) {
 				if (fbVal == null) continue;
 				const b = getBackOdds(fbVal);
 				if (!b || b <= 1) continue;
+				if (_filterMinOdds > 0 && b < _filterMinOdds) continue;
 
 				const covers = findCoversForOutcome(event, marketName, outcomeName, oddsMap, fbSite);
 				if (!covers.length) continue;
@@ -546,17 +550,78 @@ function finalizeBets(rawBets, amount, betType) {
 	return betType === 'cash' ? finalizeToutFBCashBets(rawBets, amount) : finalizeToutFBBets(rawBets, amount);
 }
 
-const TOP_EVENTS_TOUTFB = 30; // matchs conservés pour les boucles multi-match Couverture classique
+// ===== COVERING SET HELPERS (used by Couverture complète) =====
+
+// First Back leg for a rule side in an event's markets. Returns null if not found.
+function ruleSideBackLeg(rule, sideKey, event, eventKey) {
+	for (const opt of (rule[sideKey] || [])) {
+		if (opt.betType !== 'Back') continue;
+		for (const [marketName, market] of Object.entries(event.markets || {})) {
+			for (const [outcomeName] of Object.entries(market)) {
+				if (matchBetSpec(opt, marketName, outcomeName))
+					return { eventKey, marketName, outcomeName };
+			}
+		}
+	}
+	return null;
+}
+
+// All complete covering sets for an event from ALL rules (issues:2 → 2 legs, issues:3 → 3 legs, …).
+// Returns [[{eventKey, marketName, outcomeName}, ...], ...]
+function getCoverSets(data, eventKey) {
+	const event = data[eventKey];
+	if (!event) return [];
+	const sets = [];
+	const seen = new Set();
+	for (const rule of _coverageRules) {
+		const sideKeys = ['A', 'B', 'C'].filter(k => rule[k]);
+		if (sideKeys.length < 2) continue;
+		const legs = sideKeys.map(k => ruleSideBackLeg(rule, k, event, eventKey));
+		if (legs.some(l => !l)) continue;
+		const key = legs.map(l => l.marketName + ':' + l.outcomeName).sort().join('|');
+		if (seen.has(key)) continue;
+		seen.add(key);
+		sets.push(legs);
+	}
+	return sets;
+}
+
+// Asymmetric splits: for each rule where all sides match, each side can be the "single",
+// the remaining sides become the "combined" M1 legs.
+// Returns [{singleLeg, combinedLegs[]}, ...]
+function getAsymSplits(data, eventKey) {
+	const event = data[eventKey];
+	if (!event) return [];
+	const splits = [];
+	const seen = new Set();
+	for (const rule of _coverageRules) {
+		const sideKeys = ['A', 'B', 'C'].filter(k => rule[k]);
+		if (sideKeys.length < 2) continue;
+		const legs = sideKeys.map(k => ruleSideBackLeg(rule, k, event, eventKey));
+		if (legs.some(l => !l)) continue;
+		for (let si = 0; si < legs.length; si++) {
+			const singleLeg = legs[si];
+			const combinedLegs = legs.filter((_, i) => i !== si);
+			const key = singleLeg.marketName + ':' + singleLeg.outcomeName + '|' +
+				combinedLegs.map(l => l.marketName + ':' + l.outcomeName).join('|');
+			if (seen.has(key)) continue;
+			seen.add(key);
+			splits.push({ singleLeg, combinedLegs });
+		}
+	}
+	return splits;
+}
+
+const TOP_EVENTS_TOUTFB = 30; // matchs conservés pour les boucles multi-match Couverture complète
 
 // Score d'un match pour Couverture classique : meilleur taux single-match sur ses partitions DC
 // Fallback sur 1X2 si aucun marché DC disponible.
 function scoreEventToutFB(data, eventKey) {
 	let best = 0;
-	for (const p of dcPartitions(data, eventKey)) {
-		const oDC   = bestCombinedOdds(data, [{ eventKey, marketName: p.dcMarket,   outcomeName: p.dcOutcome   }]);
-		const oComp = bestCombinedOdds(data, [{ eventKey, marketName: p.compMarket, outcomeName: p.compOutcome }]);
-		if (!oDC || !oComp) continue;
-		const r = 1 / (1 / (oDC.odds - 1) + 1 / (oComp.odds - 1));
+	for (const coverSet of getCoverSets(data, eventKey)) {
+		const odds = coverSet.map(leg => bestCombinedOdds(data, [leg])?.odds ?? 0);
+		if (odds.some(o => o <= 1)) continue;
+		const r = 1 / odds.reduce((s, o) => s + 1 / (o - 1), 0);
 		if (r > best) best = r;
 	}
 	return best;
@@ -616,7 +681,7 @@ function bestSingleSiteCovering(data, betsLegsArray) {
 			for (const [site, val] of Object.entries(oddsMap)) {
 				if (isExchange(val)) continue;
 				const o = typeof val === 'number' ? val : (val?.odds ?? null);
-				if (o && o > 1) siteOdds[site] = o;
+				if (o && o > 1 && (_filterMinOdds <= 0 || o >= _filterMinOdds)) siteOdds[site] = o;
 			}
 			legOddsCache.set(key, siteOdds);
 		}
@@ -727,14 +792,12 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 
 	if (nMatches === 1) {
 		for (const eventKey of eventKeys) {
-			for (const p of dcPartitions(data, eventKey)) {
-				const siteOpts = bestSingleSiteCovering(data, [
-					[{ eventKey, marketName: p.dcMarket, outcomeName: p.dcOutcome }],
-					[{ eventKey, marketName: p.compMarket, outcomeName: p.compOutcome }],
-				]);
+			for (const coverSet of getCoverSets(data, eventKey)) {
+				const betsSpec = coverSet.map(leg => [leg]);
+				const siteOpts = bestSingleSiteCovering(data, betsSpec);
 				if (!siteOpts) continue;
 				const fin = bestFinFromSiteOpts(siteOpts);
-				if (fin) results.push({ method: 2, nMatches: 1, nBets: 2, ...fin, totalAmount: amount, eventKeys: [eventKey], betType });
+				if (fin) results.push({ method: 2, nMatches: 1, nBets: coverSet.length, ...fin, totalAmount: amount, eventKeys: [eventKey], betType });
 			}
 		}
 	} else if (nMatches === 2) {
@@ -755,6 +818,33 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 							const entry = { method: 2, nMatches: 2, nBets: 4, ...fin, totalAmount: amount, eventKeys: [ek1, ek2], betType };
 							const prev = bestPerCombo.get(comboKey);
 							if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
+						}
+					}
+				}
+				// Asymétrique : 1 single + combinés (si option activée)
+				if (_asymCov) {
+					for (const [ekS, ekC] of [[ek1, ek2], [ek2, ek1]]) {
+						const asymKey = ekS + '→' + ekC;
+						const splits = getAsymSplits(data, ekS);
+						const coverSets = getCoverSets(data, ekC);
+						if (!splits.length || !coverSets.length) continue;
+						for (const { singleLeg, combinedLegs } of splits) {
+							for (const cs of coverSets) {
+								const betsSpec = [
+									[singleLeg],
+									...combinedLegs.flatMap(cl => cs.map(m2l => [cl, m2l])),
+								];
+								const siteOpts = bestSingleSiteCovering(data, betsSpec);
+								if (!siteOpts) continue;
+								for (const { rawBets } of siteOpts) {
+									const fin = finalizeBets(rawBets, amount, betType);
+									if (!fin) continue;
+									const entry = { method: 2, nMatches: 2, nBets: betsSpec.length, ...fin,
+										totalAmount: amount, eventKeys: [ekS, ekC], betType };
+									const prev = bestPerCombo.get(asymKey);
+									if (!prev || fin.rate > prev.rate) bestPerCombo.set(asymKey, entry);
+								}
+							}
 						}
 					}
 				}
@@ -782,6 +872,41 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 									const entry = { method: 2, nMatches: 3, nBets: 8, ...fin, totalAmount: amount, eventKeys: [ek1, ek2, ek3], betType };
 									const prev = bestPerCombo.get(comboKey);
 									if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
+								}
+							}
+						}
+					}
+					// Asymétrique 3 matchs (si option activée)
+					if (_asymCov) {
+						const es = [ek1, ek2, ek3];
+						for (let si = 0; si < 3; si++) {
+							const ekS = es[si];
+							const ekCs = es.filter((_, k) => k !== si);
+							const asymKey = ekS + '→' + ekCs.join('|');
+							const splits = getAsymSplits(data, ekS);
+							const coverSets1 = getCoverSets(data, ekCs[0]);
+							const coverSets2 = getCoverSets(data, ekCs[1]);
+							if (!splits.length || !coverSets1.length || !coverSets2.length) continue;
+							for (const { singleLeg, combinedLegs } of splits) {
+								for (const cs1 of coverSets1) {
+									for (const cs2 of coverSets2) {
+										const betsSpec = [
+											[singleLeg],
+											...combinedLegs.flatMap(cl =>
+												cs1.flatMap(m2l => cs2.map(m3l => [cl, m2l, m3l]))
+											),
+										];
+										const siteOpts = bestSingleSiteCovering(data, betsSpec);
+										if (!siteOpts) continue;
+										for (const { rawBets } of siteOpts) {
+											const fin = finalizeBets(rawBets, amount, betType);
+											if (!fin) continue;
+											const entry = { method: 2, nMatches: 3, nBets: betsSpec.length, ...fin,
+												totalAmount: amount, eventKeys: [ekS, ...ekCs], betType };
+											const prev = bestPerCombo.get(asymKey);
+											if (!prev || fin.rate > prev.rate) bestPerCombo.set(asymKey, entry);
+										}
+									}
 								}
 							}
 						}
@@ -1148,7 +1273,7 @@ function buildMixteCard(result) {
 
 function rowMethod(result) {
 	if (result.method === 1) return 'Cash séq.';
-	if (result.method === 2) return 'Couv. classique';
+	if (result.method === 2) return 'Couv. complète';
 	if (result.method === 3) {
 		const keys = result.eventKeys || [];
 		const cashEk = result.cashEk;
@@ -1433,7 +1558,6 @@ function toggleDetail(idx) {
 function renderResults(results) {
 	_results = results;
 	_visibleCount = 50;
-	document.getElementById('ff-filters').hidden = false;
 	const el = document.getElementById('ff-results');
 	el.hidden = false;
 
@@ -1594,9 +1718,11 @@ function getDisplayScale(result) {
 
 function setMinOddsFilter(val) {
 	_filterMinOdds = parseFloat(val) || 0;
-	const badge = document.getElementById('ff-filter-odds-badge');
-	if (badge) badge.textContent = _filterMinOdds > 0 ? `≥ ${fmt(_filterMinOdds)}` : '';
-	if (Object.keys(_allResults).length) showCurrentResults();
+	// Le filtre affecte le calcul → invalider les résultats mis en cache
+	_allResults = {};
+	clearTabSummaries();
+	document.getElementById('ff-results').hidden = true;
+	savePrefs();
 }
 
 function setMethodLegs(m, n) {
@@ -1622,6 +1748,16 @@ function setBetType(t) {
 	);
 	const objField = document.getElementById('ff-objective-field');
 	if (objField) objField.hidden = t !== 'cash';
+	_allResults = {};
+	clearTabSummaries();
+	document.getElementById('ff-results').hidden = true;
+	savePrefs();
+}
+
+function setAsymCov(val) {
+	_asymCov = val;
+	const cb = document.getElementById('ff-asymcov-cb');
+	if (cb) cb.checked = val;
 	_allResults = {};
 	clearTabSummaries();
 	document.getElementById('ff-results').hidden = true;
@@ -1673,51 +1809,65 @@ async function tryRender() {
 	_fbSite = document.getElementById('ff-site-select')?.value ?? '';
 	_allResults = {};
 
-	const btn = document.getElementById('ff-calc-btn');
-	const progressWrap = document.getElementById('ff-progress-wrap');
-	const progressBar = document.getElementById('ff-progress-bar');
+	// Construction de la liste des étapes
 	const hasSeq = !!_fbSite;
-	const totalSteps = 5 + (hasSeq ? 3 : 0); // ToutFB×3 + Mixte×2 [+ Séq×3]
-	let step = 0;
-
-	function setProgress(label) {
-		step++;
-		btn.textContent = label;
-		progressBar.style.width = `${Math.round(step / totalSteps * 100)}%`;
-	}
-
-	btn.disabled = true;
-	btn.classList.add('ff-loading');
-	progressWrap.hidden = false;
-	progressBar.style.width = '0%';
-	await yieldToUI();
+	const steps = [];
 
 	if (hasSeq) {
-		for (const n of [1, 2, 3]) {
-			setProgress(`Calcul de Cash séquentiel – ${n} sélection${n > 1 ? 's' : ''}…`);
-			await yieldToUI();
-			_allResults[`1_${n}`] = computeSeq(_data, _fbSite, _amount, n, _betType);
-		}
+		for (const n of [1, 2, 3])
+			steps.push({ label: `Cash séquentiel · ${n} sélection${n > 1 ? 's' : ''}`, fn: () => { _allResults[`1_${n}`] = computeSeq(_data, _fbSite, _amount, n, _betType); } });
 	}
 
 	_allResults[`3_1`] = [];
-	for (const n of [2, 3]) {
-		setProgress(`Calcul de Mixte – ${n} sélections…`);
-		await yieldToUI();
-		_allResults[`3_${n}`] = computeMixte(_data, _amount, n, _betType);
-	}
+	for (const n of [2, 3])
+		steps.push({ label: `Mixte · ${n} matchs`, fn: () => { _allResults[`3_${n}`] = computeMixte(_data, _amount, n, _betType); } });
 
 	for (const n of [1, 2, 3]) {
-		setProgress(`Calcul de Couverture classique – ${n} sélection${n > 1 ? 's' : ''}…`);
-		await yieldToUI();
-		_allResults[`2_${n}`] = computeToutFB(_data, _amount, n, _betType);
+		if (_asymCov && n > 1) {
+			// Deux étapes distinctes : sym seule, puis asym (qui recalcule sym+asym et écrase)
+			steps.push({
+				label: `Couverture complète · ${n} matchs`,
+				fn: () => {
+					_asymCov = false;
+					_allResults[`2_${n}`] = computeToutFB(_data, _amount, n, _betType);
+					_asymCov = true;
+				},
+			});
+			steps.push({
+				label: `Couverture complète asymétrique · ${n} matchs`,
+				fn: () => { _allResults[`2_${n}`] = computeToutFB(_data, _amount, n, _betType); },
+			});
+		} else {
+			steps.push({
+				label: `Couverture complète · ${n} match${n > 1 ? 's' : ''}`,
+				fn: () => { _allResults[`2_${n}`] = computeToutFB(_data, _amount, n, _betType); },
+			});
+		}
 	}
 
-	progressBar.style.width = '100%';
-	btn.textContent = 'Calculer';
-	btn.classList.remove('ff-loading');
+	const btn = document.getElementById('ff-calc-btn');
+	const overlay = document.getElementById('ff-calc-overlay');
+	const overlayLabel = document.getElementById('ff-calc-overlay-label');
+	const overlayBar = document.getElementById('ff-calc-overlay-bar');
+
+	btn.disabled = true;
+	overlay.hidden = false;
+	overlayBar.style.width = '0%';
+	overlayLabel.textContent = 'Démarrage…';
+	await yieldToUI();
+
+	for (let i = 0; i < steps.length; i++) {
+		overlayLabel.textContent = steps[i].label;
+		overlayBar.style.width = `${Math.round(i / steps.length * 100)}%`;
+		await yieldToUI();
+		steps[i].fn();
+	}
+
+	overlayBar.style.width = '100%';
+	overlayLabel.textContent = 'Terminé';
+	await yieldToUI();
+	overlay.hidden = true;
 	btn.disabled = false;
-	setTimeout(() => { progressWrap.hidden = true; progressBar.style.width = '0%'; }, 500);
 
 	showCurrentResults();
 }
@@ -1805,6 +1955,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 	if (savedTotal) { const i = document.getElementById('ff-amount-total'); if (i) i.value = savedTotal; }
 	if (prefs.amountMin) { const i = document.getElementById('ff-amount-min'); if (i) i.value = prefs.amountMin; }
 	if (prefs.method && prefs.nLegs) setMethodLegs(prefs.method, prefs.nLegs);
+	if (prefs.asymCov) setAsymCov(true);
+	if (prefs.filterMinOdds > 0) {
+		_filterMinOdds = prefs.filterMinOdds;
+		const i = document.getElementById('ff-filter-odds');
+		if (i) i.value = prefs.filterMinOdds;
+	}
 	document.getElementById('ff-amount-total')?.addEventListener('change', savePrefs);
 	document.getElementById('ff-amount-min')?.addEventListener('change', savePrefs);
 	document.getElementById('ff-site-select')?.addEventListener('change', savePrefs);

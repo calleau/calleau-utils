@@ -91,13 +91,34 @@
 					</div>
 				</div>
 
+				<!-- Options avancées -->
+				<div class="ff-field">
+					<label class="ff-label">Options</label>
+					<div class="ff-options-group">
+						<label class="ff-checkbox-label">
+							<input type="checkbox" id="ff-asymcov-cb" onchange="setAsymCov(this.checked)" />
+							Couvertures asymétriques
+						</label>
+					</div>
+				</div>
+
+				<!-- Cote minimum -->
+				<div class="ff-field">
+					<label class="ff-label" for="ff-filter-odds">Cote minimum</label>
+					<div class="numinput numinput--sm">
+						<input type="number" id="ff-filter-odds" value="" min="1" step="0.05" placeholder="—"
+							oninput="setMinOddsFilter(this.value)" onclick="this.select()" />
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="var i=document.getElementById('ff-filter-odds'); i.value=(parseFloat(i.value)||1)+0.05; setMinOddsFilter(i.value)">▲</button>
+							<button class="nbtn" onclick="var i=document.getElementById('ff-filter-odds'); i.value=Math.max(1,(parseFloat(i.value)||1)-0.05).toFixed(2); setMinOddsFilter(i.value)">▼</button>
+						</div>
+					</div>
+				</div>
+
 				<!-- Bouton calculer -->
 				<button id="ff-calc-btn" class="ff-calc-btn" onclick="tryRender()" disabled>
 					Calculer
 				</button>
-				<div id="ff-progress-wrap" hidden>
-					<div id="ff-progress-bar"></div>
-				</div>
 
 			</div>
 
@@ -134,35 +155,30 @@
 					</div>
 				</div>
 
-				<div id="ff-filters" hidden>
-					<div class="ff-filter-row">
-						<span class="ff-filter-label">Filtres</span>
-						<div class="ff-filter-group">
-							<label class="ff-filter-field-label" for="ff-filter-odds">Cote min.</label>
-							<div class="numinput numinput--sm">
-								<input type="number" id="ff-filter-odds" value="" min="1" step="0.05" placeholder="—"
-									oninput="setMinOddsFilter(this.value)" onclick="this.select()" />
-								<div class="nbtn-wrap">
-									<button class="nbtn" onclick="document.getElementById('ff-filter-odds').value=(parseFloat(document.getElementById('ff-filter-odds').value)||1)+0.05; setMinOddsFilter(document.getElementById('ff-filter-odds').value)">▲</button>
-									<button class="nbtn" onclick="document.getElementById('ff-filter-odds').value=Math.max(1,(parseFloat(document.getElementById('ff-filter-odds').value)||1)-0.05).toFixed(2); setMinOddsFilter(document.getElementById('ff-filter-odds').value)">▼</button>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-
 				<div id="ff-results" hidden></div>
 			</div>
 
 		</div>
 
 		<footer class="page-footer">
-			<span class="footer-version">v3.0.0</span>
+			<span class="footer-version">v3.1.2</span>
 		</footer>
 
 	</div>
 
 	<div id="floating-actions"></div>
+
+	<!-- Overlay de calcul -->
+	<div id="ff-calc-overlay" hidden aria-live="polite">
+		<div class="ff-calc-overlay-inner">
+			<div class="ff-calc-spinner"></div>
+			<p id="ff-calc-overlay-label" class="ff-calc-overlay-label"></p>
+			<div class="ff-calc-overlay-bar-wrap">
+				<div id="ff-calc-overlay-bar" class="ff-calc-overlay-bar"></div>
+			</div>
+		</div>
+	</div>
+
 	<script src="magotculteur.js"></script>
 </body>
 
