@@ -559,18 +559,6 @@ function scoreEventToutFB(data, eventKey) {
 		const r = 1 / (1 / (oDC.odds - 1) + 1 / (oComp.odds - 1));
 		if (r > best) best = r;
 	}
-	// Fallback : score depuis le marché 1X2 direct
-	if (best === 0) {
-		const res12 = findRes12Market(data[eventKey]?.markets || {});
-		if (res12) {
-			const [mkt, map] = res12;
-			const outs = Object.keys(map);
-			if (outs.length === 3) {
-				const arr = outs.map(o => bestCombinedOdds(data, [{ eventKey, marketName: mkt, outcomeName: o }]));
-				if (arr.every(Boolean)) best = 1 / arr.reduce((s, b) => s + 1 / (b.odds - 1), 0);
-			}
-		}
-	}
 	return best;
 }
 
@@ -739,9 +727,6 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 
 	if (nMatches === 1) {
 		for (const eventKey of eventKeys) {
-			const event = data[eventKey];
-
-			// Pattern A: paires de couverture (2 paris) — une par partition
 			for (const p of dcPartitions(data, eventKey)) {
 				const siteOpts = bestSingleSiteCovering(data, [
 					[{ eventKey, marketName: p.dcMarket, outcomeName: p.dcOutcome }],
@@ -751,33 +736,15 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 				const fin = bestFinFromSiteOpts(siteOpts);
 				if (fin) results.push({ method: 2, nMatches: 1, nBets: 2, ...fin, totalAmount: amount, eventKeys: [eventKey], betType });
 			}
-
-			// Pattern B: 1 + X + 2 (3 paris)
-			const res12Entry = findRes12Market(event.markets || {});
-			if (res12Entry) {
-				const [res12Market, res12Map] = res12Entry;
-				const betsSpec = Object.keys(res12Map).map(o => [{ eventKey, marketName: res12Market, outcomeName: o }]);
-				if (betsSpec.length === 3) {
-					const siteOpts = bestSingleSiteCovering(data, betsSpec);
-					if (siteOpts) {
-						const fin = bestFinFromSiteOpts(siteOpts);
-						if (fin) results.push({ method: 2, nMatches: 1, nBets: 3, ...fin, totalAmount: amount, eventKeys: [eventKey], betType });
-					}
-				}
-			}
 		}
 	} else if (nMatches === 2) {
 		for (let i = 0; i < eventKeys.length; i++) {
 			const ek1 = eventKeys[i];
-			const ev1 = data[ek1];
 			for (let j = i + 1; j < eventKeys.length; j++) {
 				const ek2 = eventKeys[j];
-				const ev2 = data[ek2];
 				const comboKey = [ek1, ek2].sort().join('|');
 				const parts1 = dcPartitions(data, ek1);
 				const parts2 = dcPartitions(data, ek2);
-
-				// DC × DC (4 paris)
 				for (const p1 of parts1) {
 					for (const p2 of parts2) {
 						const siteOpts = bestSingleSiteCovering(data, generateCoveringBets([ek1, ek2], [p1, p2]));
@@ -788,33 +755,6 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 							const entry = { method: 2, nMatches: 2, nBets: 4, ...fin, totalAmount: amount, eventKeys: [ek1, ek2], betType };
 							const prev = bestPerCombo.get(comboKey);
 							if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
-						}
-					}
-				}
-
-				// 1X2 × 1X2 (9 paris)
-				const res1 = findRes12Market(ev1.markets || {});
-				const res2 = findRes12Market(ev2.markets || {});
-				if (res1 && res2) {
-					const [r1name, r1map] = res1;
-					const [r2name, r2map] = res2;
-					const betsSpec = [];
-					for (const o1 of Object.keys(r1map))
-						for (const o2 of Object.keys(r2map))
-							betsSpec.push([
-								{ eventKey: ek1, marketName: r1name, outcomeName: o1 },
-								{ eventKey: ek2, marketName: r2name, outcomeName: o2 },
-							]);
-					if (betsSpec.length === 9) {
-						const siteOpts = bestSingleSiteCovering(data, betsSpec);
-						if (siteOpts) {
-							for (const { rawBets } of siteOpts) {
-								const fin = finalizeBets(rawBets, amount, betType);
-								if (!fin) continue;
-								const entry = { method: 2, nMatches: 2, nBets: 9, ...fin, totalAmount: amount, eventKeys: [ek1, ek2], betType };
-								const prev = bestPerCombo.get(comboKey);
-								if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
-							}
 						}
 					}
 				}
@@ -831,8 +771,6 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 					const parts1 = dcPartitions(data, ek1);
 					const parts2 = dcPartitions(data, ek2);
 					const parts3 = dcPartitions(data, ek3);
-
-					// DC × DC × DC (8 paris)
 					for (const p1 of parts1) {
 						for (const p2 of parts2) {
 							for (const p3 of parts3) {
@@ -842,37 +780,6 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 									const fin = finalizeBets(rawBets, amount, betType);
 									if (!fin) continue;
 									const entry = { method: 2, nMatches: 3, nBets: 8, ...fin, totalAmount: amount, eventKeys: [ek1, ek2, ek3], betType };
-									const prev = bestPerCombo.get(comboKey);
-									if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
-								}
-							}
-						}
-					}
-
-					// 1X2 × 1X2 × 1X2 (27 paris)
-					const res1 = findRes12Market(data[ek1]?.markets || {});
-					const res2 = findRes12Market(data[ek2]?.markets || {});
-					const res3 = findRes12Market(data[ek3]?.markets || {});
-					if (res1 && res2 && res3) {
-						const [r1n, r1m] = res1;
-						const [r2n, r2m] = res2;
-						const [r3n, r3m] = res3;
-						const betsSpec = [];
-						for (const o1 of Object.keys(r1m))
-							for (const o2 of Object.keys(r2m))
-								for (const o3 of Object.keys(r3m))
-									betsSpec.push([
-										{ eventKey: ek1, marketName: r1n, outcomeName: o1 },
-										{ eventKey: ek2, marketName: r2n, outcomeName: o2 },
-										{ eventKey: ek3, marketName: r3n, outcomeName: o3 },
-									]);
-						if (betsSpec.length === 27) {
-							const siteOpts = bestSingleSiteCovering(data, betsSpec);
-							if (siteOpts) {
-								for (const { rawBets } of siteOpts) {
-									const fin = finalizeBets(rawBets, amount, betType);
-									if (!fin) continue;
-									const entry = { method: 2, nMatches: 3, nBets: 27, ...fin, totalAmount: amount, eventKeys: [ek1, ek2, ek3], betType };
 									const prev = bestPerCombo.get(comboKey);
 									if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
 								}
