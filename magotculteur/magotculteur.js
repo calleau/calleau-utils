@@ -14,6 +14,9 @@ let _amountMode = 'total'; // 'total' | 'min'
 let _cashObjective = 'miser'; // 'miser' | 'gagner' | 'perdre'
 let _asymCov = false;         // couvertures asymétriques (single + combinés)
 let _filterMinOdds = 0;
+let _calcCancelled = false;
+let _allowedNLegs = new Set([1, 2, 3]);
+let _minOddsPerSelection = 0;
 let _fbSite = '';
 let _visibleCount = 50;
 
@@ -32,6 +35,8 @@ function savePrefs() {
 			nLegs: _nLegs,
 			asymCov: _asymCov,
 			filterMinOdds: _filterMinOdds,
+			allowedNLegs: [..._allowedNLegs],
+			minOddsPerSelection: _minOddsPerSelection,
 			site: document.getElementById('ff-site-select')?.value ?? '',
 		}));
 	} catch {}
@@ -689,7 +694,9 @@ function bestCombinedOdds(data, betLegs) {
 
 	let best = null;
 	for (const site of sites) {
-		const odds = betLegs.reduce((prod, _, i) => prod * siteOddsPerLeg[i][site], 1);
+		const legOdds = betLegs.map((_, i) => siteOddsPerLeg[i][site]);
+		if (_minOddsPerSelection > 0 && legOdds.some(o => o < _minOddsPerSelection)) continue;
+		const odds = legOdds.reduce((p, o) => p * o, 1);
 		if (!best || odds > best.odds) best = { site, odds };
 	}
 	return best;
@@ -735,14 +742,16 @@ function bestSingleSiteCovering(data, betsLegsArray) {
 // se retrouvent sur le même site (→ déjà couvert par Couverture complète).
 // Retourne [{legs, site, odds}, ...] ou null si une cote est manquante.
 function bestMultiSiteCovering(data, betsLegsArray) {
+	const isCombined = betsLegsArray.some(betLegs => betLegs.length > 1);
 	const rawBets = betsLegsArray.map(betLegs => {
 		let best = null;
 		for (const { eventKey, marketName, outcomeName } of betLegs) {
 			const oddsMap = data[eventKey]?.markets?.[marketName]?.[outcomeName];
 			if (!oddsMap) return null;
 			for (const [site, val] of Object.entries(oddsMap)) {
-				if (isExchange(val)) continue;
-				const o = typeof val === 'number' ? val : (val?.odds ?? null);
+				// Les exchanges ne proposent pas de combinés
+				if (isCombined && isExchange(val)) continue;
+				const o = getBackOdds(val);
 				if (!o || o <= 1) continue;
 				if (_filterMinOdds > 0 && o < _filterMinOdds) continue;
 				if (!best || o > best.odds) best = { site, odds: o };
@@ -815,6 +824,32 @@ function computeMultiSite(data, amount, nMatches, betType = 'fb') {
 									generateCoveringBets([ek1, ek2, ek3], [p1, p2, p3]),
 									comboKey, { eventKeys: [ek1, ek2, ek3] }
 								);
+							}
+						}
+					}
+				}
+			}
+		}
+	} else if (nMatches === 4) {
+		for (let i = 0; i < eventKeys.length; i++) {
+			const ek1 = eventKeys[i];
+			for (let j = i + 1; j < eventKeys.length; j++) {
+				const ek2 = eventKeys[j];
+				for (let m = j + 1; m < eventKeys.length; m++) {
+					const ek3 = eventKeys[m];
+					for (let p = m + 1; p < eventKeys.length; p++) {
+						const ek4 = eventKeys[p];
+						const comboKey = [ek1, ek2, ek3, ek4].sort().join('|');
+						for (const p1 of dcPartitions(data, ek1)) {
+							for (const p2 of dcPartitions(data, ek2)) {
+								for (const p3 of dcPartitions(data, ek3)) {
+									for (const p4 of dcPartitions(data, ek4)) {
+										tryMultiSite(
+											generateCoveringBets([ek1, ek2, ek3, ek4], [p1, p2, p3, p4]),
+											comboKey, { eventKeys: [ek1, ek2, ek3, ek4] }
+										);
+									}
+								}
 							}
 						}
 					}
@@ -1031,6 +1066,41 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 												totalAmount: amount, eventKeys: [ekS, ...ekCs], betType };
 											const prev = bestPerCombo.get(asymKey);
 											if (!prev || fin.rate > prev.rate) bestPerCombo.set(asymKey, entry);
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	} else if (nMatches === 4) {
+		for (let i = 0; i < eventKeys.length; i++) {
+			const ek1 = eventKeys[i];
+			for (let j = i + 1; j < eventKeys.length; j++) {
+				const ek2 = eventKeys[j];
+				for (let m = j + 1; m < eventKeys.length; m++) {
+					const ek3 = eventKeys[m];
+					for (let p = m + 1; p < eventKeys.length; p++) {
+						const ek4 = eventKeys[p];
+						const comboKey = [ek1, ek2, ek3, ek4].sort().join('|');
+						const parts1 = dcPartitions(data, ek1);
+						const parts2 = dcPartitions(data, ek2);
+						const parts3 = dcPartitions(data, ek3);
+						const parts4 = dcPartitions(data, ek4);
+						for (const p1 of parts1) {
+							for (const p2 of parts2) {
+								for (const p3 of parts3) {
+									for (const p4 of parts4) {
+										const siteOpts = bestSingleSiteCovering(data, generateCoveringBets([ek1, ek2, ek3, ek4], [p1, p2, p3, p4]));
+										if (!siteOpts) continue;
+										for (const { rawBets } of siteOpts) {
+											const fin = finalizeBets(rawBets, amount, betType);
+											if (!fin) continue;
+											const entry = { method: 2, nMatches: 4, nBets: 16, ...fin, totalAmount: amount, eventKeys: [ek1, ek2, ek3, ek4], betType };
+											const prev = bestPerCombo.get(comboKey);
+											if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
 										}
 									}
 								}
@@ -1624,6 +1694,44 @@ function setAsymCov(val) {
 	savePrefs();
 }
 
+function updateTabCounts() {
+	document.querySelectorAll('.ff-count-btn[data-legs]').forEach(btn => {
+		const method = +btn.dataset.method;
+		const n = +btn.dataset.legs;
+		const visible = _allowedNLegs.has(n);
+		btn.hidden = !visible;
+		// Si le legs actif est masqué, basculer vers le premier visible
+		if (!visible && btn.classList.contains('ff-count-btn--active')) {
+			const first = document.querySelector(`.ff-count-btn[data-method="${method}"]:not([hidden])`);
+			if (first) setMethodLegs(method, +first.dataset.legs);
+		}
+	});
+}
+
+function toggleNLegs(n) {
+	if (_allowedNLegs.has(n)) _allowedNLegs.delete(n);
+	else _allowedNLegs.add(n);
+	document.querySelectorAll('.ff-nlegs-btn').forEach(b =>
+		b.classList.toggle('ff-btn--active', _allowedNLegs.has(+b.dataset.n))
+	);
+	// Effacer l'erreur si au moins un est sélectionné
+	if (_allowedNLegs.size > 0)
+		document.getElementById('ff-nlegs-field')?.classList.remove('ff-field--error');
+	updateTabCounts();
+	_allResults = {};
+	clearTabSummaries();
+	document.getElementById('ff-results').hidden = true;
+	savePrefs();
+}
+
+function setMinOddsPerSelection(val) {
+	_minOddsPerSelection = parseFloat(val) || 0;
+	_allResults = {};
+	clearTabSummaries();
+	document.getElementById('ff-results').hidden = true;
+	savePrefs();
+}
+
 function setObjective(obj) {
 	_cashObjective = obj;
 	document.querySelectorAll('.ff-objective-btn').forEach(b =>
@@ -1661,8 +1769,17 @@ function showCurrentResults() {
 
 function yieldToUI() { return new Promise(r => setTimeout(r, 0)); }
 
+function cancelCalc() {
+	_calcCancelled = true;
+}
+
 async function tryRender() {
 	if (!_data) return;
+	if (_allowedNLegs.size === 0) {
+		document.getElementById('ff-nlegs-field')?.classList.add('ff-field--error');
+		return;
+	}
+	document.getElementById('ff-nlegs-field')?.classList.remove('ff-field--error');
 	_amountTotal = parseFloat(document.getElementById('ff-amount-total')?.value) || 10;
 	_amountMin = parseFloat(document.getElementById('ff-amount-min')?.value) || 2;
 	_amount = _amountTotal;
@@ -1674,12 +1791,12 @@ async function tryRender() {
 	const steps = [];
 
 	if (hasSeq) {
-		for (const n of [1, 2, 3])
+		for (const n of [1, 2, 3].filter(n => _allowedNLegs.has(n)))
 			steps.push({ label: `Séquentiel · ${n} sélection${n > 1 ? 's' : ''}`, fn: () => { _allResults[`1_${n}`] = computeSeq(_data, _fbSite, _amount, n, _betType); } });
 	}
 
-	for (const n of [1, 2, 3]) {
-		if (_asymCov && n > 1) {
+	for (const n of [1, 2, 3, 4].filter(n => _allowedNLegs.has(n))) {
+		if (_asymCov && n > 1 && n < 4) {
 			steps.push({
 				label: `Couverture complète · ${n} matchs`,
 				fn: () => {
@@ -1700,7 +1817,7 @@ async function tryRender() {
 		}
 	}
 
-	for (const n of [1, 2, 3])
+	for (const n of [1, 2, 3, 4].filter(n => _allowedNLegs.has(n)))
 		steps.push({ label: `Couverture multi-sites · ${n} match${n > 1 ? 's' : ''}`, fn: () => { _allResults[`4_${n}`] = computeMultiSite(_data, _amount, n, _betType); } });
 
 	const btn = document.getElementById('ff-calc-btn');
@@ -1708,6 +1825,7 @@ async function tryRender() {
 	const overlayLabel = document.getElementById('ff-calc-overlay-label');
 	const overlayBar = document.getElementById('ff-calc-overlay-bar');
 
+	_calcCancelled = false;
 	btn.disabled = true;
 	overlay.hidden = false;
 	overlayBar.style.width = '0%';
@@ -1715,19 +1833,20 @@ async function tryRender() {
 	await yieldToUI();
 
 	for (let i = 0; i < steps.length; i++) {
+		if (_calcCancelled) break;
 		overlayLabel.textContent = steps[i].label;
 		overlayBar.style.width = `${Math.round(i / steps.length * 100)}%`;
 		await yieldToUI();
 		steps[i].fn();
 	}
 
-	overlayBar.style.width = '100%';
-	overlayLabel.textContent = 'Terminé';
+	overlayBar.style.width = _calcCancelled ? '0%' : '100%';
+	overlayLabel.textContent = _calcCancelled ? 'Annulé' : 'Terminé';
 	await yieldToUI();
 	overlay.hidden = true;
 	btn.disabled = false;
 
-	showCurrentResults();
+	if (!_calcCancelled) showCurrentResults();
 }
 
 function onJsonChange() {
@@ -1818,6 +1937,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 		_filterMinOdds = prefs.filterMinOdds;
 		const i = document.getElementById('ff-filter-odds');
 		if (i) i.value = prefs.filterMinOdds;
+	}
+	if (Array.isArray(prefs.allowedNLegs) && prefs.allowedNLegs.length > 0) {
+		_allowedNLegs = new Set(prefs.allowedNLegs);
+		document.querySelectorAll('.ff-nlegs-btn').forEach(b =>
+			b.classList.toggle('ff-btn--active', _allowedNLegs.has(+b.dataset.n))
+		);
+		updateTabCounts();
+	}
+	if (prefs.minOddsPerSelection > 0) {
+		_minOddsPerSelection = prefs.minOddsPerSelection;
+		const i = document.getElementById('ff-min-odds-sel');
+		if (i) i.value = prefs.minOddsPerSelection;
 	}
 	document.getElementById('ff-amount-total')?.addEventListener('change', savePrefs);
 	document.getElementById('ff-amount-min')?.addEventListener('change', savePrefs);

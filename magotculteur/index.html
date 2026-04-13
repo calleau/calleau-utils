@@ -115,6 +115,30 @@
 					</div>
 				</div>
 
+				<!-- Nombre de combinés -->
+				<div class="ff-field" id="ff-nlegs-field">
+					<label class="ff-label">Nombre de combinés</label>
+					<div class="ff-legs-toggle">
+						<button class="ff-nlegs-btn ff-btn ff-btn--active" data-n="1" onclick="toggleNLegs(1)">1</button>
+						<button class="ff-nlegs-btn ff-btn ff-btn--active" data-n="2" onclick="toggleNLegs(2)">2</button>
+						<button class="ff-nlegs-btn ff-btn ff-btn--active" data-n="3" onclick="toggleNLegs(3)">3</button>
+						<button class="ff-nlegs-btn ff-btn" data-n="4" onclick="toggleNLegs(4)">4</button>
+					</div>
+				</div>
+
+				<!-- Cote minimum par sélection -->
+				<div class="ff-field">
+					<label class="ff-label" for="ff-min-odds-sel">Cote min. par sélection</label>
+					<div class="numinput numinput--sm">
+						<input type="number" id="ff-min-odds-sel" value="" min="1" step="0.05" placeholder="—"
+							oninput="setMinOddsPerSelection(this.value)" onclick="this.select()" />
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="var i=document.getElementById('ff-min-odds-sel'); i.value=(parseFloat(i.value)||1)+0.05; setMinOddsPerSelection(i.value)">▲</button>
+							<button class="nbtn" onclick="var i=document.getElementById('ff-min-odds-sel'); i.value=Math.max(1,(parseFloat(i.value)||1)-0.05).toFixed(2); setMinOddsPerSelection(i.value)">▼</button>
+						</div>
+					</div>
+				</div>
+
 				<!-- Bouton calculer -->
 				<button id="ff-calc-btn" class="ff-calc-btn" onclick="tryRender()" disabled>
 					Calculer
@@ -144,6 +168,7 @@
 							<button class="ff-count-btn" data-method="2" data-legs="1" onclick="setMethodLegs(2,1)">1</button>
 							<button class="ff-count-btn" data-method="2" data-legs="2" onclick="setMethodLegs(2,2)">2</button>
 							<button class="ff-count-btn" data-method="2" data-legs="3" onclick="setMethodLegs(2,3)">3</button>
+							<button class="ff-count-btn" data-method="2" data-legs="4" onclick="setMethodLegs(2,4)">4</button>
 						</div>
 					</div>
 					<div class="ff-method-group" data-method="4">
@@ -152,6 +177,7 @@
 							<button class="ff-count-btn" data-method="4" data-legs="1" onclick="setMethodLegs(4,1)">1</button>
 							<button class="ff-count-btn" data-method="4" data-legs="2" onclick="setMethodLegs(4,2)">2</button>
 							<button class="ff-count-btn" data-method="4" data-legs="3" onclick="setMethodLegs(4,3)">3</button>
+							<button class="ff-count-btn" data-method="4" data-legs="4" onclick="setMethodLegs(4,4)">4</button>
 						</div>
 					</div>
 				</div>
@@ -162,7 +188,7 @@
 		</div>
 
 		<footer class="page-footer">
-			<span class="footer-version">v3.2.0</span>
+			<span class="footer-version">v3.3.4</span>
 		</footer>
 
 	</div>
@@ -177,6 +203,7 @@
 			<div class="ff-calc-overlay-bar-wrap">
 				<div id="ff-calc-overlay-bar" class="ff-calc-overlay-bar"></div>
 			</div>
+			<button class="ff-calc-cancel-btn" onclick="cancelCalc()">Annuler</button>
 		</div>
 	</div>
 

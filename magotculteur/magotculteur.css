@@ -327,6 +327,23 @@
 	transition: width 0.15s ease;
 }
 
+.ff-calc-cancel-btn {
+	margin-top: 0.25rem;
+	padding: 0.4rem 1.2rem;
+	border: 1.5px solid var(--color-neg, #dc2626);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-neg, #dc2626);
+	font-size: 0.85rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+.ff-calc-cancel-btn:hover {
+	background: var(--color-neg, #dc2626);
+	color: #fff;
+}
+
 .ff-textarea {
 	width: 100%;
 	min-height: 180px;
@@ -340,6 +357,19 @@
 	font-size: 0.8rem;
 	color: var(--color-neg);
 	margin: 0;
+}
+
+.ff-field--error .ff-label {
+	color: var(--color-neg);
+}
+
+.ff-field--error .ff-btn {
+	border-color: var(--color-neg);
+}
+
+.ff-field--error .ff-legs-toggle {
+	outline: 1.5px solid var(--color-neg);
+	border-radius: 6px;
 }
 
 /* Footer */
