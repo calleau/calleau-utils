@@ -280,26 +280,17 @@
 	position: fixed;
 	inset: 0;
 	z-index: 9999;
-	background: rgba(0, 0, 0, 0.55);
-	backdrop-filter: blur(3px);
+	background: rgba(128, 128, 128, 0.15);
 	display: flex;
+	flex-direction: column;
 	align-items: center;
 	justify-content: center;
+	gap: 1.25rem;
 }
 #ff-calc-overlay[hidden] { display: none; }
 
 .ff-calc-overlay-inner {
-	background: var(--c-surface, #fff);
-	border: 1px solid var(--c-border, #ddd);
-	border-radius: 14px;
-	padding: 2rem 2.5rem;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 1.25rem;
-	min-width: 280px;
-	max-width: 420px;
-	box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+	display: contents;
 }
 
 .ff-calc-spinner {
@@ -322,7 +313,7 @@
 }
 
 .ff-calc-overlay-bar-wrap {
-	width: 100%;
+	width: min(320px, 60vw);
 	height: 5px;
 	background: var(--c-border, #ddd);
 	border-radius: 3px;
@@ -534,6 +525,7 @@
 
 .ff-td-muted { color: var(--color-muted); font-size: 0.78rem; }
 .ff-td-center { justify-content: center; }
+.ff-paris-sub { display: block; font-size: 0.72rem; color: var(--color-muted); font-weight: 400; line-height: 1.3; }
 .ff-td-mono { font-variant-numeric: tabular-nums; }
 .ff-td-date { font-size: 0.78rem; white-space: nowrap; }
 .ff-td-bold { font-weight: 700; }

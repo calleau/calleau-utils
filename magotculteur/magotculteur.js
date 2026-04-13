@@ -4,7 +4,7 @@
 let _data = null;
 let _results = [];
 let _allResults = {};   // cache: key = `${method}_${nLegs}` → results array
-let _method = 1;   // 1 | 2 | 3
+let _method = 1;   // 1 | 2 | 4
 let _betType = 'fb'; // 'fb' | 'cash'
 let _nLegs = 1;
 let _amount = 10;      // compute amount, toujours = _amountTotal
@@ -319,6 +319,21 @@ function stakeAndLiabilityCash(T, cover) {
 	return { stake, liability };
 }
 
+// Best odds on fbSite for a cover outcome (Back covers only — freebets are back bets).
+// Returns the cover object augmented with the fbSite odds, or null if unavailable.
+function bestFbCoverOdds(leg, data, fbSite) {
+	let best = null;
+	for (const cover of leg.covers) {
+		if (cover.type !== 'bk') continue;
+		const val = data[leg.eventKey]?.markets?.[cover.marketName]?.[cover.outcomeName]?.[fbSite];
+		const o = getBackOdds(val);
+		if (!o || o <= 1) continue;
+		if (_filterMinOdds > 0 && o < _filterMinOdds) continue;
+		if (!best || o > best.odds) best = { ...cover, odds: o };
+	}
+	return best;
+}
+
 function computeSeq(data, fbSite, amount, nLegs, betType = 'fb') {
 	const legs = collectLegs(data, fbSite);
 	const results = [];
@@ -469,13 +484,20 @@ function computeSeq(data, fbSite, amount, nLegs, betType = 'fb') {
 				const rate = profit / amount;
 				const s1 = stakeAndLiability(profit, 1, l1.bestCover);
 				const s2 = stakeAndLiability(profit, l1.bestK, l2.bestCover);
+				// Variante Fb : couvertures aussi en freebet sur fbSite
+				const fb1 = bestFbCoverOdds(l1, data, fbSite);
+				const fb2 = bestFbCoverOdds(l2, data, fbSite);
+				const profitFb = (fb1 && fb2)
+					? amount * Math.min(B - 1, fb1.odds - 1, fb2.odds - 1)
+					: null;
 				results.push({
 					method: 1, nLegs: 2,
 					B, profit, rate,
+					profitFb, rateFb: profitFb != null ? profitFb / amount : null,
 					gaps: [l2.dateTime - l1.dateTime],
 					legs: [
-						{ ...l1, cover: l1.bestCover, ...s1 },
-						{ ...l2, cover: l2.bestCover, ...s2 },
+						{ ...l1, cover: l1.bestCover, ...s1, fbCover: fb1 },
+						{ ...l2, cover: l2.bestCover, ...s2, fbCover: fb2 },
 					],
 				});
 			}
@@ -504,14 +526,22 @@ function computeSeq(data, fbSite, amount, nLegs, betType = 'fb') {
 					const s1 = stakeAndLiability(profit, 1, l1.bestCover);
 					const s2 = stakeAndLiability(profit, l1.bestK, l2.bestCover);
 					const s3 = stakeAndLiability(profit, l1.bestK * l2.bestK, l3.bestCover);
+					// Variante Fb
+					const fb1 = bestFbCoverOdds(l1, data, fbSite);
+					const fb2 = bestFbCoverOdds(l2, data, fbSite);
+					const fb3 = bestFbCoverOdds(l3, data, fbSite);
+					const profitFb = (fb1 && fb2 && fb3)
+						? amount * Math.min(B - 1, fb1.odds - 1, fb2.odds - 1, fb3.odds - 1)
+						: null;
 					results.push({
 						method: 1, nLegs: 3,
 						B, profit, rate,
+						profitFb, rateFb: profitFb != null ? profitFb / amount : null,
 						gaps: [l2.dateTime - l1.dateTime, l3.dateTime - l2.dateTime],
 						legs: [
-							{ ...l1, cover: l1.bestCover, ...s1 },
-							{ ...l2, cover: l2.bestCover, ...s2 },
-							{ ...l3, cover: l3.bestCover, ...s3 },
+							{ ...l1, cover: l1.bestCover, ...s1, fbCover: fb1 },
+							{ ...l2, cover: l2.bestCover, ...s2, fbCover: fb2 },
+							{ ...l3, cover: l3.bestCover, ...s3, fbCover: fb3 },
 						],
 					});
 				}
@@ -698,6 +728,102 @@ function bestSingleSiteCovering(data, betsLegsArray) {
 				prod * legOddsCache.get(`${eventKey}|${marketName}|${outcomeName}`)[site], 1),
 		})),
 	}));
+}
+
+// "Couverture multi-sites" : pour chaque pari du covering set, trouve la meilleure cote
+// disponible sur N'IMPORTE quel site bookmaker (pas échange). Rejette si tous les paris
+// se retrouvent sur le même site (→ déjà couvert par Couverture complète).
+// Retourne [{legs, site, odds}, ...] ou null si une cote est manquante.
+function bestMultiSiteCovering(data, betsLegsArray) {
+	const rawBets = betsLegsArray.map(betLegs => {
+		let best = null;
+		for (const { eventKey, marketName, outcomeName } of betLegs) {
+			const oddsMap = data[eventKey]?.markets?.[marketName]?.[outcomeName];
+			if (!oddsMap) return null;
+			for (const [site, val] of Object.entries(oddsMap)) {
+				if (isExchange(val)) continue;
+				const o = typeof val === 'number' ? val : (val?.odds ?? null);
+				if (!o || o <= 1) continue;
+				if (_filterMinOdds > 0 && o < _filterMinOdds) continue;
+				if (!best || o > best.odds) best = { site, odds: o };
+			}
+		}
+		return best ? { legs: betLegs, site: best.site, odds: best.odds } : null;
+	});
+	if (rawBets.some(b => !b)) return null;
+	// Filtre : au moins 2 sites différents requis
+	const sites = new Set(rawBets.map(b => b.site));
+	if (sites.size < 2) return null;
+	return rawBets;
+}
+
+function computeMultiSite(data, amount, nMatches, betType = 'fb') {
+	const allEventKeys = Object.keys(data);
+	const eventKeys = nMatches === 1 ? allEventKeys : topEventsForToutFB(data);
+	const results = [];
+	const bestPerCombo = new Map();
+
+	function tryMultiSite(betsSpec, comboKey, meta) {
+		const rawBets = bestMultiSiteCovering(data, betsSpec);
+		if (!rawBets) return;
+		const fin = finalizeBets(rawBets, amount, betType);
+		if (!fin) return;
+		const entry = { method: 4, nMatches, nBets: betsSpec.length, ...fin,
+			totalAmount: amount, betType, ...meta };
+		if (nMatches === 1) {
+			results.push(entry);
+		} else {
+			const prev = bestPerCombo.get(comboKey);
+			if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
+		}
+	}
+
+	if (nMatches === 1) {
+		for (const eventKey of eventKeys) {
+			for (const coverSet of getCoverSets(data, eventKey)) {
+				tryMultiSite(coverSet.map(l => [l]), eventKey, { eventKeys: [eventKey] });
+			}
+		}
+	} else if (nMatches === 2) {
+		for (let i = 0; i < eventKeys.length; i++) {
+			const ek1 = eventKeys[i];
+			for (let j = i + 1; j < eventKeys.length; j++) {
+				const ek2 = eventKeys[j];
+				const comboKey = [ek1, ek2].sort().join('|');
+				for (const p1 of dcPartitions(data, ek1)) {
+					for (const p2 of dcPartitions(data, ek2)) {
+						tryMultiSite(
+							generateCoveringBets([ek1, ek2], [p1, p2]),
+							comboKey, { eventKeys: [ek1, ek2] }
+						);
+					}
+				}
+			}
+		}
+	} else if (nMatches === 3) {
+		for (let i = 0; i < eventKeys.length; i++) {
+			const ek1 = eventKeys[i];
+			for (let j = i + 1; j < eventKeys.length; j++) {
+				const ek2 = eventKeys[j];
+				for (let m = j + 1; m < eventKeys.length; m++) {
+					const ek3 = eventKeys[m];
+					const comboKey = [ek1, ek2, ek3].sort().join('|');
+					for (const p1 of dcPartitions(data, ek1)) {
+						for (const p2 of dcPartitions(data, ek2)) {
+							for (const p3 of dcPartitions(data, ek3)) {
+								tryMultiSite(
+									generateCoveringBets([ek1, ek2, ek3], [p1, p2, p3]),
+									comboKey, { eventKeys: [ek1, ek2, ek3] }
+								);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return [...results, ...bestPerCombo.values()].sort((a, b) => b.rate - a.rate);
 }
 
 // Generate all 2^n bets for a covering set defined by partitions
@@ -919,164 +1045,6 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 	return [...results, ...bestPerCombo.values()].sort((a, b) => b.rate - a.rate);
 }
 
-// ===== METHOD 3: MIXED (1 cash cover + FB covering set) =====
-//
-// 1 match couvert en cash (facteur k), les N-1 autres en FB simultanés.
-// Les paris FB contiennent tous la bonne issue DC du match couvert en cash.
-// rate_Mixte = rate_ToutFB(2^(N-1) paris FB) / k_cash
-//
-function computeMixte(data, amount, nMatches, betType = 'fb') {
-	if (nMatches < 2) return [];
-
-	const eventKeys = topEventsForToutFB(data);
-	const bestPerCombo = new Map();
-
-	function saveIfBetter(comboKey, entry) {
-		const prev = bestPerCombo.get(comboKey);
-		if (!prev || entry.rate > prev.rate) bestPerCombo.set(comboKey, entry);
-	}
-
-	function buildMixteEntry(cashEk, fbEks, cashPartition, cashCover, fin) {
-		const k = cashCover.k;
-		const rate = fin.rate / k;
-		if (rate <= 0) return null;
-		const gain = cashCover.type === 'lay' ? (1 - cashCover.c) : (cashCover.odds - 1);
-		let cashStake, cashLiability;
-		if (betType === 'cash') {
-			// For cash: cover must pay total return T = amount × fin.rate
-			const T = amount * fin.rate;
-			cashStake = T / gain;
-		} else {
-			// For freebet: cover must pay profit = amount × rate
-			cashStake = (amount * rate) / gain;
-		}
-		cashLiability = cashCover.type === 'lay' ? cashStake * (cashCover.lGross - 1) : null;
-		const profit = amount * rate;
-		return { method: 3, nMatches, betType, rate, profit,
-			loss: betType === 'cash' ? amount * (1 - rate) : undefined,
-			totalAmount: amount,
-			cashEk, cashPartition, cashCover, cashStake, cashLiability,
-			fbBets: fin.bets, eventKeys: [cashEk, ...fbEks] };
-	}
-
-	function tryCashFb(cashEk, fbEks) {
-		const cashEvent = data[cashEk];
-		const comboKey = [...fbEks, cashEk].sort().join('|') + '|c=' + cashEk;
-
-		// --- Chemin DC (partitions double chance) ---
-		const cashParts = dcPartitions(data, cashEk);
-		const fbPartsList = fbEks.map(ek => dcPartitions(data, ek));
-		if (cashParts.length > 0 && !fbPartsList.some(ps => !ps.length)) {
-			for (const p_cash of cashParts) {
-				const oddsMap = cashEvent?.markets?.[p_cash.dcMarket]?.[p_cash.dcOutcome];
-				if (!oddsMap) continue;
-				const covers = findCoversForOutcome(cashEvent, p_cash.dcMarket, p_cash.dcOutcome, oddsMap, '');
-				if (!covers.length) continue;
-				const bestCover = covers.reduce((best, c) => c.k < best.k ? c : best);
-
-				function iterParts(idx, chosen) {
-					if (idx === fbEks.length) {
-						const raw = [];
-						let valid = true;
-						for (let mask = 0; mask < (1 << fbEks.length); mask++) {
-							const betLegs = [
-								{ eventKey: cashEk, marketName: p_cash.dcMarket, outcomeName: p_cash.dcOutcome },
-								...chosen.map((p, i) => ({
-									eventKey: fbEks[i],
-									marketName: (mask >> i) & 1 ? p.compMarket : p.dcMarket,
-									outcomeName: (mask >> i) & 1 ? p.compOutcome : p.dcOutcome,
-								})),
-							];
-							const best = bestCombinedOdds(data, betLegs);
-							if (!best) { valid = false; break; }
-							raw.push({ legs: betLegs, site: best.site, odds: best.odds });
-						}
-						if (!valid) return;
-						const fin = finalizeBets(raw, amount, betType);
-						if (!fin) return;
-						const entry = buildMixteEntry(cashEk, fbEks, p_cash, bestCover, fin);
-						if (entry) saveIfBetter(comboKey, entry);
-						return;
-					}
-					for (const p of fbPartsList[idx]) iterParts(idx + 1, [...chosen, p]);
-				}
-				iterParts(0, []);
-			}
-		}
-
-		// --- Chemin 1X2 (fallback sans marché DC) ---
-		const res12Cash = findRes12Market(cashEvent?.markets || {});
-		const fbRes12List = fbEks.map(ek => findRes12Market(data[ek]?.markets || {}));
-		if (res12Cash && !fbRes12List.some(r => !r)) {
-			const [r12mkt, r12map] = res12Cash;
-			const allCashOuts = Object.keys(r12map);
-			if (allCashOuts.length === 3) {
-				for (const compOutcome of allCashOuts) {
-					const nonComp = allCashOuts.filter(o => o !== compOutcome);
-					const oddsMapComp = r12map[compOutcome];
-					if (!oddsMapComp) continue;
-					let bestCashCover = null;
-					for (const [site, val] of Object.entries(oddsMapComp)) {
-						let o = typeof val === 'number' ? val
-							: (isExchange(val) ? (val.Back?.odds_net ?? val.Back?.odds) : (val?.odds ?? null));
-						if (!o || o <= 1) continue;
-						const k = kFromBk(o);
-						if (!bestCashCover || k < bestCashCover.k)
-							bestCashCover = { type: 'bk', site, marketName: r12mkt, outcomeName: compOutcome, odds: o, lGross: null, c: null, k };
-					}
-					if (!bestCashCover) continue;
-
-					// FB bets : chaque non-comp de A × toutes issues des matchs FB
-					function iterFb(fbIdx, tail) {
-						if (fbIdx === fbEks.length)
-							return nonComp.map(nc => [{ eventKey: cashEk, marketName: r12mkt, outcomeName: nc }, ...tail]);
-						const [fm, fmap] = fbRes12List[fbIdx];
-						return Object.keys(fmap).flatMap(fo =>
-							iterFb(fbIdx + 1, [...tail, { eventKey: fbEks[fbIdx], marketName: fm, outcomeName: fo }])
-						);
-					}
-					const allBetLegs = iterFb(0, []);
-					const raw = [];
-					let valid = true;
-					for (const betLegs of allBetLegs) {
-						const best = bestCombinedOdds(data, betLegs);
-						if (!best) { valid = false; break; }
-						raw.push({ legs: betLegs, site: best.site, odds: best.odds });
-					}
-					if (!valid) continue;
-					const fin = finalizeBets(raw, amount, betType);
-					if (!fin) continue;
-					const syntheticPartition = { dcMarket: r12mkt, dcOutcome: nonComp.join('/'), compMarket: r12mkt, compOutcome };
-					const entry = buildMixteEntry(cashEk, fbEks, syntheticPartition, bestCashCover, fin);
-					if (entry) saveIfBetter(comboKey, entry);
-				}
-			}
-		}
-	}
-
-	if (nMatches === 2) {
-		for (let i = 0; i < eventKeys.length; i++) {
-			for (let j = i + 1; j < eventKeys.length; j++) {
-				tryCashFb(eventKeys[i], [eventKeys[j]]);
-				tryCashFb(eventKeys[j], [eventKeys[i]]);
-			}
-		}
-	} else if (nMatches === 3) {
-		for (let i = 0; i < eventKeys.length; i++) {
-			for (let j = i + 1; j < eventKeys.length; j++) {
-				for (let m = j + 1; m < eventKeys.length; m++) {
-					const [e1, e2, e3] = [eventKeys[i], eventKeys[j], eventKeys[m]];
-					tryCashFb(e1, [e2, e3]);
-					tryCashFb(e2, [e1, e3]);
-					tryCashFb(e3, [e1, e2]);
-				}
-			}
-		}
-	}
-
-	return [...bestPerCombo.values()].sort((a, b) => b.rate - a.rate);
-}
-
 // ===== RENDERING =====
 
 function formatGap(ms) {
@@ -1095,16 +1063,25 @@ function evInfo(leg) {
 function coverBadge(cover) {
 	if (cover.type === 'lay') return `<span class="ff-badge ff-badge-lay">Lay</span>`;
 	if (cover.type === 'dc')  return `<span class="ff-badge ff-badge-dc">DC</span>`;
-	return `<span class="ff-badge ff-badge-bk">Back</span>`;
+	if (isExchangeSite(cover?.site)) return `<span class="ff-badge ff-badge-bk">Back</span>`;
+	return '';
 }
 
 const _SITE_KEYS = ['piwi', 'olybet', 'betclic', 'winamax', 'bwin', 'unibet', 'feelingbet', 'pokerstars'];
+const _EXCHANGE_SITE_KEYS = ['piwi'];
+
+function isExchangeSite(name) {
+	if (!name) return false;
+	const low = name.toLowerCase();
+	return _EXCHANGE_SITE_KEYS.some(k => low.includes(k));
+}
 
 function sitePill(name, isLay = false) {
 	const key = _SITE_KEYS.find(k => name.toLowerCase().includes(k));
 	const dataSite = key ? ` data-site="${key}"` : '';
-	const layClass = isLay && key === 'piwi' ? ' ff-site-pill--lay' : '';
-	const label = key === 'piwi' ? `PIWI ${isLay ? 'Lay' : 'Back'}` : esc(name);
+	const isExch = _EXCHANGE_SITE_KEYS.includes(key);
+	const layClass = isLay && isExch ? ' ff-site-pill--lay' : '';
+	const label = isExch ? `${esc(name)} ${isLay ? 'Lay' : 'Back'}` : esc(name);
 	return `<span class="ff-site-pill${layClass}"${dataSite}>${label}</span>`;
 }
 
@@ -1159,7 +1136,7 @@ function buildSeqCard(result) {
 	const liabHtml = totalLiab > 0
 		? `<span class="ff-card-liab">Liab. totale <strong>${fmt(totalLiab)}\u00a0€</strong></span>` : '';
 	const coverLabel = result.nLegs === 1
-		? result.legs[0].cover.type === 'lay' ? 'Lay EX' : (result.legs[0].cover.type === 'dc' ? 'DC BK' : 'Back BK')
+		? result.legs[0].cover.type === 'lay' ? 'Lay EX' : (result.legs[0].cover.type === 'dc' ? 'DC BK' : (isExchangeSite(result.legs[0].cover.site) ? 'Back EX' : 'BK'))
 		: `${result.nLegs} legs séq.`;
 	const isCash = result.betType === 'cash';
 	const valueHtml = isCash
@@ -1170,7 +1147,7 @@ function buildSeqCard(result) {
 	return `
 	<div class="ff-card ff-card-m1">
 		<div class="ff-card-header">
-			<span class="ff-card-type">Cash séquentiel · ${esc(coverLabel)}</span>
+			<span class="ff-card-type">Séquentiel · ${esc(coverLabel)}</span>
 			<span class="ff-card-b">Cote\u00a0: <strong>${fmt(result.B)}</strong></span>
 			${liabHtml}
 			${valueHtml}
@@ -1210,7 +1187,7 @@ function buildToutFBCard(result) {
 	return `
 	<div class="ff-card ff-card-m2">
 		<div class="ff-card-header">
-			<span class="ff-card-type">Couverture classique · ${result.nBets}\u00a0Paris · ${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
+			<span class="ff-card-type">${result.method === 4 ? 'Couverture multi-sites' : 'Couverture complète'} · ${result.nBets}\u00a0Paris · ${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
 			<span class="ff-card-b">Cotes\u00a0: ${fmt(minOdds)}\u2013${fmt(maxOdds)}</span>
 			<span class="ff-card-totalfb">Total\u00a0: <strong>${fmt(result.totalAmount)}\u00a0€</strong></span>
 			${valueHtml}
@@ -1220,69 +1197,12 @@ function buildToutFBCard(result) {
 	</div>`;
 }
 
-function buildMixteCashRow(result, scale = 1) {
-	const ev = _data?.[result.cashEk];
-	const evName = ev ? eventDisplayName(result.cashEk, ev) : result.cashEk;
-	const p = result.cashPartition;
-	const cover = result.cashCover;
-	const stakeDetail = result.cashLiability != null
-		? `${fmt(result.cashStake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(result.cashLiability * scale)}\u00a0€)</span>`
-		: `${fmt(result.cashStake * scale)}\u00a0€`;
-	const oddsDetail = cover.lGross != null
-		? `${fmt(cover.lGross)}`
-		: `${fmt(cover.odds)}`;
-	return `
-	<div class="ff-leg ff-leg-cash">
-		<div class="ff-leg-left">
-			<span class="ff-leg-num ff-leg-num-cash">CASH</span>
-			<div class="ff-ev-wrap"><span class="ff-ev-name">${esc(evName)}</span></div>
-		</div>
-		<div class="ff-leg-right">
-			<span class="ff-leg-market">${esc(p.dcMarket)} · <strong>${esc(p.dcOutcome)}</strong> <span class="ff-sub">(en FB)</span></span>
-			<span class="ff-leg-cover">${esc(cover.site)} ${coverBadge(cover)} ${esc(cover.outcomeName)} · ${oddsDetail}</span>
-			<span class="ff-leg-stake">Mise couv.\u00a0: <strong>${stakeDetail}</strong></span>
-		</div>
-	</div>`;
-}
-
-function buildMixteCard(result) {
-	const isCash = result.betType === 'cash';
-	const cashRow = buildMixteCashRow(result);
-	const betRows = result.fbBets.map((b, i) => buildToutFBBetRow(b, i, result.betType)).join('');
-	const nFb = result.fbBets.length;
-	const valueHtml = isCash
-		? `<span class="ff-card-profit neg"><strong>−${fmt(result.loss)}\u00a0€</strong> perte</span>`
-		: `<span class="ff-card-profit pos"><strong>${fmt(result.profit)}\u00a0€</strong> garanti</span>`;
-	const rateHtml = `<span class="${isCash ? rateClassCash(result.rate) : rateClass(result.rate)} ff-card-rate">${fmt(result.rate * 100, 1)}\u00a0%</span>`;
-	return `
-	<div class="ff-card ff-card-m3">
-		<div class="ff-card-header">
-			<span class="ff-card-type">Mixte · ${nFb}\u00a0Paris + cash</span>
-			<span class="ff-card-b">${result.nMatches}\u00a0match${result.nMatches > 1 ? 's' : ''}</span>
-			<span class="ff-card-totalfb">Total\u00a0: <strong>${fmt(result.totalAmount)}\u00a0€</strong></span>
-			${valueHtml}
-			${rateHtml}
-		</div>
-		<div class="ff-legs">${cashRow}</div>
-		<div class="ff-m3-divider"></div>
-		<div class="ff-bets">${betRows}</div>
-	</div>`;
-}
-
 // ===== TABLE RENDERING =====
 
 function rowMethod(result) {
-	if (result.method === 1) return 'Cash séq.';
+	if (result.method === 1) return 'Séq.';
 	if (result.method === 2) return 'Couv. complète';
-	if (result.method === 3) {
-		const keys = result.eventKeys || [];
-		const cashEk = result.cashEk;
-		const t = result.cashCover?.type;
-		const cashLabel = t === 'lay' ? 'Cash séq. · Lay' : t === 'back' ? 'Cash séq. · Back' : 'Cash séq.';
-		return keys.map(ek =>
-			`<span>${esc(ek === cashEk ? cashLabel : 'Couv. classique')}</span>`
-		).join('');
-	}
+	if (result.method === 4) return 'Multi-sites';
 	return '';
 }
 
@@ -1317,27 +1237,19 @@ function rowMarketsHtml(result) {
 			return `<span>${esc(mkts.join(', '))}</span>`;
 		}).join('');
 	}
-	if (result.method === 2) {
+	if (result.method === 2 || result.method === 4) {
 		return resultEventKeys(result).map(ek => {
 			const mkts = [...new Set(result.bets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
 			return `<span>${esc(mkts.join(', '))}</span>`;
 		}).join('');
-	}
-	if (result.method === 3) {
-		const cashMkt = result.cashPartition?.dcMarket ?? '';
-		const fbEks = resultEventKeys(result).slice(1);
-		const fbSpans = fbEks.map(ek => {
-			const mkts = [...new Set(result.fbBets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
-			return `<span>${esc(mkts.join(', '))}</span>`;
-		});
-		return [`<span>${esc(cashMkt)}</span>`, ...fbSpans].join('');
 	}
 	return '';
 }
 
 function coverTypeLabel(cover) {
 	if (!cover) return '';
-	const suffix = cover.type === 'lay' ? ' Lay' : cover.type === 'dc' ? '' : ' Back';
+	const exch = isExchangeSite(cover.site);
+	const suffix = cover.type === 'lay' ? ' Lay' : cover.type === 'dc' ? '' : (exch ? ' Back' : '');
 	return (cover.site || '') + suffix;
 }
 
@@ -1352,19 +1264,11 @@ function rowTypeHtml(result) {
 			return `<span>${esc(leg ? coverTypeLabel(leg.cover) : '')}</span>`;
 		}).join('');
 	}
-	if (result.method === 2) {
+	if (result.method === 2 || result.method === 4) {
 		return resultEventKeys(result).map(ek => {
 			const n = outcomesPerEvent(result.bets, ek);
 			return `<span>${n}\u00a0issues</span>`;
 		}).join('');
-	}
-	if (result.method === 3) {
-		const cashLabel = coverTypeLabel(result.cashCover);
-		const fbEks = resultEventKeys(result).slice(1);
-		return [`<span>${esc(cashLabel)}</span>`, ...fbEks.map(ek => {
-			const n = outcomesPerEvent(result.fbBets, ek);
-			return `<span>${n}\u00a0issues</span>`;
-		})].join('');
 	}
 	return '';
 }
@@ -1391,21 +1295,26 @@ function eventsLabel(result) {
 
 
 function rowParis(result) {
-	if (result.method === 1) return result.legs.length * 2;
-	if (result.method === 2) return result.nBets;
-	if (result.method === 3) return result.fbBets.length + 1;
+	if (result.method === 1) {
+		const count = result.legs.length * 2;
+		if (result.profitFb != null && result.nLegs > 1) {
+			const scale = getDisplayScale(result);
+			return `${count}<br><span class="ff-paris-sub">+${fmt(result.profitFb * scale)}\u00a0\u20ac Fb</span><br><span class="ff-paris-sub">+${fmt(result.profit * scale)}\u00a0\u20ac Cash</span>`;
+		}
+		return count;
+	}
+	if (result.method === 2 || result.method === 4) return result.nBets;
 	return '-';
 }
 
 function rowCashEngaged(result) {
 	if (result.method === 1) return result.legs.reduce((s, l) => s + (l.liability ?? l.stake), 0);
-	if (result.method === 3) return result.cashLiability ?? result.cashStake;
-	return null; // Couverture classique : pas de cash engagé
+	return null;
 }
 
 function rowCote(result) {
 	if (result.method === 1) return fmt(result.B);
-	if (result.method === 2) {
+	if (result.method === 2 || result.method === 4) {
 		const odds = result.bets.map(b => b.odds);
 		const min = Math.min(...odds), max = Math.max(...odds);
 		return Math.abs(max - min) < 0.01 ? fmt(min) : `${fmt(min)}\u2013${fmt(max)}`;
@@ -1451,60 +1360,13 @@ function buildSeqDetailFlat(result, scale = 1) {
 	return `<div class="ff-betlist">${backRow}${coverRows}</div>`;
 }
 
-function buildMixteDetailFlat(result, scale = 1) {
-	const ev = _data?.[result.cashEk];
-	const evName = ev ? eventDisplayName(result.cashEk, ev) : result.cashEk;
-	const p = result.cashPartition;
-	const cover = result.cashCover;
-	const amount = _amount * scale;
-
-	// FB back row (DC part placed as freebet on fbSite)
-	const fbOutcome = resolveOutcome(p.dcOutcome, result.cashEk, p.dcMarket);
-	const fbRow = `
-	<div class="ff-betrow">
-		<span class="ff-betrow-badge ff-betrow-badge--fb">FB</span>
-		<div class="ff-betrow-body">
-			<span class="ff-betrow-title">${esc(evName)}</span>
-			<span class="ff-betrow-detail">${sitePill(_fbSite)} · ${fbOutcome} · Mise <strong>${fmt(amount)}\u00a0€</strong> ${miseTag('fb')}</span>
-		</div>
-	</div>`;
-
-	// Cash cover row
-	const badgeClass = cover.type === 'lay' ? 'lay' : 'back';
-	const badgeLabel = cover.type === 'lay' ? 'LAY' : 'BACK';
-	const oddsStr = cover.lGross != null
-		? `<strong>${fmt(cover.lGross)}</strong>`
-		: `<strong>${fmt(cover.odds)}</strong>`;
-	const liabilityStr = result.cashLiability != null
-		? ` · Liability <strong>${fmt(result.cashLiability * scale)}\u00a0€</strong>`
-		: '';
-	const coverOutcome = resolveOutcome(cover.outcomeName, result.cashEk, '1X2');
-	const coverRow = `
-	<div class="ff-betrow">
-		<span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">${badgeLabel}</span>
-		<div class="ff-betrow-body">
-			<span class="ff-betrow-title">${esc(evName)}</span>
-			<span class="ff-betrow-detail">${sitePill(cover.site, cover.type === 'lay')} · ${coverOutcome} · Mise <strong>${fmt(result.cashStake * scale)}\u00a0€</strong> ${miseTag('cash')} · Cote ${oddsStr}${liabilityStr}</span>
-		</div>
-	</div>`;
-
-	// FB bet rows (other freebets)
-	const betRows = result.fbBets.map((b, i) => buildToutFBBetRow(b, i, result.betType, scale)).join('');
-
-	return `<div class="ff-betlist">${fbRow}${coverRow}</div><div class="ff-m3-divider"></div><div class="ff-detail-bets">${betRows}</div>`;
-}
-
-
 function buildDetailContent(result, scale = 1) {
 	if (result.method === 1) {
 		return buildSeqDetailFlat(result, scale);
 	}
-	if (result.method === 2) {
+	if (result.method === 2 || result.method === 4) {
 		const rows = result.bets.map((b, i) => buildToutFBBetRow(b, i, result.betType, scale)).join('');
 		return `<div class="ff-detail-bets">${rows}</div>`;
-	}
-	if (result.method === 3) {
-		return buildMixteDetailFlat(result, scale);
 	}
 	return '';
 }
@@ -1533,7 +1395,7 @@ function buildTableRow(result, idx) {
 	const rClass = isCash ? rateClassCash(result.rate) : rateClass(result.rate);
 	return `
 		<button class="ff-row-expand" id="ff-expand-${idx}" onclick="toggleDetail(${idx})" aria-label="Détails"><span class="ff-expand-icon">&#9654;</span></button>
-		<div class="ff-td ff-td-muted${result.method === 3 ? ' ff-td-events' : ''}">${result.method === 3 ? rowMethod(result) : esc(rowMethod(result))}</div>
+		<div class="ff-td ff-td-muted">${esc(rowMethod(result))}</div>
 		<div class="ff-td ff-td-center">${rowMatches(result)}</div>
 		<div class="ff-td ff-td-mono ff-td-date">${esc(rowFirstDate(result))}</div>
 		<div class="ff-td ff-td-events">${eventsLines(result)}</div>
@@ -1689,15 +1551,13 @@ function clearTabSummaries() {
 
 function resultMinOdds(result) {
 	if (result.method === 1) return result.B;
-	if (result.method === 2) return Math.min(...result.bets.map(b => b.odds));
-	if (result.method === 3) return Math.min(result.cashCover?.odds ?? Infinity, ...result.fbBets.map(b => b.odds));
+	if (result.method === 2 || result.method === 4) return Math.min(...result.bets.map(b => b.odds));
 	return 0;
 }
 
 function resultMinStake(result) {
-	if (result.method === 1) return _amount; // back bet = toujours _amount sur le site sélectionné
-	if (result.method === 2) return Math.min(...result.bets.map(b => b.stake));
-	if (result.method === 3) return Math.min(...result.fbBets.map(b => b.stake));
+	if (result.method === 1) return _amount;
+	if (result.method === 2 || result.method === 4) return Math.min(...result.bets.map(b => b.stake));
 	return _amount;
 }
 
@@ -1738,7 +1598,7 @@ function setMethodLegs(m, n) {
 	savePrefs();
 }
 
-function setMethod(m) { setMethodLegs(m, m === 3 ? Math.max(2, _nLegs) : _nLegs); }
+function setMethod(m) { setMethodLegs(m, _nLegs); }
 function setLegs(n) { setMethodLegs(_method, n); }
 
 function setBetType(t) {
@@ -1793,7 +1653,7 @@ function showCurrentResults() {
 	const results = _allResults[key];
 	if (results === undefined) {
 		el.hidden = false;
-		el.innerHTML = '<p class="ff-empty">Sélectionnez un site freebet pour calculer Cash séquentiel.</p>';
+		el.innerHTML = '<p class="ff-empty">Sélectionnez un site freebet pour calculer le Séquentiel.</p>';
 		return;
 	}
 	renderResults(results);
@@ -1815,16 +1675,11 @@ async function tryRender() {
 
 	if (hasSeq) {
 		for (const n of [1, 2, 3])
-			steps.push({ label: `Cash séquentiel · ${n} sélection${n > 1 ? 's' : ''}`, fn: () => { _allResults[`1_${n}`] = computeSeq(_data, _fbSite, _amount, n, _betType); } });
+			steps.push({ label: `Séquentiel · ${n} sélection${n > 1 ? 's' : ''}`, fn: () => { _allResults[`1_${n}`] = computeSeq(_data, _fbSite, _amount, n, _betType); } });
 	}
-
-	_allResults[`3_1`] = [];
-	for (const n of [2, 3])
-		steps.push({ label: `Mixte · ${n} matchs`, fn: () => { _allResults[`3_${n}`] = computeMixte(_data, _amount, n, _betType); } });
 
 	for (const n of [1, 2, 3]) {
 		if (_asymCov && n > 1) {
-			// Deux étapes distinctes : sym seule, puis asym (qui recalcule sym+asym et écrase)
 			steps.push({
 				label: `Couverture complète · ${n} matchs`,
 				fn: () => {
@@ -1844,6 +1699,9 @@ async function tryRender() {
 			});
 		}
 	}
+
+	for (const n of [1, 2, 3])
+		steps.push({ label: `Couverture multi-sites · ${n} match${n > 1 ? 's' : ''}`, fn: () => { _allResults[`4_${n}`] = computeMultiSite(_data, _amount, n, _betType); } });
 
 	const btn = document.getElementById('ff-calc-btn');
 	const overlay = document.getElementById('ff-calc-overlay');
