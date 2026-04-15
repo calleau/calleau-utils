@@ -1,6 +1,6 @@
 import EngineWorker from './worker.ts?worker';
 import { collectSites, eventDisplayName, formatDate, isExchange, getBackOdds } from './engine';
-import type { AllResults, AnyResult, SeqResult, ToutFBResult, LegWithCover, FinalizedBet, WorkerOutMessage, EngineOpts, CoverageRule } from './types';
+import type { AllResults, AnyResult, SeqResult, ToutFBResult, HybridFBResult, LegWithCover, FinalizedBet, WorkerOutMessage, EngineOpts, CoverageRule } from './types';
 
 // ===== STATE =====
 let _data: any = null;
@@ -203,8 +203,41 @@ function buildToutFBBetRow(bet: FinalizedBet, idx: number, betType: string, scal
   </div>`;
 }
 
+function buildHybridDetailContent(result: HybridFBResult, scale = 1): string {
+  const fbTitleParts = result.fbBet.legs.map(l => {
+    const ev = _data?.[l.eventKey];
+    return esc(ev ? eventDisplayName(l.eventKey, ev) : l.eventKey);
+  }).join(' + ');
+  const fbOutcomeParts = result.fbBet.legs.map(l => resolveOutcome(l.outcomeName, l.eventKey, l.marketName)).join(' + ');
+  const fbRow = `
+  <div class="ff-bet">
+    <span class="ff-bet-num">Freebet</span>
+    <div class="ff-bet-desc">
+      <span class="ff-bet-legs">${fbTitleParts}</span>
+      <span class="ff-bet-site">${sitePill(result.fbBet.site)} · ${fbOutcomeParts} · Mise <strong>${fmt(result.fbBet.stake * scale)}\u00a0€</strong> ${miseTag('fb')} · Cote <strong>${fmt(result.fbBet.odds)}</strong></span>
+    </div>
+  </div>`;
+  const cashRows = result.cashBets.map((b, i) => {
+    const titleParts = b.legs.map(l => {
+      const ev = _data?.[l.eventKey];
+      return esc(ev ? eventDisplayName(l.eventKey, ev) : l.eventKey);
+    }).join(' + ');
+    const outcomeParts = b.legs.map(l => resolveOutcome(l.outcomeName, l.eventKey, l.marketName)).join(' + ');
+    return `
+  <div class="ff-bet">
+    <span class="ff-bet-num">Cash\u00a0${i + 1}</span>
+    <div class="ff-bet-desc">
+      <span class="ff-bet-legs">${titleParts}</span>
+      <span class="ff-bet-site">${sitePill(b.site)} · ${outcomeParts} · Mise <strong>${fmt(b.stake * scale)}\u00a0€</strong> ${miseTag('cash')} · Cote <strong>${fmt(b.odds)}</strong></span>
+    </div>
+  </div>`;
+  }).join('');
+  return `<div class="ff-detail-bets">${fbRow}${cashRows}</div>`;
+}
+
 function buildDetailContent(result: AnyResult, scale = 1): string {
   if (result.method === 1) return buildSeqDetailFlat(result as SeqResult, scale);
+  if (result.method === 3) return buildHybridDetailContent(result as HybridFBResult, scale);
   if (result.method === 2 || result.method === 4) {
     const r = result as ToutFBResult;
     const rows = r.bets.map((b, i) => buildToutFBBetRow(b, i, r.betType, scale)).join('');
@@ -222,6 +255,7 @@ const COL_FILTER_DEFS: Record<string, any> = {
     options: [
       { value: '1', label: 'Séq.' },
       { value: '2', label: 'Couv. complète' },
+      { value: '3', label: 'Hybride FB' },
       { value: '4', label: 'Multi-sites' },
     ],
     getValue: (r: AnyResult) => String(r.method),
@@ -231,14 +265,14 @@ const COL_FILTER_DEFS: Record<string, any> = {
     label: 'Matchs',
     getValue: (r: AnyResult) => r.method === 1
       ? new Set((r as SeqResult).legs.map(l => l.eventKey)).size
-      : ((r as ToutFBResult).nMatches ?? 0),
+      : ((r as ToutFBResult | HybridFBResult).nMatches ?? 0),
   },
   paris: {
     type: 'num',
     label: 'Paris',
     getValue: (r: AnyResult) => r.method === 1
       ? (r as SeqResult).legs.length * 2
-      : ((r as ToutFBResult).nBets ?? 0),
+      : ((r as ToutFBResult | HybridFBResult).nBets ?? 0),
   },
   liab: {
     type: 'num',
@@ -253,6 +287,7 @@ const COL_FILTER_DEFS: Record<string, any> = {
     label: 'Cote',
     getValue: (r: AnyResult) => {
       if (r.method === 1) return (r as SeqResult).B;
+      if (r.method === 3) { const hr = r as HybridFBResult; return Math.min(hr.fbBet.odds, ...hr.cashBets.map(b => b.odds)); }
       if (r.method === 2 || r.method === 4) return Math.min(...(r as ToutFBResult).bets.map(b => b.odds));
       return null;
     },
@@ -402,13 +437,14 @@ function thFilter(col: string, label: string, extraClass = ''): string {
 function rowMethod(result: AnyResult): string {
   if (result.method === 1) return 'Séq.';
   if (result.method === 2) return 'Couv. complète';
+  if (result.method === 3) return 'Hybride FB';
   if (result.method === 4) return 'Multi-sites';
   return '';
 }
 
 function rowMatches(result: AnyResult): number | string {
   if (result.method === 1) return new Set((result as SeqResult).legs.map(l => l.eventKey)).size;
-  return (result as ToutFBResult).nMatches ?? '-';
+  return (result as ToutFBResult | HybridFBResult).nMatches ?? '-';
 }
 
 function rowFirstDate(result: AnyResult): string {
@@ -417,7 +453,7 @@ function rowFirstDate(result: AnyResult): string {
       (l.dateTime && (!min || l.dateTime < min)) ? l.dateTime : min, null);
     return first ? formatDate(new Date(first).toISOString()) : '—';
   }
-  const keys = (result as ToutFBResult).eventKeys || [];
+  const keys = (result as ToutFBResult | HybridFBResult).eventKeys || [];
   let first: string | null = null;
   for (const ek of keys) {
     const dt = _data?.[ek]?.dateTime;
@@ -428,13 +464,21 @@ function rowFirstDate(result: AnyResult): string {
 
 function resultEventKeys(result: AnyResult): string[] {
   if (result.method === 1) return [...new Set((result as SeqResult).legs.map(l => l.eventKey))];
-  return (result as ToutFBResult).eventKeys || [];
+  return (result as ToutFBResult | HybridFBResult).eventKeys || [];
 }
 
 function rowMarketsHtml(result: AnyResult): string {
   if (result.method === 1) {
     return resultEventKeys(result).map(ek => {
       const mkts = [...new Set((result as SeqResult).legs.filter(l => l.eventKey === ek).map(l => l.marketName))];
+      return `<span>${esc(mkts.join(', '))}</span>`;
+    }).join('');
+  }
+  if (result.method === 3) {
+    const r = result as HybridFBResult;
+    const allBets = [r.fbBet, ...r.cashBets];
+    return resultEventKeys(result).map(ek => {
+      const mkts = [...new Set(allBets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
       return `<span>${esc(mkts.join(', '))}</span>`;
     }).join('');
   }
@@ -465,6 +509,14 @@ function rowTypeHtml(result: AnyResult): string {
       return `<span>${esc(leg ? coverTypeLabel(leg.cover) : '')}</span>`;
     }).join('');
   }
+  if (result.method === 3) {
+    const r = result as HybridFBResult;
+    const allBets = [r.fbBet, ...r.cashBets];
+    return resultEventKeys(result).map(ek => {
+      const n = new Set(allBets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.outcomeName))).size;
+      return `<span>${n}\u00a0issues</span>`;
+    }).join('');
+  }
   if (result.method === 2 || result.method === 4) {
     return resultEventKeys(result).map(ek => {
       const n = outcomesPerEvent((result as ToutFBResult).bets, ek);
@@ -491,17 +543,25 @@ function rowParis(result: AnyResult): string | number {
     }
     return count;
   }
+  if (result.method === 3) return (result as HybridFBResult).nBets;
   if (result.method === 2 || result.method === 4) return (result as ToutFBResult).nBets;
   return '-';
 }
 
 function rowCashEngaged(result: AnyResult): number | null {
   if (result.method === 1) return (result as SeqResult).legs.reduce((s, l) => s + (l.liability ?? l.stake), 0);
+  if (result.method === 3) return (result as HybridFBResult).totalCashAmount;
   return null;
 }
 
 function rowCote(result: AnyResult): string {
   if (result.method === 1) return fmt((result as SeqResult).B);
+  if (result.method === 3) {
+    const r = result as HybridFBResult;
+    const odds = [r.fbBet, ...r.cashBets].map(b => b.odds);
+    const min = Math.min(...odds), max = Math.max(...odds);
+    return Math.abs(max - min) < 0.01 ? fmt(min) : `${fmt(min)}\u2013${fmt(max)}`;
+  }
   if (result.method === 2 || result.method === 4) {
     const odds = (result as ToutFBResult).bets.map(b => b.odds);
     const min = Math.min(...odds), max = Math.max(...odds);
@@ -512,12 +572,14 @@ function rowCote(result: AnyResult): string {
 
 function resultMinOdds(result: AnyResult): number {
   if (result.method === 1) return (result as SeqResult).B;
+  if (result.method === 3) { const r = result as HybridFBResult; return Math.min(r.fbBet.odds, ...r.cashBets.map(b => b.odds)); }
   if (result.method === 2 || result.method === 4) return Math.min(...(result as ToutFBResult).bets.map(b => b.odds));
   return 0;
 }
 
 function resultMinStake(result: AnyResult): number {
   if (result.method === 1) return _amount;
+  if (result.method === 3) { const r = result as HybridFBResult; return Math.min(r.fbBet.stake, ...r.cashBets.map(b => b.stake)); }
   if (result.method === 2 || result.method === 4) return Math.min(...(result as ToutFBResult).bets.map(b => b.stake));
   return _amount;
 }
@@ -837,7 +899,9 @@ function showCurrentResults() {
   const results = _allResults[key];
   if (results === undefined) {
     (el as any).hidden = false;
-    el.innerHTML = '<p class="ff-empty">Sélectionnez un site freebet pour calculer le Séquentiel.</p>';
+    el.innerHTML = (_method === 1 || _method === 3)
+      ? '<p class="ff-empty">Sélectionnez un site freebet pour calculer cette méthode.</p>'
+      : '<p class="ff-empty">Cliquez sur Calculer.</p>';
     return;
   }
   renderResults(results);

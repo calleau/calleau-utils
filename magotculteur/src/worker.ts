@@ -1,4 +1,4 @@
-import { computeSeq, computeToutFB, computeMultiSite } from './engine';
+import { computeSeq, computeToutFB, computeMultiSite, computeHybridFB } from './engine';
 import type { WorkerInMessage, WorkerOutMessage, AllResults } from './types';
 
 let cancelled = false;
@@ -53,6 +53,15 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       label: `Couverture multi-sites · ${n} match${n > 1 ? 's' : ''}`,
       fn: () => { allResults[`4_${n}`] = computeMultiSite(data, amount, n, betType, opts); },
     });
+  }
+
+  if (hasSeq && betType === 'fb') {
+    for (const n of [1, 2, 3, 4].filter(n => allowedNLegs.includes(n))) {
+      steps.push({
+        label: `Hybride freebet · ${n} match${n > 1 ? 's' : ''}`,
+        fn: () => { allResults[`3_${n}`] = computeHybridFB(data, fbSite, amount, n, opts); },
+      });
+    }
   }
 
   for (let i = 0; i < steps.length; i++) {

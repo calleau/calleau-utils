@@ -1,4 +1,4 @@
-import type { BetSpec, CoverageRule, EngineOpts, Cover, Leg, LegWithCover, LegRef, RawBet, FinalizedBet, LayInfo, SeqResult, ToutFBResult } from './types';
+import type { BetSpec, CoverageRule, EngineOpts, Cover, Leg, LegWithCover, LegRef, RawBet, FinalizedBet, LayInfo, SeqResult, ToutFBResult, HybridFBResult } from './types';
 
 export const MIN_GAP_MS = 90 * 60 * 1000;
 const TOP_MULTI_SEQ = 50;
@@ -38,7 +38,7 @@ export function collectSites(data: any): string[] {
       for (const oddsMap of Object.values(market) as any[]) {
         if (oddsMap && typeof oddsMap === 'object' && !Array.isArray(oddsMap)) {
           for (const [site, val] of Object.entries(oddsMap))
-            if (val && typeof val === 'object') sites.add(site);
+            if (val != null && (typeof val === 'number' || typeof val === 'object')) sites.add(site);
         }
       }
     }
@@ -738,6 +738,126 @@ export function computeToutFB(data: any, amount: number, nMatches: number, betTy
           }
         }
       }
+    });
+  }
+
+  return [...results, ...bestPerCombo.values()].sort((a, b) => b.rate - a.rate);
+}
+
+// ===== METHOD 3: HYBRID FREEBET (1 freebet + rest as cash on other sites) =====
+
+export function computeHybridFB(data: any, fbSite: string, amount: number, nMatches: number, opts: EngineOpts): HybridFBResult[] {
+  if (!fbSite) return [];
+  const allEventKeys = Object.keys(data);
+  const eventKeys = nMatches === 1 ? allEventKeys : topEventsForToutFB(data, opts);
+  const results: HybridFBResult[] = [];
+  const bestPerCombo = new Map<string, HybridFBResult>();
+
+  function tryHybrid(betsLegsArray: LegRef[][], comboKey: string, meta: { eventKeys: string[] }) {
+    const n = betsLegsArray.length;
+    if (n < 2) return;
+
+    for (let fbIdx = 0; fbIdx < n; fbIdx++) {
+      const fbLegs = betsLegsArray[fbIdx];
+
+      // Compute combined freebet odds on fbSite
+      let fbOdds = 1;
+      let fbOddsValid = true;
+      for (const { eventKey, marketName, outcomeName } of fbLegs) {
+        const oddsMap = data[eventKey]?.markets?.[marketName]?.[outcomeName];
+        if (!oddsMap) { fbOddsValid = false; break; }
+        const val = oddsMap[fbSite];
+        const o = getBackOdds(val);
+        if (!o || o <= 1) { fbOddsValid = false; break; }
+        if (opts.filterMinOdds > 0 && o < opts.filterMinOdds) { fbOddsValid = false; break; }
+        fbOdds *= o;
+      }
+      if (!fbOddsValid || fbOdds <= 1) continue;
+
+      // For each cash bet, find best odds on any site except fbSite
+      const cashBetsRaw: Array<{ legs: LegRef[]; site: string; odds: number }> = [];
+      let cashValid = true;
+
+      for (let j = 0; j < n; j++) {
+        if (j === fbIdx) continue;
+        const cashLegs = betsLegsArray[j];
+        let siteOddsMap: Record<string, number> | null = null;
+        for (const { eventKey, marketName, outcomeName } of cashLegs) {
+          const oddsMap = data[eventKey]?.markets?.[marketName]?.[outcomeName];
+          if (!oddsMap) { cashValid = false; break; }
+          const legSiteOdds: Record<string, number> = {};
+          for (const [site, val] of Object.entries(oddsMap) as [string, any][]) {
+            if (site === fbSite) continue;
+            const o = getBackOdds(val);
+            if (!o || o <= 1) continue;
+            if (opts.filterMinOdds > 0 && o < opts.filterMinOdds) continue;
+            legSiteOdds[site] = o;
+          }
+          if (siteOddsMap === null) {
+            siteOddsMap = { ...legSiteOdds };
+          } else {
+            for (const site of Object.keys(siteOddsMap)) {
+              if (site in legSiteOdds) siteOddsMap[site] *= legSiteOdds[site];
+              else delete siteOddsMap[site];
+            }
+          }
+          if (!siteOddsMap || !Object.keys(siteOddsMap).length) { cashValid = false; break; }
+        }
+        if (!cashValid) break;
+        if (!siteOddsMap || !Object.keys(siteOddsMap).length) { cashValid = false; break; }
+        let best: { site: string; odds: number } | null = null;
+        for (const [site, odds] of Object.entries(siteOddsMap)) {
+          if (!best || odds > best.odds) best = { site, odds };
+        }
+        if (!best) { cashValid = false; break; }
+        cashBetsRaw.push({ legs: cashLegs, site: best.site, odds: best.odds });
+      }
+
+      if (!cashValid || cashBetsRaw.length === 0) continue;
+
+      // P = amount × (fbOdds - 1) × (1 - R), R = Σ 1/odds_j
+      const R = cashBetsRaw.reduce((s, b) => s + 1 / b.odds, 0);
+      const profit = amount * (fbOdds - 1) * (1 - R);
+      if (profit <= 0) continue;
+
+      const rate = profit / amount;
+      const cashMultiplier = fbOdds - 1;
+
+      const fbBet: FinalizedBet = { legs: fbLegs, site: fbSite, odds: fbOdds, stake: amount };
+      const cashBets: FinalizedBet[] = cashBetsRaw.map(b => ({
+        legs: b.legs, site: b.site, odds: b.odds,
+        stake: amount * cashMultiplier / b.odds,
+      }));
+      const totalCashAmount = cashBets.reduce((s, b) => s + b.stake, 0);
+
+      const entry: HybridFBResult = {
+        method: 3, nMatches: meta.eventKeys.length, nBets: n, betType: 'fb',
+        rate, profit, fbBet, cashBets, totalCashAmount, eventKeys: meta.eventKeys,
+      };
+
+      if (nMatches === 1) {
+        results.push(entry);
+      } else {
+        const prev = bestPerCombo.get(comboKey);
+        if (!prev || rate > prev.rate) bestPerCombo.set(comboKey, entry);
+      }
+    }
+  }
+
+  if (nMatches === 1) {
+    for (const eventKey of eventKeys) {
+      for (const coverSet of getCoverSetsExtended(data, eventKey, opts)) {
+        tryHybrid(coverSet, eventKey, { eventKeys: [eventKey] });
+      }
+    }
+  } else {
+    forEachCombo(eventKeys, nMatches, combo => {
+      const comboKey = combo.slice().sort().join('|');
+      const coverSetsPerEvent = combo.map(ek => getCoverSetsExtended(data, ek, opts));
+      if (coverSetsPerEvent.some(s => !s.length)) return;
+      forEachCoverSetCombo(coverSetsPerEvent, chosen => {
+        tryHybrid(generateCoveringBetsMulti(chosen), comboKey, { eventKeys: combo });
+      });
     });
   }
 

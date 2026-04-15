@@ -113,7 +113,20 @@ export interface ToutFBResult {
   eventKeys: string[];
 }
 
-export type AnyResult = SeqResult | ToutFBResult;
+export interface HybridFBResult {
+  method: 3;
+  nMatches: number;
+  nBets: number;
+  betType: 'fb';
+  rate: number;
+  profit: number;
+  fbBet: FinalizedBet;
+  cashBets: FinalizedBet[];
+  totalCashAmount: number;
+  eventKeys: string[];
+}
+
+export type AnyResult = SeqResult | ToutFBResult | HybridFBResult;
 export type AllResults = Record<string, AnyResult[]>;
 
 // ===== WORKER MESSAGES =====
