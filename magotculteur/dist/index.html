@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Le Magotculteur</title>
+	<script src="../theme-toggle.js"></script>
+  <script type="module" crossorigin src="./assets/index-BWOVIjpX.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BcM8jH3y.css">
+</head>
+
+<body>
+	<div class="wrap">
+
+		<header class="toolbar">
+			<a href="../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Le Magotculteur</h1>
+			<p class="subtitle">Trouve la combinaison de couverture avec le moins de perte</p>
+		</header>
+
+		<div class="ff-layout">
+
+			<!-- Panneau config -->
+			<div class="ff-config card">
+
+				<!-- Type de mise -->
+				<div class="ff-field">
+					<label class="ff-label">Type de mise</label>
+					<div class="ff-legs-toggle">
+						<button class="ff-bettype-btn ff-btn ff-btn--active" data-bettype="fb" onclick="setBetType('fb')">Freebet</button>
+						<button class="ff-bettype-btn ff-btn" data-bettype="cash" onclick="setBetType('cash')">Cash</button>
+					</div>
+				</div>
+
+				<!-- Objectif cash (masqué en mode freebet) -->
+				<div class="ff-field" id="ff-objective-field" hidden>
+					<label class="ff-label">Objectif</label>
+					<div class="ff-legs-toggle">
+						<button class="ff-objective-btn ff-btn" data-objective="gagner" onclick="setObjective('gagner')">Gagner</button>
+						<button class="ff-objective-btn ff-btn ff-btn--active" data-objective="miser" onclick="setObjective('miser')">Miser</button>
+						<button class="ff-objective-btn ff-btn" data-objective="perdre" onclick="setObjective('perdre')">Perdre</button>
+					</div>
+				</div>
+
+				<!-- Montant -->
+				<div class="ff-field">
+					<div class="ff-legs-toggle">
+						<button class="ff-amountmode-btn ff-btn ff-btn--active" data-mode="total" onclick="setAmountMode('total')">Mise totale</button>
+						<button class="ff-amountmode-btn ff-btn" data-mode="min" onclick="setAmountMode('min')">Mise minimale</button>
+					</div>
+					<div class="numinput" id="ff-amount-total-wrap">
+						<input type="number" id="ff-amount-total" value="10" min="1" step="5"
+							onclick="this.select()" />
+						<span class="unit">€</span>
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="stepAmountTotal(5)">▲</button>
+							<button class="nbtn" onclick="stepAmountTotal(-5)">▼</button>
+						</div>
+					</div>
+					<div class="numinput" id="ff-amount-min-wrap" hidden>
+						<input type="number" id="ff-amount-min" value="2" min="0.5" step="0.5"
+							onclick="this.select()" />
+						<span class="unit">€</span>
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="stepAmountMin(0.5)">▲</button>
+							<button class="nbtn" onclick="stepAmountMin(-0.5)">▼</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- JSON -->
+				<div class="ff-json-row">
+					<div class="ff-json-label-row">
+						<label class="ff-label" for="ff-json">Données JSON</label>
+						<button class="btn btn-ghost ff-paste-btn" onclick="pasteFromClipboard()">Coller</button>
+					</div>
+					<textarea id="ff-json" class="ff-textarea"
+						placeholder="Coller votre JSON ici…"
+						oninput="onJsonChange()" spellcheck="false"></textarea>
+					<p id="ff-json-error" class="ff-json-error" hidden></p>
+				</div>
+
+				<!-- Freebets disponibles par site -->
+				<div class="ff-field" id="ff-freebet-sites-field" hidden>
+					<label class="ff-label">Freebets disponibles</label>
+					<div id="ff-freebet-sites-wrap"></div>
+				</div>
+
+				<!-- Site freebet (méthode 1) -->
+				<div id="ff-site-row">
+					<div class="ff-field" id="ff-site-field" hidden>
+						<label class="ff-label" for="ff-site-select">Site du freebet</label>
+						<select id="ff-site-select">
+							<option value="">— Sélectionner un site —</option>
+						</select>
+					</div>
+				</div>
+
+				<!-- Options avancées -->
+				<div class="ff-field">
+					<label class="ff-label">Options</label>
+					<div class="ff-options-group">
+						<label class="ff-checkbox-label">
+							<input type="checkbox" id="ff-asymcov-cb" onchange="setAsymCov(this.checked)" />
+							Couvertures asymétriques
+						</label>
+					</div>
+				</div>
+
+				<!-- Cote minimum -->
+				<div class="ff-field">
+					<label class="ff-label" for="ff-filter-odds">Cote minimum</label>
+					<div class="numinput numinput--sm">
+						<input type="number" id="ff-filter-odds" value="" min="1" step="0.05" placeholder="—"
+							oninput="setMinOddsFilter(this.value)" onclick="this.select()" />
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="var i=document.getElementById('ff-filter-odds'); i.value=(parseFloat(i.value)||1)+0.05; setMinOddsFilter(i.value)">▲</button>
+							<button class="nbtn" onclick="var i=document.getElementById('ff-filter-odds'); i.value=Math.max(1,(parseFloat(i.value)||1)-0.05).toFixed(2); setMinOddsFilter(i.value)">▼</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Nombre de combinés -->
+				<div class="ff-field" id="ff-nlegs-field">
+					<label class="ff-label">Nombre de combinés</label>
+					<div class="ff-legs-toggle">
+						<button class="ff-nlegs-btn ff-btn ff-btn--active" data-n="1" onclick="toggleNLegs(1)">1</button>
+						<button class="ff-nlegs-btn ff-btn ff-btn--active" data-n="2" onclick="toggleNLegs(2)">2</button>
+						<button class="ff-nlegs-btn ff-btn ff-btn--active" data-n="3" onclick="toggleNLegs(3)">3</button>
+						<button class="ff-nlegs-btn ff-btn" data-n="4" onclick="toggleNLegs(4)">4</button>
+					</div>
+				</div>
+
+				<!-- Cote minimum par sélection -->
+				<div class="ff-field">
+					<label class="ff-label" for="ff-min-odds-sel">Cote min. par sélection</label>
+					<div class="numinput numinput--sm">
+						<input type="number" id="ff-min-odds-sel" value="" min="1" step="0.05" placeholder="—"
+							oninput="setMinOddsPerSelection(this.value)" onclick="this.select()" />
+						<div class="nbtn-wrap">
+							<button class="nbtn" onclick="var i=document.getElementById('ff-min-odds-sel'); i.value=(parseFloat(i.value)||1)+0.05; setMinOddsPerSelection(i.value)">▲</button>
+							<button class="nbtn" onclick="var i=document.getElementById('ff-min-odds-sel'); i.value=Math.max(1,(parseFloat(i.value)||1)-0.05).toFixed(2); setMinOddsPerSelection(i.value)">▼</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Bouton calculer -->
+				<button id="ff-calc-btn" class="ff-calc-btn" onclick="tryRender()" disabled>
+					Calculer
+				</button>
+
+			</div>
+
+			<!-- Résultats -->
+			<div class="ff-right">
+
+				<!-- Onglets méthode + nombre de sélections -->
+				<div class="ff-method-tabs">
+					<div class="ff-method-group ff-method-group--tout" data-method="0" onclick="setMethodLegs(0,0)">
+						<span class="ff-method-label" data-name="Tout">Tout</span>
+					</div>
+					<div class="ff-method-group ff-method-group--active" data-method="1">
+						<span class="ff-method-label" data-name="Séquentiel">Séquentiel</span>
+						<div class="ff-method-counts">
+							<button class="ff-count-btn ff-count-btn--active" data-method="1" data-legs="1" onclick="setMethodLegs(1,1)">1</button>
+							<button class="ff-count-btn" data-method="1" data-legs="2" onclick="setMethodLegs(1,2)">2</button>
+							<button class="ff-count-btn" data-method="1" data-legs="3" onclick="setMethodLegs(1,3)">3</button>
+						</div>
+					</div>
+					<div class="ff-method-group" data-method="2">
+						<span class="ff-method-label" data-name="Couverture complète">Couverture complète</span>
+						<div class="ff-method-counts">
+							<button class="ff-count-btn" data-method="2" data-legs="1" onclick="setMethodLegs(2,1)">1</button>
+							<button class="ff-count-btn" data-method="2" data-legs="2" onclick="setMethodLegs(2,2)">2</button>
+							<button class="ff-count-btn" data-method="2" data-legs="3" onclick="setMethodLegs(2,3)">3</button>
+							<button class="ff-count-btn" data-method="2" data-legs="4" onclick="setMethodLegs(2,4)">4</button>
+						</div>
+					</div>
+					<div class="ff-method-group" data-method="4">
+						<span class="ff-method-label" data-name="Couverture multi-sites">Couverture multi-sites</span>
+						<div class="ff-method-counts">
+							<button class="ff-count-btn" data-method="4" data-legs="1" onclick="setMethodLegs(4,1)">1</button>
+							<button class="ff-count-btn" data-method="4" data-legs="2" onclick="setMethodLegs(4,2)">2</button>
+							<button class="ff-count-btn" data-method="4" data-legs="3" onclick="setMethodLegs(4,3)">3</button>
+							<button class="ff-count-btn" data-method="4" data-legs="4" onclick="setMethodLegs(4,4)">4</button>
+						</div>
+					</div>
+				</div>
+
+				<div id="ff-results" hidden></div>
+			</div>
+
+		</div>
+
+		<footer class="page-footer">
+			<span class="footer-version">v4.0.2</span>
+		</footer>
+
+	</div>
+
+	<div id="floating-actions"></div>
+
+	<!-- Popover filtre colonne -->
+	<div id="ff-col-filter-popover" hidden></div>
+
+	<!-- Overlay de calcul -->
+	<div id="ff-calc-overlay" hidden aria-live="polite">
+		<div class="ff-calc-overlay-inner">
+			<div class="ff-calc-spinner"></div>
+			<p id="ff-calc-overlay-label" class="ff-calc-overlay-label"></p>
+			<div class="ff-calc-overlay-bar-wrap">
+				<div id="ff-calc-overlay-bar" class="ff-calc-overlay-bar"></div>
+			</div>
+			<button class="ff-calc-cancel-btn" onclick="cancelCalc()">Annuler</button>
+		</div>
+	</div>
+
+</body>
+
+</html>

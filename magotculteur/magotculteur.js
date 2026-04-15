@@ -19,6 +19,9 @@ let _allowedNLegs = new Set([1, 2, 3]);
 let _minOddsPerSelection = 0;
 let _fbSite = '';
 let _visibleCount = 50;
+let _colFilters = {};      // { colKey: { type:'num', min, max, exact } | { type:'set', values: Set } }
+let _cfpOpenCol = null;    // column whose filter popover is open
+let _freebetBySite = {};   // site name → available freebet amount (0 = none)
 
 // ===== PREFS (localStorage) =====
 const _PREFS_KEY = 'ff_prefs';
@@ -601,8 +604,9 @@ function ruleSideBackLeg(rule, sideKey, event, eventKey) {
 	return null;
 }
 
-// All complete covering sets for an event from ALL rules (issues:2 → 2 legs, issues:3 → 3 legs, …).
-// Returns [[{eventKey, marketName, outcomeName}, ...], ...]
+// Single-rule covering sets for an event. Each cover set is an array of GROUPS.
+// Each group is an array of legs that form one bet: group = [leg] for single-rule.
+// Returns [[[leg,...], [leg,...], ...], ...]
 function getCoverSets(data, eventKey) {
 	const event = data[eventKey];
 	if (!event) return [];
@@ -616,32 +620,44 @@ function getCoverSets(data, eventKey) {
 		const key = legs.map(l => l.marketName + ':' + l.outcomeName).sort().join('|');
 		if (seen.has(key)) continue;
 		seen.add(key);
-		sets.push(legs);
+		sets.push(legs.map(l => [l]));  // each leg wrapped in a single-element group
 	}
 	return sets;
 }
 
-// Asymmetric splits: for each rule where all sides match, each side can be the "single",
-// the remaining sides become the "combined" M1 legs.
-// Returns [{singleLeg, combinedLegs[]}, ...]
+// Extended cover sets: single-rule sets + cross-product pairs of different rules.
+// Cross-product groups are multi-selection parlays on the same match (e.g. DC/1X + BTTS/Oui).
+function getCoverSetsExtended(data, eventKey) {
+	const singleRuleSets = getCoverSets(data, eventKey);
+	const result = [...singleRuleSets];
+	const crossSeen = new Set();
+	for (let i = 0; i < singleRuleSets.length; i++) {
+		for (let j = i + 1; j < singleRuleSets.length; j++) {
+			const crossSet = singleRuleSets[i].flatMap(g1 => singleRuleSets[j].map(g2 => [...g1, ...g2]));
+			const crossKey = crossSet.map(g => g.map(l => l.marketName + ':' + l.outcomeName).sort().join('+')).sort().join('|');
+			if (crossSeen.has(crossKey)) continue;
+			crossSeen.add(crossKey);
+			result.push(crossSet);
+		}
+	}
+	return result;
+}
+
+// Asymmetric splits from extended cover sets (includes cross-product groups).
+// Each group can be the "single" bet while the rest become "combined" with the other matches.
+// Returns [{singleGroup: [leg,...], combinedGroups: [[leg,...], ...]}]
 function getAsymSplits(data, eventKey) {
-	const event = data[eventKey];
-	if (!event) return [];
 	const splits = [];
 	const seen = new Set();
-	for (const rule of _coverageRules) {
-		const sideKeys = ['A', 'B', 'C'].filter(k => rule[k]);
-		if (sideKeys.length < 2) continue;
-		const legs = sideKeys.map(k => ruleSideBackLeg(rule, k, event, eventKey));
-		if (legs.some(l => !l)) continue;
-		for (let si = 0; si < legs.length; si++) {
-			const singleLeg = legs[si];
-			const combinedLegs = legs.filter((_, i) => i !== si);
-			const key = singleLeg.marketName + ':' + singleLeg.outcomeName + '|' +
-				combinedLegs.map(l => l.marketName + ':' + l.outcomeName).join('|');
+	for (const coverSet of getCoverSetsExtended(data, eventKey)) {
+		for (let si = 0; si < coverSet.length; si++) {
+			const singleGroup = coverSet[si];
+			const combinedGroups = coverSet.filter((_, i) => i !== si);
+			const key = singleGroup.map(l => l.marketName + ':' + l.outcomeName).sort().join('+') + '→' +
+				combinedGroups.map(g => g.map(l => l.marketName + ':' + l.outcomeName).sort().join('+')).sort().join('|');
 			if (seen.has(key)) continue;
 			seen.add(key);
-			splits.push({ singleLeg, combinedLegs });
+			splits.push({ singleGroup, combinedGroups });
 		}
 	}
 	return splits;
@@ -654,7 +670,7 @@ const TOP_EVENTS_TOUTFB = 30; // matchs conservés pour les boucles multi-match 
 function scoreEventToutFB(data, eventKey) {
 	let best = 0;
 	for (const coverSet of getCoverSets(data, eventKey)) {
-		const odds = coverSet.map(leg => bestCombinedOdds(data, [leg])?.odds ?? 0);
+		const odds = coverSet.map(legGroup => bestCombinedOdds(data, legGroup)?.odds ?? 0);
 		if (odds.some(o => o <= 1)) continue;
 		const r = 1 / odds.reduce((s, o) => s + 1 / (o - 1), 0);
 		if (r > best) best = r;
@@ -741,21 +757,44 @@ function bestSingleSiteCovering(data, betsLegsArray) {
 // disponible sur N'IMPORTE quel site bookmaker (pas échange). Rejette si tous les paris
 // se retrouvent sur le même site (→ déjà couvert par Couverture complète).
 // Retourne [{legs, site, odds}, ...] ou null si une cote est manquante.
-function bestMultiSiteCovering(data, betsLegsArray) {
+function bestMultiSiteCovering(data, betsLegsArray, betType = 'fb') {
 	const isCombined = betsLegsArray.some(betLegs => betLegs.length > 1);
+	// Si betType = 'fb' et que des montants sont configurés, ne garder que les sites avec freebet > 0
+	const fbActiveSites = betType === 'fb'
+		? Object.entries(_freebetBySite).filter(([, v]) => v > 0).map(([k]) => k)
+		: null;
+	const useFbFilter = fbActiveSites && fbActiveSites.length > 0;
 	const rawBets = betsLegsArray.map(betLegs => {
-		let best = null;
+		// For each leg, collect qualifying odds per site
+		// Then find the site that offers ALL legs with the best combined odds (product)
+		let siteOddsMap = null; // site → accumulated product odds
 		for (const { eventKey, marketName, outcomeName } of betLegs) {
 			const oddsMap = data[eventKey]?.markets?.[marketName]?.[outcomeName];
 			if (!oddsMap) return null;
+			const legSiteOdds = {};
 			for (const [site, val] of Object.entries(oddsMap)) {
-				// Les exchanges ne proposent pas de combinés
 				if (isCombined && isExchange(val)) continue;
+				if (useFbFilter && !fbActiveSites.includes(site)) continue;
 				const o = getBackOdds(val);
 				if (!o || o <= 1) continue;
 				if (_filterMinOdds > 0 && o < _filterMinOdds) continue;
-				if (!best || o > best.odds) best = { site, odds: o };
+				legSiteOdds[site] = o;
 			}
+			if (siteOddsMap === null) {
+				// First leg: seed the map
+				siteOddsMap = { ...legSiteOdds };
+			} else {
+				// Subsequent legs: intersect (keep only sites offering all legs) and multiply odds
+				for (const site of Object.keys(siteOddsMap)) {
+					if (site in legSiteOdds) siteOddsMap[site] *= legSiteOdds[site];
+					else delete siteOddsMap[site];
+				}
+			}
+		}
+		if (!siteOddsMap || !Object.keys(siteOddsMap).length) return null;
+		let best = null;
+		for (const [site, odds] of Object.entries(siteOddsMap)) {
+			if (!best || odds > best.odds) best = { site, odds };
 		}
 		return best ? { legs: betLegs, site: best.site, odds: best.odds } : null;
 	});
@@ -773,7 +812,7 @@ function computeMultiSite(data, amount, nMatches, betType = 'fb') {
 	const bestPerCombo = new Map();
 
 	function tryMultiSite(betsSpec, comboKey, meta) {
-		const rawBets = bestMultiSiteCovering(data, betsSpec);
+		const rawBets = bestMultiSiteCovering(data, betsSpec, betType);
 		if (!rawBets) return;
 		const fin = finalizeBets(rawBets, amount, betType);
 		if (!fin) return;
@@ -789,149 +828,56 @@ function computeMultiSite(data, amount, nMatches, betType = 'fb') {
 
 	if (nMatches === 1) {
 		for (const eventKey of eventKeys) {
-			for (const coverSet of getCoverSets(data, eventKey)) {
-				tryMultiSite(coverSet.map(l => [l]), eventKey, { eventKeys: [eventKey] });
+			for (const coverSet of getCoverSetsExtended(data, eventKey)) {
+				tryMultiSite(coverSet, eventKey, { eventKeys: [eventKey] });
 			}
 		}
-	} else if (nMatches === 2) {
-		for (let i = 0; i < eventKeys.length; i++) {
-			const ek1 = eventKeys[i];
-			for (let j = i + 1; j < eventKeys.length; j++) {
-				const ek2 = eventKeys[j];
-				const comboKey = [ek1, ek2].sort().join('|');
-				for (const p1 of dcPartitions(data, ek1)) {
-					for (const p2 of dcPartitions(data, ek2)) {
-						tryMultiSite(
-							generateCoveringBets([ek1, ek2], [p1, p2]),
-							comboKey, { eventKeys: [ek1, ek2] }
-						);
-					}
-				}
-			}
-		}
-	} else if (nMatches === 3) {
-		for (let i = 0; i < eventKeys.length; i++) {
-			const ek1 = eventKeys[i];
-			for (let j = i + 1; j < eventKeys.length; j++) {
-				const ek2 = eventKeys[j];
-				for (let m = j + 1; m < eventKeys.length; m++) {
-					const ek3 = eventKeys[m];
-					const comboKey = [ek1, ek2, ek3].sort().join('|');
-					for (const p1 of dcPartitions(data, ek1)) {
-						for (const p2 of dcPartitions(data, ek2)) {
-							for (const p3 of dcPartitions(data, ek3)) {
-								tryMultiSite(
-									generateCoveringBets([ek1, ek2, ek3], [p1, p2, p3]),
-									comboKey, { eventKeys: [ek1, ek2, ek3] }
-								);
-							}
-						}
-					}
-				}
-			}
-		}
-	} else if (nMatches === 4) {
-		for (let i = 0; i < eventKeys.length; i++) {
-			const ek1 = eventKeys[i];
-			for (let j = i + 1; j < eventKeys.length; j++) {
-				const ek2 = eventKeys[j];
-				for (let m = j + 1; m < eventKeys.length; m++) {
-					const ek3 = eventKeys[m];
-					for (let p = m + 1; p < eventKeys.length; p++) {
-						const ek4 = eventKeys[p];
-						const comboKey = [ek1, ek2, ek3, ek4].sort().join('|');
-						for (const p1 of dcPartitions(data, ek1)) {
-							for (const p2 of dcPartitions(data, ek2)) {
-								for (const p3 of dcPartitions(data, ek3)) {
-									for (const p4 of dcPartitions(data, ek4)) {
-										tryMultiSite(
-											generateCoveringBets([ek1, ek2, ek3, ek4], [p1, p2, p3, p4]),
-											comboKey, { eventKeys: [ek1, ek2, ek3, ek4] }
-										);
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+	} else {
+		forEachCombo(eventKeys, nMatches, combo => {
+			const comboKey = combo.slice().sort().join('|');
+			const coverSetsPerEvent = combo.map(ek => getCoverSetsExtended(data, ek));
+			if (coverSetsPerEvent.some(s => !s.length)) return;
+			forEachCoverSetCombo(coverSetsPerEvent, chosen => {
+				tryMultiSite(generateCoveringBetsMulti(chosen), comboKey, { eventKeys: combo });
+			});
+		});
 	}
 
 	return [...results, ...bestPerCombo.values()].sort((a, b) => b.rate - a.rate);
 }
 
-// Generate all 2^n bets for a covering set defined by partitions
-// partitions[i] = {dcMarket, dcOutcome, compMarket, compOutcome, eventKey}
-// mask bit i = 0 → use dc, bit i = 1 → use comp
-function generateCoveringBets(eventKeys, partitions) {
-	const n = partitions.length;
-	const bets = [];
-	for (let mask = 0; mask < (1 << n); mask++) {
-		const bet = partitions.map((p, i) => ({
-			eventKey: eventKeys[i],
-			marketName: (mask >> i) & 1 ? p.compMarket : p.dcMarket,
-			outcomeName: (mask >> i) & 1 ? p.compOutcome : p.dcOutcome,
-		}));
-		bets.push(bet);
+// Cartesian product of cover sets. coveringSets[i] is a cover set for one event = array of groups.
+// Each group is [leg, ...] (one bet's selections). Result: all combinations with legs from all events.
+function generateCoveringBetsMulti(coveringSets) {
+	let result = [[]];
+	for (const groups of coveringSets) {
+		result = result.flatMap(prev => groups.map(legGroup => [...prev, ...legGroup]));
 	}
-	return bets;
+	return result;
 }
 
-// 2-way covering partitions for a single match, based on coverage rules.
-// Returns [{dcMarket, dcOutcome, compMarket, compOutcome}] (same interface as before).
-function dcPartitions(data, eventKey) {
-	const event = data[eventKey];
-	if (!event) return [];
-	const partitions = [];
-	const seen = new Set();
-
-	for (const rule of _coverageRules) {
-		if (rule.issues !== 2) continue;
-		const sideKeys = ['A', 'B'].filter(k => rule[k]);
-		if (sideKeys.length !== 2) continue;
-
-		for (let ai = 0; ai < 2; ai++) {
-			const sideAKey = sideKeys[ai];
-			const sideBKey = sideKeys[1 - ai];
-			for (const [marketName, market] of Object.entries(event.markets || {})) {
-				for (const [outcomeName] of Object.entries(market)) {
-					// Find first Back option in sideA that matches this (market, outcome)
-					let bindings = null;
-					for (const opt of rule[sideAKey]) {
-						if (opt.betType !== 'Back') continue;
-						bindings = matchBetSpec(opt, marketName, outcomeName);
-						if (bindings) break;
-					}
-					if (!bindings) continue;
-					// Find best available Back option from sideB
-					let bestB = null;
-					for (const coverOpt of rule[sideBKey]) {
-						if (coverOpt.betType !== 'Back') continue;
-						const resolved = resolveCoverSpec(coverOpt, bindings);
-						if (!resolved) continue;
-						const mEntry = findMarketEntry(event.markets, resolved.market);
-						if (!mEntry) continue;
-						const [bMkt, bMktData] = mEntry;
-						const oEntry = findOutcomeEntry(bMktData, resolved.issue);
-						if (!oEntry) continue;
-						const [bOut] = oEntry;
-						const best = bestCombinedOdds(data, [{ eventKey, marketName: bMkt, outcomeName: bOut }]);
-						if (!best) continue;
-						if (!bestB || best.odds > bestB.odds)
-							bestB = { marketName: bMkt, outcomeName: bOut };
-					}
-					if (!bestB) continue;
-					const key = [marketName + ':' + outcomeName, bestB.marketName + ':' + bestB.outcomeName].sort().join('|');
-					if (seen.has(key)) continue; seen.add(key);
-					partitions.push({ dcMarket: marketName, dcOutcome: outcomeName,
-						compMarket: bestB.marketName, compOutcome: bestB.outcomeName });
-				}
-			}
+// Iterate over all k-combinations of arr[], calling fn(combo) for each.
+function forEachCombo(arr, k, fn) {
+	function rec(start, combo) {
+		if (combo.length === k) { fn(combo.slice()); return; }
+		for (let i = start; i < arr.length; i++) {
+			combo.push(arr[i]);
+			rec(i + 1, combo);
+			combo.pop();
 		}
 	}
-	return partitions;
+	rec(0, []);
 }
+
+// Iterate over the Cartesian product of coverSetsPerEvent[i] arrays, calling fn(chosen) for each.
+function forEachCoverSetCombo(coverSetsPerEvent, fn) {
+	function rec(idx, chosen) {
+		if (idx === coverSetsPerEvent.length) { fn(chosen); return; }
+		for (const s of coverSetsPerEvent[idx]) rec(idx + 1, [...chosen, s]);
+	}
+	rec(0, []);
+}
+
 
 function computeToutFB(data, amount, nMatches, betType = 'fb') {
 	const allEventKeys = Object.keys(data);
@@ -953,163 +899,65 @@ function computeToutFB(data, amount, nMatches, betType = 'fb') {
 
 	if (nMatches === 1) {
 		for (const eventKey of eventKeys) {
-			for (const coverSet of getCoverSets(data, eventKey)) {
-				const betsSpec = coverSet.map(leg => [leg]);
-				const siteOpts = bestSingleSiteCovering(data, betsSpec);
+			for (const coverSet of getCoverSetsExtended(data, eventKey)) {
+				const siteOpts = bestSingleSiteCovering(data, coverSet);
 				if (!siteOpts) continue;
 				const fin = bestFinFromSiteOpts(siteOpts);
 				if (fin) results.push({ method: 2, nMatches: 1, nBets: coverSet.length, ...fin, totalAmount: amount, eventKeys: [eventKey], betType });
 			}
 		}
-	} else if (nMatches === 2) {
-		for (let i = 0; i < eventKeys.length; i++) {
-			const ek1 = eventKeys[i];
-			for (let j = i + 1; j < eventKeys.length; j++) {
-				const ek2 = eventKeys[j];
-				const comboKey = [ek1, ek2].sort().join('|');
-				const parts1 = dcPartitions(data, ek1);
-				const parts2 = dcPartitions(data, ek2);
-				for (const p1 of parts1) {
-					for (const p2 of parts2) {
-						const siteOpts = bestSingleSiteCovering(data, generateCoveringBets([ek1, ek2], [p1, p2]));
-						if (!siteOpts) continue;
-						for (const { rawBets } of siteOpts) {
-							const fin = finalizeBets(rawBets, amount, betType);
-							if (!fin) continue;
-							const entry = { method: 2, nMatches: 2, nBets: 4, ...fin, totalAmount: amount, eventKeys: [ek1, ek2], betType };
-							const prev = bestPerCombo.get(comboKey);
-							if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
-						}
-					}
+	} else {
+		forEachCombo(eventKeys, nMatches, combo => {
+			const comboKey = combo.slice().sort().join('|');
+			const coverSetsPerEvent = combo.map(ek => getCoverSetsExtended(data, ek));
+			if (coverSetsPerEvent.some(s => !s.length)) return;
+
+			// Symétrique
+			forEachCoverSetCombo(coverSetsPerEvent, chosen => {
+				const betsSpec = generateCoveringBetsMulti(chosen);
+				const siteOpts = bestSingleSiteCovering(data, betsSpec);
+				if (!siteOpts) return;
+				for (const { rawBets } of siteOpts) {
+					const fin = finalizeBets(rawBets, amount, betType);
+					if (!fin) continue;
+					const entry = { method: 2, nMatches, nBets: betsSpec.length, ...fin, totalAmount: amount, eventKeys: combo, betType };
+					const prev = bestPerCombo.get(comboKey);
+					if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
 				}
-				// Asymétrique : 1 single + combinés (si option activée)
-				if (_asymCov) {
-					for (const [ekS, ekC] of [[ek1, ek2], [ek2, ek1]]) {
-						const asymKey = ekS + '→' + ekC;
-						const splits = getAsymSplits(data, ekS);
-						const coverSets = getCoverSets(data, ekC);
-						if (!splits.length || !coverSets.length) continue;
-						for (const { singleLeg, combinedLegs } of splits) {
-							for (const cs of coverSets) {
-								const betsSpec = [
-									[singleLeg],
-									...combinedLegs.flatMap(cl => cs.map(m2l => [cl, m2l])),
-								];
-								const siteOpts = bestSingleSiteCovering(data, betsSpec);
-								if (!siteOpts) continue;
-								for (const { rawBets } of siteOpts) {
-									const fin = finalizeBets(rawBets, amount, betType);
-									if (!fin) continue;
-									const entry = { method: 2, nMatches: 2, nBets: betsSpec.length, ...fin,
-										totalAmount: amount, eventKeys: [ekS, ekC], betType };
-									const prev = bestPerCombo.get(asymKey);
-									if (!prev || fin.rate > prev.rate) bestPerCombo.set(asymKey, entry);
-								}
+			});
+
+			// Asymétrique (si option activée)
+			if (_asymCov) {
+				for (let si = 0; si < combo.length; si++) {
+					const ekS = combo[si];
+					const ekCs = combo.filter((_, k) => k !== si);
+					const asymKey = ekS + '→' + ekCs.join('|');
+					const splits = getAsymSplits(data, ekS);
+					const coverSetsCs = ekCs.map(ek => getCoverSetsExtended(data, ek));
+					if (!splits.length || coverSetsCs.some(s => !s.length)) continue;
+					for (const { singleGroup, combinedGroups } of splits) {
+						forEachCoverSetCombo(coverSetsCs, chosenCs => {
+							const betsSpec = [
+								singleGroup,
+								...combinedGroups.flatMap(cg =>
+									generateCoveringBetsMulti(chosenCs).map(comboLegs => [...cg, ...comboLegs])
+								),
+							];
+							const siteOpts = bestSingleSiteCovering(data, betsSpec);
+							if (!siteOpts) return;
+							for (const { rawBets } of siteOpts) {
+								const fin = finalizeBets(rawBets, amount, betType);
+								if (!fin) continue;
+								const entry = { method: 2, nMatches, nBets: betsSpec.length, ...fin,
+									totalAmount: amount, eventKeys: [ekS, ...ekCs], betType };
+								const prev = bestPerCombo.get(asymKey);
+								if (!prev || fin.rate > prev.rate) bestPerCombo.set(asymKey, entry);
 							}
-						}
-					}
-				}
-			}
-		}
-	} else if (nMatches === 3) {
-		for (let i = 0; i < eventKeys.length; i++) {
-			const ek1 = eventKeys[i];
-			for (let j = i + 1; j < eventKeys.length; j++) {
-				const ek2 = eventKeys[j];
-				for (let m = j + 1; m < eventKeys.length; m++) {
-					const ek3 = eventKeys[m];
-					const comboKey = [ek1, ek2, ek3].sort().join('|');
-					const parts1 = dcPartitions(data, ek1);
-					const parts2 = dcPartitions(data, ek2);
-					const parts3 = dcPartitions(data, ek3);
-					for (const p1 of parts1) {
-						for (const p2 of parts2) {
-							for (const p3 of parts3) {
-								const siteOpts = bestSingleSiteCovering(data, generateCoveringBets([ek1, ek2, ek3], [p1, p2, p3]));
-								if (!siteOpts) continue;
-								for (const { rawBets } of siteOpts) {
-									const fin = finalizeBets(rawBets, amount, betType);
-									if (!fin) continue;
-									const entry = { method: 2, nMatches: 3, nBets: 8, ...fin, totalAmount: amount, eventKeys: [ek1, ek2, ek3], betType };
-									const prev = bestPerCombo.get(comboKey);
-									if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
-								}
-							}
-						}
-					}
-					// Asymétrique 3 matchs (si option activée)
-					if (_asymCov) {
-						const es = [ek1, ek2, ek3];
-						for (let si = 0; si < 3; si++) {
-							const ekS = es[si];
-							const ekCs = es.filter((_, k) => k !== si);
-							const asymKey = ekS + '→' + ekCs.join('|');
-							const splits = getAsymSplits(data, ekS);
-							const coverSets1 = getCoverSets(data, ekCs[0]);
-							const coverSets2 = getCoverSets(data, ekCs[1]);
-							if (!splits.length || !coverSets1.length || !coverSets2.length) continue;
-							for (const { singleLeg, combinedLegs } of splits) {
-								for (const cs1 of coverSets1) {
-									for (const cs2 of coverSets2) {
-										const betsSpec = [
-											[singleLeg],
-											...combinedLegs.flatMap(cl =>
-												cs1.flatMap(m2l => cs2.map(m3l => [cl, m2l, m3l]))
-											),
-										];
-										const siteOpts = bestSingleSiteCovering(data, betsSpec);
-										if (!siteOpts) continue;
-										for (const { rawBets } of siteOpts) {
-											const fin = finalizeBets(rawBets, amount, betType);
-											if (!fin) continue;
-											const entry = { method: 2, nMatches: 3, nBets: betsSpec.length, ...fin,
-												totalAmount: amount, eventKeys: [ekS, ...ekCs], betType };
-											const prev = bestPerCombo.get(asymKey);
-											if (!prev || fin.rate > prev.rate) bestPerCombo.set(asymKey, entry);
-										}
-									}
-								}
-							}
-						}
+						});
 					}
 				}
 			}
-		}
-	} else if (nMatches === 4) {
-		for (let i = 0; i < eventKeys.length; i++) {
-			const ek1 = eventKeys[i];
-			for (let j = i + 1; j < eventKeys.length; j++) {
-				const ek2 = eventKeys[j];
-				for (let m = j + 1; m < eventKeys.length; m++) {
-					const ek3 = eventKeys[m];
-					for (let p = m + 1; p < eventKeys.length; p++) {
-						const ek4 = eventKeys[p];
-						const comboKey = [ek1, ek2, ek3, ek4].sort().join('|');
-						const parts1 = dcPartitions(data, ek1);
-						const parts2 = dcPartitions(data, ek2);
-						const parts3 = dcPartitions(data, ek3);
-						const parts4 = dcPartitions(data, ek4);
-						for (const p1 of parts1) {
-							for (const p2 of parts2) {
-								for (const p3 of parts3) {
-									for (const p4 of parts4) {
-										const siteOpts = bestSingleSiteCovering(data, generateCoveringBets([ek1, ek2, ek3, ek4], [p1, p2, p3, p4]));
-										if (!siteOpts) continue;
-										for (const { rawBets } of siteOpts) {
-											const fin = finalizeBets(rawBets, amount, betType);
-											if (!fin) continue;
-											const entry = { method: 2, nMatches: 4, nBets: 16, ...fin, totalAmount: amount, eventKeys: [ek1, ek2, ek3, ek4], betType };
-											const prev = bestPerCombo.get(comboKey);
-											if (!prev || fin.rate > prev.rate) bestPerCombo.set(comboKey, entry);
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+		});
 	}
 
 	return [...results, ...bestPerCombo.values()].sort((a, b) => b.rate - a.rate);
@@ -1268,6 +1116,189 @@ function buildToutFBCard(result) {
 }
 
 // ===== TABLE RENDERING =====
+
+// ===== COLUMN FILTERS =====
+
+const COL_FILTER_DEFS = {
+	method: {
+		type: 'set',
+		label: 'Méthode',
+		options: [
+			{ value: '1', label: 'Séq.' },
+			{ value: '2', label: 'Couv. complète' },
+			{ value: '4', label: 'Multi-sites' },
+		],
+		getValue: r => String(r.method),
+	},
+	matches: {
+		type: 'num',
+		label: 'Matchs',
+		getValue: r => r.method === 1 ? new Set(r.legs.map(l => l.eventKey)).size : (r.nMatches ?? 0),
+	},
+	paris: {
+		type: 'num',
+		label: 'Paris',
+		getValue: r => r.method === 1 ? r.legs.length * 2 : (r.nBets ?? 0),
+	},
+	liab: {
+		type: 'num',
+		label: 'Cash engagé',
+		getValue: r => {
+			const v = rowCashEngaged(r);
+			return v === null ? null : v * getDisplayScale(r);
+		},
+	},
+	cote: {
+		type: 'num',
+		label: 'Cote',
+		getValue: r => {
+			if (r.method === 1) return r.B;
+			if (r.method === 2 || r.method === 4) return Math.min(...r.bets.map(b => b.odds));
+			return null;
+		},
+	},
+	result: {
+		type: 'num',
+		label: 'Résultat',
+		getValue: r => {
+			const scale = getDisplayScale(r);
+			const obj = r._cashObjective;
+			if (obj === 'gagner') return (r.netIfWins ?? 0) * scale;
+			if (obj === 'perdre') return (r.netIfLoses ?? 0) * scale;
+			return r.betType === 'cash' ? -(r.loss * scale) : r.profit * scale;
+		},
+	},
+	taux: {
+		type: 'num',
+		label: 'Taux (%)',
+		getValue: r => r.rate * 100,
+	},
+};
+
+function isColFilterActive(col) {
+	const f = _colFilters[col];
+	if (!f) return false;
+	if (f.type === 'num') return f.min !== null || f.max !== null || f.exact !== null;
+	if (f.type === 'set') {
+		const def = COL_FILTER_DEFS[col];
+		return def && f.values.size > 0 && f.values.size < def.options.length;
+	}
+	return false;
+}
+
+function passesColFilters(r) {
+	for (const [col, f] of Object.entries(_colFilters)) {
+		const def = COL_FILTER_DEFS[col];
+		if (!def) continue;
+		const val = def.getValue(r);
+		if (val === null || val === undefined) continue;
+		if (f.type === 'num') {
+			if (f.exact !== null && Math.abs(val - f.exact) > 0.005) return false;
+			if (f.exact === null && f.min !== null && val < f.min) return false;
+			if (f.exact === null && f.max !== null && val > f.max) return false;
+		} else if (f.type === 'set') {
+			if (!f.values.has(String(val))) return false;
+		}
+	}
+	return true;
+}
+
+function clearColFilter(col) {
+	delete _colFilters[col];
+	closeColFilterPopover();
+	renderPage();
+}
+
+function clearAllColFilters() {
+	_colFilters = {};
+	closeColFilterPopover();
+	renderPage();
+}
+
+function applyColFilterFromPopover(col) {
+	const def = COL_FILTER_DEFS[col];
+	if (def.type === 'num') {
+		const parse = id => { const v = document.getElementById(id)?.value.trim(); return v === '' || v == null ? null : parseFloat(v); };
+		const min = parse('ff-cfp-min'), max = parse('ff-cfp-max'), exact = parse('ff-cfp-exact');
+		if (min === null && max === null && exact === null) {
+			delete _colFilters[col];
+		} else {
+			_colFilters[col] = { type: 'num', min, max, exact };
+		}
+	} else if (def.type === 'set') {
+		const checked = new Set([...document.querySelectorAll('#ff-cfp-body input[type=checkbox]:checked')].map(cb => cb.value));
+		if (checked.size === 0 || checked.size === def.options.length) {
+			delete _colFilters[col];
+		} else {
+			_colFilters[col] = { type: 'set', values: checked };
+		}
+	}
+	closeColFilterPopover();
+	renderPage();
+}
+
+function openColFilterPopover(col, anchorEl) {
+	if (_cfpOpenCol === col) { closeColFilterPopover(); return; }
+	_cfpOpenCol = col;
+	const def = COL_FILTER_DEFS[col];
+	const f = _colFilters[col];
+
+	let inner = '';
+	if (def.type === 'num') {
+		const v = n => (n !== null && n !== undefined) ? n : '';
+		inner = `
+			<div class="ff-cfp-row"><label class="ff-cfp-lbl">Min</label><input id="ff-cfp-min" class="ff-cfp-input" type="number" step="any" value="${v(f?.min)}" placeholder="—"/></div>
+			<div class="ff-cfp-row"><label class="ff-cfp-lbl">Max</label><input id="ff-cfp-max" class="ff-cfp-input" type="number" step="any" value="${v(f?.max)}" placeholder="—"/></div>
+			<div class="ff-cfp-row"><label class="ff-cfp-lbl">Exact</label><input id="ff-cfp-exact" class="ff-cfp-input" type="number" step="any" value="${v(f?.exact)}" placeholder="—"/></div>`;
+	} else if (def.type === 'set') {
+		const active = f?.values ?? new Set(def.options.map(o => o.value));
+		inner = def.options.map(o => `
+			<label class="ff-cfp-check-lbl">
+				<input type="checkbox" value="${esc(o.value)}" ${active.has(o.value) ? 'checked' : ''}/>
+				${esc(o.label)}
+			</label>`).join('');
+	}
+
+	const popover = document.getElementById('ff-col-filter-popover');
+	popover.innerHTML = `
+		<div class="ff-cfp-title">${esc(def.label)}</div>
+		<div id="ff-cfp-body">${inner}</div>
+		<div class="ff-cfp-actions">
+			${isColFilterActive(col) ? `<button class="ff-cfp-clear" onclick="clearColFilter('${col}')">Effacer</button>` : ''}
+			<button class="ff-cfp-apply" onclick="applyColFilterFromPopover('${col}')">Appliquer</button>
+		</div>`;
+
+	const rect = anchorEl.getBoundingClientRect();
+	popover.style.top = (rect.bottom + 4) + 'px';
+	popover.style.left = rect.left + 'px';
+	popover.hidden = false;
+
+	setTimeout(() => {
+		const first = popover.querySelector('input');
+		first?.focus();
+		if (first?.type === 'number') first.select?.();
+		popover.querySelectorAll('.ff-cfp-input').forEach(inp => {
+			inp.addEventListener('keydown', e => {
+				if (e.key === 'Enter') applyColFilterFromPopover(col);
+				if (e.key === 'Escape') closeColFilterPopover();
+			});
+		});
+	}, 0);
+}
+
+function closeColFilterPopover() {
+	_cfpOpenCol = null;
+	const p = document.getElementById('ff-col-filter-popover');
+	if (p) p.hidden = true;
+}
+
+function thFilter(col, label, extraClass = '') {
+	const active = isColFilterActive(col);
+	return `<div class="ff-th${extraClass ? ' ' + extraClass : ''}">
+		<span>${esc(label)}</span>
+		<button class="ff-th-filter-btn${active ? ' ff-th-filter-btn--active' : ''}" onclick="event.stopPropagation(); openColFilterPopover('${col}', this)" title="Filtrer">&#9663;</button>
+	</div>`;
+}
 
 function rowMethod(result) {
 	if (result.method === 1) return 'Séq.';
@@ -1519,6 +1550,7 @@ function renderPage() {
 
 	const filtered = _results.filter(r => {
 		if (_filterMinOdds > 0 && resultMinOdds(r) < _filterMinOdds) return false;
+		if (!passesColFilters(r)) return false;
 		if (!q) return true;
 		if (r.method === 1) return r.legs.some(l => l.evName.toLowerCase().includes(q) || l.evComp.toLowerCase().includes(q));
 		return r.eventKeys.some(ek => {
@@ -1544,25 +1576,29 @@ function renderPage() {
 		if (countEl) countEl.textContent = `${_results.length} combinaison${_results.length > 1 ? 's' : ''}`;
 	}
 
-	if (!visible.length) {
-		cards.innerHTML = `<p class="ff-empty">Aucun match correspondant.</p>`;
-		if (more) more.innerHTML = '';
-		return;
-	}
-
 	const headers = `
 		<div class="ff-th"></div>
-		<div class="ff-th">Méthode</div>
-		<div class="ff-th ff-th-center">Matchs</div>
+		${thFilter('method', 'Méthode')}
+		${thFilter('matches', 'Matchs', 'ff-th-center')}
 		<div class="ff-th">Date event</div>
 		<div class="ff-th">Événement(s)</div>
 		<div class="ff-th">Marchés</div>
 		<div class="ff-th">Type</div>
-		<div class="ff-th ff-th-center">Paris</div>
-		<div class="ff-th">Cash engagé</div>
-		<div class="ff-th">Cote</div>
-		<div class="ff-th">Résultat</div>
-		<div class="ff-th">Taux</div>`;
+		${thFilter('paris', 'Paris', 'ff-th-center')}
+		${thFilter('liab', 'Cash engagé')}
+		${thFilter('cote', 'Cote')}
+		${thFilter('result', 'Résultat')}
+		${thFilter('taux', 'Taux')}`;
+
+	if (!visible.length) {
+		const hasColFilters = Object.keys(_colFilters).length > 0;
+		const emptyMsg = hasColFilters
+			? `<p class="ff-empty">Aucun résultat pour ces filtres. <button class="ff-link-btn" onclick="clearAllColFilters()">Effacer tous les filtres</button></p>`
+			: `<p class="ff-empty">Aucun match correspondant.</p>`;
+		cards.innerHTML = `<div class="ff-table-wrap"><div class="ff-table">${headers}</div></div>${emptyMsg}`;
+		if (more) more.innerHTML = '';
+		return;
+	}
 
 	cards.innerHTML = `<div class="ff-table-wrap"><div class="ff-table">${headers}${visible.map((r, i) => buildTableRow(r, i)).join('')}</div></div>`;
 
@@ -1678,6 +1714,8 @@ function setBetType(t) {
 	);
 	const objField = document.getElementById('ff-objective-field');
 	if (objField) objField.hidden = t !== 'cash';
+	const fbField = document.getElementById('ff-freebet-sites-field');
+	if (fbField && Object.keys(_freebetBySite).length) fbField.hidden = t !== 'fb';
 	_allResults = {};
 	clearTabSummaries();
 	document.getElementById('ff-results').hidden = true;
@@ -1785,6 +1823,7 @@ async function tryRender() {
 	_amount = _amountTotal;
 	_fbSite = document.getElementById('ff-site-select')?.value ?? '';
 	_allResults = {};
+	_colFilters = {};
 
 	// Construction de la liste des étapes
 	const hasSeq = !!_fbSite;
@@ -1859,19 +1898,55 @@ function onJsonChange() {
 		_data = null;
 		errEl.hidden = true;
 		updateSiteSelect([]);
+		updateFreebetSites([]);
 	} else {
 		try {
 			_data = JSON.parse(raw);
 			errEl.hidden = true;
-			updateSiteSelect(collectSites(_data));
+			const sites = collectSites(_data);
+			updateSiteSelect(sites);
+			updateFreebetSites(sites);
 		} catch (e) {
 			_data = null;
 			errEl.textContent = 'JSON invalide : ' + e.message;
 			errEl.hidden = false;
 			updateSiteSelect([]);
+			updateFreebetSites([]);
 		}
 	}
 	document.getElementById('ff-calc-btn').disabled = !_data;
+}
+
+function updateFreebetSites(sites) {
+	const wrap = document.getElementById('ff-freebet-sites-wrap');
+	const field = document.getElementById('ff-freebet-sites-field');
+	if (!wrap || !field) return;
+	if (!sites.length) {
+		field.hidden = true;
+		_freebetBySite = {};
+		return;
+	}
+	// Preserve existing values for sites that are still present
+	const prev = { ..._freebetBySite };
+	_freebetBySite = {};
+	for (const s of sites) _freebetBySite[s] = prev[s] ?? 0;
+	wrap.innerHTML = sites.map(s => `
+		<div class="ff-fb-site-row">
+			<span class="ff-fb-site-name">${esc(s)}</span>
+			<div class="numinput numinput--sm">
+				<input type="number" class="ff-fb-amount-input" data-site="${esc(s)}"
+					value="${_freebetBySite[s] || ''}"
+					min="0" step="5" placeholder="0"
+					oninput="setFreebetAmount('${esc(s)}', this.value)"
+					onclick="this.select()" />
+				<span class="unit">€</span>
+			</div>
+		</div>`).join('');
+	field.hidden = _betType !== 'fb';
+}
+
+function setFreebetAmount(site, value) {
+	_freebetBySite[site] = parseFloat(value) || 0;
 }
 
 function updateSiteSelect(sites) {
@@ -1986,4 +2061,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 	setTimeout(() => {
 		if (document.getElementById('ff-json').value.trim()) onJsonChange();
 	}, 100);
+
+	// Fermer le popover de filtre au clic en dehors
+	document.addEventListener('click', e => {
+		const p = document.getElementById('ff-col-filter-popover');
+		if (!p || p.hidden) return;
+		if (!p.contains(e.target) && !e.target.closest('.ff-th-filter-btn')) closeColFilterPopover();
+	});
+	document.addEventListener('keydown', e => {
+		if (e.key === 'Escape') closeColFilterPopover();
+	});
 });

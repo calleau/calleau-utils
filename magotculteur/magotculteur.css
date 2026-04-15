@@ -66,6 +66,27 @@
 
 .ff-field[hidden] { display: none; }
 
+/* Freebets par site */
+.ff-fb-site-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding: 2px 0;
+}
+.ff-fb-site-name {
+	font-size: 0.82rem;
+	color: var(--color-text);
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.ff-fb-amount-input {
+	width: 64px !important;
+}
+
 .ff-options-group {
 	display: flex;
 	flex-direction: column;
@@ -416,6 +437,16 @@
 	color: var(--color-muted);
 }
 
+.ff-link-btn {
+	background: none;
+	border: none;
+	padding: 0;
+	color: var(--c-primary);
+	cursor: pointer;
+	font-size: inherit;
+	text-decoration: underline;
+}
+
 /* Search */
 
 .ff-search-row {
@@ -510,6 +541,8 @@
 
 .ff-table-wrap {
 	overflow-x: auto;
+	overflow-y: auto;
+	max-height: calc(100vh - 260px);
 	width: 100%;
 	border: 1px solid var(--color-divider);
 	border-radius: 10px;
@@ -533,9 +566,125 @@
 	border-bottom: 2px solid var(--color-divider);
 	white-space: nowrap;
 	background: var(--color-surface-2);
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	position: sticky;
+	top: 0;
+	z-index: 10;
 }
 
-.ff-th-center { text-align: center; }
+.ff-th-center { justify-content: center; }
+
+.ff-th-filter-btn {
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--color-muted);
+	font-size: 0.6rem;
+	padding: 1px 3px;
+	border-radius: 3px;
+	line-height: 1;
+	flex-shrink: 0;
+	transition: color 0.15s, background 0.15s;
+	opacity: 0.5;
+}
+
+.ff-th:hover .ff-th-filter-btn,
+.ff-th-filter-btn:hover { opacity: 1; color: var(--c-primary); }
+.ff-th-filter-btn--active { opacity: 1 !important; color: var(--c-primary) !important; }
+
+/* Popover filtre colonne */
+
+#ff-col-filter-popover {
+	position: fixed;
+	z-index: 300;
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	box-shadow: 0 6px 20px rgba(0,0,0,0.14);
+	padding: 12px 14px;
+	min-width: 190px;
+}
+
+.ff-cfp-title {
+	font-size: 0.65rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--color-muted);
+	margin-bottom: 10px;
+}
+
+.ff-cfp-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.ff-cfp-lbl {
+	font-size: 0.72rem;
+	color: var(--color-muted);
+	width: 38px;
+	flex-shrink: 0;
+}
+
+.ff-cfp-input {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.78rem;
+	padding: 4px 7px;
+	border: 1px solid var(--color-divider);
+	border-radius: 4px;
+	background: var(--color-bg);
+	color: var(--color-text);
+}
+
+.ff-cfp-input:focus { outline: none; border-color: var(--c-primary); box-shadow: 0 0 0 2px rgba(var(--c-primary-rgb, 59,130,246), 0.18); }
+
+.ff-cfp-check-lbl {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 0.78rem;
+	cursor: pointer;
+	padding: 3px 0;
+}
+
+.ff-cfp-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 10px;
+	padding-top: 8px;
+	border-top: 1px solid var(--color-divider);
+}
+
+.ff-cfp-clear {
+	background: none;
+	border: 1px solid var(--color-divider);
+	border-radius: 4px;
+	font-size: 0.72rem;
+	padding: 4px 10px;
+	cursor: pointer;
+	color: var(--color-muted);
+}
+
+.ff-cfp-clear:hover { border-color: var(--color-text); color: var(--color-text); }
+
+.ff-cfp-apply {
+	background: var(--c-primary);
+	color: #fff;
+	border: none;
+	border-radius: 4px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 4px 12px;
+	cursor: pointer;
+}
+
+.ff-cfp-apply:hover { opacity: 0.88; }
 
 .ff-td {
 	padding: 9px 10px;

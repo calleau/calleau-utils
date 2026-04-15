@@ -81,6 +81,12 @@
 					<p id="ff-json-error" class="ff-json-error" hidden></p>
 				</div>
 
+				<!-- Freebets disponibles par site -->
+				<div class="ff-field" id="ff-freebet-sites-field" hidden>
+					<label class="ff-label">Freebets disponibles</label>
+					<div id="ff-freebet-sites-wrap"></div>
+				</div>
+
 				<!-- Site freebet (méthode 1) -->
 				<div id="ff-site-row">
 					<div class="ff-field" id="ff-site-field" hidden>
@@ -188,12 +194,15 @@
 		</div>
 
 		<footer class="page-footer">
-			<span class="footer-version">v3.3.4</span>
+			<span class="footer-version">v5.0.0</span>
 		</footer>
 
 	</div>
 
 	<div id="floating-actions"></div>
+
+	<!-- Popover filtre colonne -->
+	<div id="ff-col-filter-popover" hidden></div>
 
 	<!-- Overlay de calcul -->
 	<div id="ff-calc-overlay" hidden aria-live="polite">
@@ -207,7 +216,7 @@
 		</div>
 	</div>
 
-	<script src="magotculteur.js"></script>
+	<script type="module" src="/src/app.ts"></script>
 </body>
 
 </html>
