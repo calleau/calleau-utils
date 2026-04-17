@@ -109,6 +109,72 @@
 	flex-shrink: 0;
 }
 
+/* Field header: label + secondary toggle on same row */
+.ff-field-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.ff-field-header .ff-label {
+	margin-bottom: 0;
+}
+
+.ff-advanced-toggle {
+	font-size: 0.78rem;
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+/* Site selector buttons */
+.ff-site-btns-wrap {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.ff-site-btn {
+	font-size: 0.82rem;
+	padding: 4px 10px;
+}
+
+.ff-no-sites {
+	font-size: 0.82rem;
+	color: var(--color-muted);
+	margin: 0;
+}
+
+/* Methods grid (2 columns of checkboxes) */
+.ff-methods-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px 12px;
+}
+
+.ff-toggle-label {
+	display: flex;
+	align-items: center;
+	gap: 0.45rem;
+	font-size: 0.85rem;
+	cursor: pointer;
+	color: var(--color-text);
+}
+.ff-toggle-label input[type="checkbox"] {
+	width: 15px;
+	height: 15px;
+	accent-color: var(--c-primary);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+/* Cover badge variant */
+.ff-betrow-badge--cover {
+	background: rgba(160, 120, 80, 0.13);
+	color: var(--c-tertiary, #a05020);
+}
+
 .ff-label {
 	font-size: 0.72rem;
 	font-weight: 600;
@@ -296,6 +362,23 @@
 	cursor: wait;
 }
 
+.ff-debug-dl-btn {
+	width: 100%;
+	padding: 7px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	border: 1.5px dashed var(--color-pos, #16a34a);
+	border-radius: 8px;
+	background: none;
+	color: var(--color-pos, #16a34a);
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.ff-debug-dl-btn:hover {
+	background: color-mix(in srgb, var(--color-pos, #16a34a) 10%, transparent);
+}
+
 /* ===== Overlay de calcul ===== */
 #ff-calc-overlay {
 	position: fixed;
@@ -331,6 +414,23 @@
 	text-align: center;
 	color: var(--color-text, #111);
 	line-height: 1.4;
+}
+
+.ff-calc-overlay-detail {
+	margin: 0;
+	font-size: 0.78rem;
+	text-align: center;
+	color: var(--color-text-muted, #888);
+	min-height: 1.2em;
+}
+
+.ff-calc-overlay-count {
+	margin: 0;
+	font-size: 0.78rem;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+	color: var(--color-text-muted, #888);
+	min-height: 1.2em;
 }
 
 .ff-calc-overlay-bar-wrap {
@@ -399,6 +499,41 @@
 	border-top: 1px solid var(--color-divider);
 	padding-top: 1rem;
 	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.ff-debug-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.65rem;
+	color: var(--color-muted);
+	opacity: 0.4;
+	padding: 2px 6px;
+	border-radius: 4px;
+	transition: opacity 0.15s, color 0.15s;
+}
+
+.ff-debug-btn:hover { opacity: 0.8; }
+
+.ff-debug-btn--active {
+	color: var(--color-pos, #16a34a);
+	opacity: 1;
+}
+
+.ff-debug-icon {
+	filter: invert(60%) sepia(0%) saturate(0%) hue-rotate(0deg);
+}
+
+.ff-debug-btn--active .ff-debug-icon {
+	filter: invert(45%) sepia(80%) saturate(400%) hue-rotate(90deg) brightness(90%);
 }
 
 .footer-version {
@@ -551,8 +686,8 @@
 
 .ff-table {
 	display: grid;
-	grid-template-columns: 28px 130px 52px 105px 1fr auto 120px 120px 95px 105px 110px 80px;
-	min-width: 900px;
+	grid-template-columns: 28px 170px 52px 105px 1fr auto 52px 90px 90px 110px 80px;
+	min-width: 820px;
 	width: 100%;
 }
 
@@ -1114,4 +1249,132 @@
 	color: var(--color-muted);
 	white-space: nowrap;
 	text-align: right;
+}
+
+/* =========================================================
+   Sub-fields (simple mode)
+   ========================================================= */
+
+.ff-subfield {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.ff-subfield + .ff-subfield {
+	margin-top: 0.6rem;
+}
+
+.ff-sublabel {
+	font-size: 0.7rem;
+	color: var(--color-muted);
+	font-weight: 500;
+}
+
+/* Small toggle */
+.ff-legs-toggle--sm {
+	flex-wrap: wrap;
+	gap: 3px;
+}
+
+/* Small button */
+.ff-btn--sm {
+	padding: 5px 9px;
+	font-size: 0.78rem;
+	font-weight: 500;
+	border-radius: 6px;
+	flex-direction: row;
+}
+
+/* Bet type color variants (active state override) */
+.ff-btn--fb.ff-btn--active {
+	background: var(--color-pos, #16a34a);
+	border-color: var(--color-pos, #16a34a);
+}
+
+.ff-btn--cash.ff-btn--active {
+	background: #a07000;
+	border-color: #a07000;
+}
+
+/* =========================================================
+   Mode Avancé — per-site cards
+   ========================================================= */
+
+.ff-adv-site {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	padding: 10px 12px;
+	margin-bottom: 8px;
+}
+
+.ff-adv-site:last-child { margin-bottom: 0; }
+
+.ff-adv-site-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.ff-adv-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.ff-adv-add-mission {
+	padding: 4px 10px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	border: 1px dashed var(--color-divider);
+	border-radius: 6px;
+	background: none;
+	color: var(--c-primary);
+	cursor: pointer;
+	transition: border-color 0.15s, background 0.15s;
+}
+
+.ff-adv-add-mission:hover {
+	border-color: var(--c-primary);
+	background: color-mix(in srgb, var(--c-primary) 8%, transparent);
+}
+
+.ff-adv-mission {
+	border: 1px solid var(--color-divider);
+	border-radius: 6px;
+	padding: 8px 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.ff-adv-mission-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.ff-adv-mission-del {
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--color-muted);
+	font-size: 0.75rem;
+	padding: 2px 5px;
+	border-radius: 4px;
+	transition: color 0.15s, background 0.15s;
+}
+
+.ff-adv-mission-del:hover {
+	color: var(--color-neg);
+	background: rgba(220, 38, 38, 0.1);
+}
+
+.ff-adv-mission-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
 }

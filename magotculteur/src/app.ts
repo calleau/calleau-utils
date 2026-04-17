@@ -1,57 +1,70 @@
 import EngineWorker from './worker.ts?worker';
-import { collectSites, eventDisplayName, formatDate, isExchange, getBackOdds } from './engine';
-import type { AllResults, AnyResult, SeqResult, ToutFBResult, HybridFBResult, LegWithCover, FinalizedBet, WorkerOutMessage, EngineOpts, CoverageRule } from './types';
+import { collectSites, eventDisplayName, formatDate } from './engine';
+import bugOffUrl from '../../icons/bug-off.svg?url';
+import bugUrl from '../../icons/bug.svg?url';
+import type { AllResults, CoveringSetResult, BetDetail, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission } from './types';
 
 // ===== STATE =====
 let _data: any = null;
-let _results: AnyResult[] = [];
-let _allResults: AllResults = {};
-let _method = 1;
-let _betType = 'fb';
-let _nLegs = 1;
-let _amount = 10;
-let _amountTotal = 10;
-let _amountMin = 2;
-let _amountMode = 'total';
-let _cashObjective: 'miser' | 'gagner' | 'perdre' = 'miser';
-let _asymCov = false;
-let _filterMinOdds = 0;
-let _allowedNLegs = new Set([1, 2, 3]);
-let _minOddsPerSelection = 0;
-let _fbSite = '';
+let _results: AllResults = [];
+let _coverageRules: CoverageRule[] = [];
+let _worker: Worker | null = null;
 let _visibleCount = 50;
 let _colFilters: Record<string, any> = {};
 let _cfpOpenCol: string | null = null;
-let _freebetBySite: Record<string, number> = {};
-let _coverageRules: CoverageRule[] = [];
 
-// Worker state
-let _worker: Worker | null = null;
+// Config state
+let _betType: 'fb' | 'cash' = 'fb';
+let _advancedMode = false;
+
+// Simple mode
+let _simpleSite = '';
+let _simpleAmountMode: 'mise_totale' | 'mise_min_par_pari' | 'profit_net_min' | 'profit_brut' = 'mise_totale';
+let _simpleAmount = 10;
+let _simpleCashObjective: 'gagner' | 'miser' | 'perdre' = 'miser';
+let _simpleCoteMin = 0;
+let _simpleCoteMinSel = 0;
+
+// Advanced mode — per site
+let _advSites: Record<string, {
+  freebetAmount: number;
+  freebetPriority: 1 | 2 | 3;
+  missions: Mission[];
+}> = {};
+
+// General params
+let _allowedNLegs = new Set([1, 2, 3]);
+let _allowSeq = true;
+let _allowSimult = true;
+let _allowUni = true;
+let _allowMulti = true;
+let _allowSym = true;
+let _allowAsym = false;
 
 // ===== PREFS =====
-const _PREFS_KEY = 'ff_prefs';
+const PREFS_KEY = 'ff_prefs_v2';
 
 function savePrefs() {
   try {
-    localStorage.setItem(_PREFS_KEY, JSON.stringify({
+    localStorage.setItem(PREFS_KEY, JSON.stringify({
       betType: _betType,
-      cashObjective: _cashObjective,
-      amountTotal: parseFloat((document.getElementById('ff-amount-total') as HTMLInputElement)?.value) || _amountTotal,
-      amountMin: parseFloat((document.getElementById('ff-amount-min') as HTMLInputElement)?.value) || _amountMin,
-      amountMode: _amountMode,
-      method: _method,
-      nLegs: _nLegs,
-      asymCov: _asymCov,
-      filterMinOdds: _filterMinOdds,
+      advancedMode: _advancedMode,
+      simpleSite: _simpleSite,
+      simpleAmountMode: _simpleAmountMode,
+      simpleAmount: _simpleAmount,
+      simpleCashObjective: _simpleCashObjective,
+      simpleCoteMin: _simpleCoteMin,
+      simpleCoteMinSel: _simpleCoteMinSel,
       allowedNLegs: [..._allowedNLegs],
-      minOddsPerSelection: _minOddsPerSelection,
-      site: (document.getElementById('ff-site-select') as HTMLSelectElement)?.value ?? '',
+      allowSeq: _allowSeq, allowSimult: _allowSimult,
+      allowUni: _allowUni, allowMulti: _allowMulti,
+      allowSym: _allowSym, allowAsym: _allowAsym,
     }));
   } catch {}
 }
 
 function loadPrefs(): Record<string, any> {
-  try { return JSON.parse(localStorage.getItem(_PREFS_KEY) || '{}'); } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); } catch { return {}; }
 }
 
 // ===== HELPERS =====
@@ -62,15 +75,14 @@ function esc(s: any): string {
 
 function fmt(n: number, d = 2): string { return Number(n).toFixed(d).replace('.', ','); }
 
-function rateClass(rate: number): string {
+function rateClass(rate: number, isCash: boolean): string {
+  if (isCash) {
+    if (rate >= -0.03) return 'ff-rate-good';
+    if (rate >= -0.07) return 'ff-rate-ok';
+    return 'ff-rate-bad';
+  }
   if (rate >= 0.75) return 'ff-rate-good';
   if (rate >= 0.55) return 'ff-rate-ok';
-  return 'ff-rate-bad';
-}
-
-function rateClassCash(rate: number): string {
-  if (rate >= 0.97) return 'ff-rate-good';
-  if (rate >= 0.93) return 'ff-rate-ok';
   return 'ff-rate-bad';
 }
 
@@ -78,8 +90,7 @@ const _SITE_KEYS = ['piwi', 'olybet', 'betclic', 'winamax', 'bwin', 'unibet', 'f
 const _EXCHANGE_SITE_KEYS = ['piwi'];
 
 function isExchangeSite(name: string): boolean {
-  if (!name) return false;
-  const low = name.toLowerCase();
+  const low = (name || '').toLowerCase();
   return _EXCHANGE_SITE_KEYS.some(k => low.includes(k));
 }
 
@@ -92,25 +103,18 @@ function sitePill(name: string, isLay = false): string {
   return `<span class="ff-site-pill${layClass}"${dataSite}>${label}</span>`;
 }
 
-function miseTag(type: string): string {
+function miseTag(type: 'fb' | 'cash'): string {
   return type === 'fb'
     ? `<span class="ff-mise-tag ff-mise-tag--fb">Freebet</span>`
     : `<span class="ff-mise-tag ff-mise-tag--cash">Cash</span>`;
-}
-
-function coverBadge(cover: any): string {
-  if (cover.type === 'lay') return `<span class="ff-badge ff-badge-lay">Lay</span>`;
-  if (cover.type === 'dc') return `<span class="ff-badge ff-badge-dc">DC</span>`;
-  if (isExchangeSite(cover?.site)) return `<span class="ff-badge ff-badge-bk">Back</span>`;
-  return '';
 }
 
 function resolveOutcome(outcomeName: string, eventKey: string, marketName: string): string {
   const ev = _data?.[eventKey];
   const opp = ev?.opponents;
   if (!opp) return `${esc(marketName)} · ${esc(outcomeName)}`;
-  let label: string;
   const k = outcomeName.trim();
+  let label: string;
   if (k === '1') label = esc(opp['1'] ?? outcomeName);
   else if (k === '2') label = esc(opp['2'] ?? outcomeName);
   else if (k === 'X') label = 'Nul';
@@ -126,124 +130,151 @@ function formatGap(ms: number): string {
   return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
 }
 
-function evInfo(leg: LegWithCover): string {
-  return `<span class="ff-ev-name">${esc(leg.evName)}</span>
-    <span class="ff-ev-meta">${esc([leg.evComp, leg.evDate].filter(Boolean).join(' · '))}</span>`;
-}
+// ===== BUILD ENGINE OPTS =====
 
-// ===== RENDERING =====
+function buildEngineOpts(): EngineOpts {
+  const sites: Record<string, SiteConfig> = {};
 
-function buildSeqLegRow(leg: LegWithCover, idx: number, gap: number | null, scale = 1): string {
-  const gapHtml = gap ? `<span class="ff-gap">+${formatGap(gap)}</span>` : '';
-  const stakeDetail = leg.liability != null
-    ? `${fmt(leg.stake * scale)}\u00a0€ <span class="ff-sub">(liab.\u00a0${fmt(leg.liability * scale)}\u00a0€)</span>`
-    : `${fmt(leg.stake * scale)}\u00a0€`;
-  const coverOddsDetail = leg.cover.lGross != null ? `${fmt(leg.cover.lGross)}` : `${fmt(leg.cover.odds)}`;
-  return `
-  <div class="ff-leg">
-    <div class="ff-leg-left">
-      <span class="ff-leg-num">L${idx + 1}</span>
-      ${gapHtml}
-      <div class="ff-ev-wrap">${evInfo(leg)}</div>
-    </div>
-    <div class="ff-leg-right">
-      <span class="ff-leg-market">${esc(leg.marketName)} · <strong>${esc(leg.outcomeName)}</strong></span>
-      <span class="ff-leg-back">Back\u00a0: <strong>${fmt(_amount * scale)}\u00a0€</strong> \u00d7 cote <strong>${fmt(leg.b)}</strong> sur ${esc(_fbSite)}</span>
-      <span class="ff-leg-cover">${esc(leg.cover.site)} ${coverBadge(leg.cover)} ${esc(leg.cover.outcomeName)} · ${coverOddsDetail}</span>
-      <span class="ff-leg-stake">Mise couv.\u00a0: <strong>${stakeDetail}</strong></span>
-    </div>
-  </div>`;
-}
-
-function buildSeqDetailFlat(result: SeqResult, scale = 1): string {
-  const amount = _amount * scale;
-  const backTitles = result.legs.map(leg => esc(leg.evName)).join(' + ');
-  const backOutcomes = result.legs.map(leg => resolveOutcome(leg.outcomeName, leg.eventKey, leg.marketName)).join(' + ');
-  const backRow = `
-  <div class="ff-betrow">
-    <span class="ff-betrow-badge ff-betrow-badge--back">Seq.\u00a01</span>
-    <div class="ff-betrow-body">
-      <span class="ff-betrow-title">${backTitles}</span>
-      <span class="ff-betrow-detail">${sitePill(_fbSite)} · ${backOutcomes} · Mise <strong>${fmt(amount)}\u00a0€</strong> ${miseTag('fb')} · Cote <strong>${fmt(result.B)}</strong></span>
-    </div>
-  </div>`;
-  const coverRows = result.legs.map((leg, i) => {
-    const cover = leg.cover;
-    const badgeClass = cover.type === 'lay' ? 'lay' : 'back';
-    const oddsStr = cover.lGross != null ? `<strong>${fmt(cover.lGross)}</strong>` : `<strong>${fmt(cover.odds)}</strong>`;
-    const liabilityStr = leg.liability != null ? ` · Liability <strong>${fmt(leg.liability * scale)}\u00a0€</strong>` : '';
-    const coverOutcome = resolveOutcome(cover.outcomeName, leg.eventKey, leg.marketName);
-    return `
-  <div class="ff-betrow">
-    <span class="ff-betrow-badge ff-betrow-badge--${badgeClass}">Seq.\u00a0${i + 2}</span>
-    <div class="ff-betrow-body">
-      <span class="ff-betrow-title">${esc(leg.evName)}</span>
-      <span class="ff-betrow-detail">${sitePill(cover.site, cover.type === 'lay')} · ${coverOutcome} · Mise <strong>${fmt(leg.stake * scale)}\u00a0€</strong> ${miseTag('cash')} · Cote ${oddsStr}${liabilityStr}</span>
-    </div>
-  </div>`;
-  }).join('');
-  return `<div class="ff-betlist">${backRow}${coverRows}</div>`;
-}
-
-function buildToutFBBetRow(bet: FinalizedBet, idx: number, betType: string, scale = 1): string {
-  const titleParts = bet.legs.map(l => {
-    const ev = _data?.[l.eventKey];
-    return esc(ev ? eventDisplayName(l.eventKey, ev) : l.eventKey);
-  }).join(' + ');
-  const outcomeParts = bet.legs.map(l => resolveOutcome(l.outcomeName, l.eventKey, l.marketName)).join(' + ');
-  const s = bet.stake * scale;
-  const detail = `${sitePill(bet.site)} · ${outcomeParts} · Mise <strong>${fmt(s)}\u00a0€</strong> ${miseTag(betType)} · Cote <strong>${fmt(bet.odds)}</strong>`;
-  return `
-  <div class="ff-bet">
-    <span class="ff-bet-num">Pari\u00a0${idx + 1}</span>
-    <div class="ff-bet-desc">
-      <span class="ff-bet-legs">${titleParts}</span>
-      <span class="ff-bet-site">${detail}</span>
-    </div>
-  </div>`;
-}
-
-function buildHybridDetailContent(result: HybridFBResult, scale = 1): string {
-  const fbTitleParts = result.fbBet.legs.map(l => {
-    const ev = _data?.[l.eventKey];
-    return esc(ev ? eventDisplayName(l.eventKey, ev) : l.eventKey);
-  }).join(' + ');
-  const fbOutcomeParts = result.fbBet.legs.map(l => resolveOutcome(l.outcomeName, l.eventKey, l.marketName)).join(' + ');
-  const fbRow = `
-  <div class="ff-bet">
-    <span class="ff-bet-num">Freebet</span>
-    <div class="ff-bet-desc">
-      <span class="ff-bet-legs">${fbTitleParts}</span>
-      <span class="ff-bet-site">${sitePill(result.fbBet.site)} · ${fbOutcomeParts} · Mise <strong>${fmt(result.fbBet.stake * scale)}\u00a0€</strong> ${miseTag('fb')} · Cote <strong>${fmt(result.fbBet.odds)}</strong></span>
-    </div>
-  </div>`;
-  const cashRows = result.cashBets.map((b, i) => {
-    const titleParts = b.legs.map(l => {
-      const ev = _data?.[l.eventKey];
-      return esc(ev ? eventDisplayName(l.eventKey, ev) : l.eventKey);
-    }).join(' + ');
-    const outcomeParts = b.legs.map(l => resolveOutcome(l.outcomeName, l.eventKey, l.marketName)).join(' + ');
-    return `
-  <div class="ff-bet">
-    <span class="ff-bet-num">Cash\u00a0${i + 1}</span>
-    <div class="ff-bet-desc">
-      <span class="ff-bet-legs">${titleParts}</span>
-      <span class="ff-bet-site">${sitePill(b.site)} · ${outcomeParts} · Mise <strong>${fmt(b.stake * scale)}\u00a0€</strong> ${miseTag('cash')} · Cote <strong>${fmt(b.odds)}</strong></span>
-    </div>
-  </div>`;
-  }).join('');
-  return `<div class="ff-detail-bets">${fbRow}${cashRows}</div>`;
-}
-
-function buildDetailContent(result: AnyResult, scale = 1): string {
-  if (result.method === 1) return buildSeqDetailFlat(result as SeqResult, scale);
-  if (result.method === 3) return buildHybridDetailContent(result as HybridFBResult, scale);
-  if (result.method === 2 || result.method === 4) {
-    const r = result as ToutFBResult;
-    const rows = r.bets.map((b, i) => buildToutFBBetRow(b, i, r.betType, scale)).join('');
-    return `<div class="ff-detail-bets">${rows}</div>`;
+  if (_advancedMode) {
+    for (const [site, cfg] of Object.entries(_advSites)) {
+      sites[site] = {
+        freebetAmount: cfg.freebetAmount,
+        freebetPriority: cfg.freebetPriority,
+        missions: cfg.missions,
+      };
+    }
+  } else {
+    // Simple mode: build a single-site config from simple mode settings
+    if (_data) {
+      const allSites = collectSites(_data);
+      for (const s of allSites) {
+        if (s === _simpleSite && _betType === 'fb') {
+          sites[s] = { freebetAmount: _simpleAmount, freebetPriority: 1, missions: [] };
+        } else if (s === _simpleSite && _betType === 'cash') {
+          // Obligatory cash site: add a default mission
+          sites[s] = {
+            freebetAmount: 0, freebetPriority: 3,
+            missions: [{
+              id: 'simple_main',
+              importance: 'obligatoire',
+              montantMode: (_simpleAmountMode === 'mise_totale' || _simpleAmountMode === 'mise_min_par_pari') ? 'mise_min' : _simpleAmountMode,
+              // Pour mise_totale : montant=0 car l'amount est déjà appliqué
+              // dans makeSimultResult via opts.amount. La mission sert uniquement
+              // à marquer le site comme obligatoire.
+              montant: _simpleAmountMode === 'mise_totale' ? 0 : _simpleAmount,
+              objectif: _simpleCashObjective,
+              coteMin: _simpleCoteMin,
+              coteMinParSelection: _simpleCoteMinSel,
+              nbCombinesMin: 1,
+            }],
+          };
+        } else {
+          sites[s] = { freebetAmount: 0, freebetPriority: 3, missions: [] };
+        }
+      }
+    }
   }
-  return '';
+
+  return {
+    coverageRules: _coverageRules,
+    betType: _betType,
+    sites,
+    allowedNLegs: [..._allowedNLegs],
+    amountMode: _simpleAmountMode,
+    amount: _simpleAmount,
+    cashObjective: _simpleCashObjective,
+    coteMin: _simpleCoteMin,
+    coteMinParSelection: _simpleCoteMinSel,
+    allowSeq: _allowSeq,
+    allowSimult: _allowSimult,
+    allowUni: _allowUni,
+    allowMulti: _allowMulti,
+    allowSym: _allowSym,
+    allowAsym: _allowAsym,
+  };
+}
+
+// ===== RESULT TABLE HELPERS =====
+
+function resultMethodLabel(r: CoveringSetResult): string {
+  const timing = r.timing === 'seq' ? 'Séq.' : 'Simult.';
+  const placement = r.placement === 'uni' ? 'Uni' : 'Multi';
+  const sym = r.symmetry === 'sym' ? 'Sym.' : 'Asym.';
+  return `${timing} · ${placement} · ${sym}`;
+}
+
+function resultFirstDate(r: CoveringSetResult): string {
+  let first: number | null = null;
+  for (const ek of r.eventKeys) {
+    const dt = _data?.[ek]?.dateTime;
+    if (dt) {
+      const t = new Date(dt).getTime();
+      if (!first || t < first) first = t;
+    }
+  }
+  return first ? formatDate(new Date(first).toISOString()) : '—';
+}
+
+function resultEventsHtml(r: CoveringSetResult): string {
+  return r.eventKeys.map(ek => {
+    const ev = _data?.[ek];
+    return `<span>${esc(ev ? eventDisplayName(ek, ev) : ek)}</span>`;
+  }).join('');
+}
+
+function resultMarketsHtml(r: CoveringSetResult): string {
+  return r.eventKeys.map(ek => {
+    const mkts = [...new Set(r.bets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
+    return `<span>${esc(mkts.join(', ') || '—')}</span>`;
+  }).join('');
+}
+
+function resultAllOdds(r: CoveringSetResult): number[] {
+  return r.bets.map(b => b.odds);
+}
+
+function resultOddsRange(r: CoveringSetResult): string {
+  const odds = resultAllOdds(r);
+  if (!odds.length) return '—';
+  const mn = Math.min(...odds), mx = Math.max(...odds);
+  return Math.abs(mx - mn) < 0.01 ? fmt(mn) : `${fmt(mn)}\u2013${fmt(mx)}`;
+}
+
+function resultProfitDisplay(r: CoveringSetResult): { cls: string; text: string } {
+  const p = r.profit;
+  if (_betType === 'cash') {
+    return { cls: p >= 0 ? 'pos' : 'neg', text: `${p >= 0 ? '+' : '\u2212'}${fmt(Math.abs(p))}\u00a0\u20ac` };
+  }
+  return { cls: 'pos', text: `+${fmt(p)}\u00a0\u20ac` };
+}
+
+// ===== DETAIL RENDERING =====
+
+function buildBetDetailRow(bet: BetDetail, idx: number): string {
+  const titleParts = [...new Set(bet.legs.map(l => {
+    const ev = _data?.[l.eventKey];
+    return ev ? eventDisplayName(l.eventKey, ev) : l.eventKey;
+  }))].join(' + ');
+
+  const outcomeParts = bet.legs.map(l => resolveOutcome(l.outcomeName, l.eventKey, l.marketName)).join(' + ');
+  const stepLabel = bet.seqStep != null ? `Seq.\u00a0${bet.seqStep + 1}` : `Pari\u00a0${idx + 1}`;
+  const liabilityStr = bet.liability != null ? ` · Liability <strong>${fmt(bet.liability)}\u00a0\u20ac</strong>` : '';
+  const roleClass = bet.role === 'principal' ? 'ff-betrow-badge--back' : 'ff-betrow-badge--cover';
+  const roleLabel = bet.role === 'principal' ? stepLabel : `Couv.\u00a0${idx + 1}`;
+
+  return `
+  <div class="ff-betrow">
+    <span class="ff-betrow-badge ${roleClass}">${esc(roleLabel)}</span>
+    <div class="ff-betrow-body">
+      <span class="ff-betrow-title">${esc(titleParts)}</span>
+      <span class="ff-betrow-detail">${sitePill(bet.site)} · ${outcomeParts} · Mise <strong>${fmt(bet.stake)}\u00a0\u20ac</strong> ${miseTag(bet.betType)} · Cote <strong>${fmt(bet.odds)}</strong>${liabilityStr}</span>
+    </div>
+  </div>`;
+}
+
+function buildDetailContent(r: CoveringSetResult): string {
+  const rows = r.bets.map((b, i) => buildBetDetailRow(b, i)).join('');
+  return `<div class="ff-betlist">${rows}</div>`;
 }
 
 // ===== COLUMN FILTERS =====
@@ -253,60 +284,44 @@ const COL_FILTER_DEFS: Record<string, any> = {
     type: 'set',
     label: 'Méthode',
     options: [
-      { value: '1', label: 'Séq.' },
-      { value: '2', label: 'Couv. complète' },
-      { value: '3', label: 'Hybride FB' },
-      { value: '4', label: 'Multi-sites' },
+      { value: 'seq_uni_sym', label: 'Séq. · Uni · Sym.' },
+      { value: 'seq_multi_sym', label: 'Séq. · Multi · Sym.' },
+      { value: 'simult_uni_sym', label: 'Simult. · Uni · Sym.' },
+      { value: 'simult_multi_sym', label: 'Simult. · Multi · Sym.' },
+      { value: 'simult_uni_asym', label: 'Simult. · Uni · Asym.' },
+      { value: 'simult_multi_asym', label: 'Simult. · Multi · Asym.' },
     ],
-    getValue: (r: AnyResult) => String(r.method),
+    getValue: (r: CoveringSetResult) => `${r.timing}_${r.placement}_${r.symmetry}`,
   },
   matches: {
     type: 'num',
     label: 'Matchs',
-    getValue: (r: AnyResult) => r.method === 1
-      ? new Set((r as SeqResult).legs.map(l => l.eventKey)).size
-      : ((r as ToutFBResult | HybridFBResult).nMatches ?? 0),
+    getValue: (r: CoveringSetResult) => r.nMatches,
   },
   paris: {
     type: 'num',
     label: 'Paris',
-    getValue: (r: AnyResult) => r.method === 1
-      ? (r as SeqResult).legs.length * 2
-      : ((r as ToutFBResult | HybridFBResult).nBets ?? 0),
+    getValue: (r: CoveringSetResult) => r.bets.length,
   },
-  liab: {
+  cash: {
     type: 'num',
     label: 'Cash engagé',
-    getValue: (r: AnyResult) => {
-      const v = rowCashEngaged(r);
-      return v === null ? null : v * getDisplayScale(r);
-    },
+    getValue: (r: CoveringSetResult) => r.totalCash,
   },
   cote: {
     type: 'num',
-    label: 'Cote',
-    getValue: (r: AnyResult) => {
-      if (r.method === 1) return (r as SeqResult).B;
-      if (r.method === 3) { const hr = r as HybridFBResult; return Math.min(hr.fbBet.odds, ...hr.cashBets.map(b => b.odds)); }
-      if (r.method === 2 || r.method === 4) return Math.min(...(r as ToutFBResult).bets.map(b => b.odds));
-      return null;
-    },
+    label: 'Cote min',
+    getValue: (r: CoveringSetResult) => Math.min(...r.bets.map(b => b.odds)),
   },
   result: {
     type: 'num',
     label: 'Résultat',
-    getValue: (r: AnyResult) => {
-      const scale = getDisplayScale(r);
-      const obj = (r as SeqResult)._cashObjective;
-      if (obj === 'gagner') return ((r as SeqResult).netIfWins ?? 0) * scale;
-      if (obj === 'perdre') return ((r as SeqResult).netIfLoses ?? 0) * scale;
-      return r.betType === 'cash' ? -((r as any).loss * scale) : ((r as any).profit * scale);
-    },
+    getValue: (r: CoveringSetResult) => r.profit,
   },
   taux: {
     type: 'num',
     label: 'Taux (%)',
-    getValue: (r: AnyResult) => r.rate * 100,
+    getValue: (r: CoveringSetResult) => r.rate * 100,
   },
 };
 
@@ -314,14 +329,11 @@ function isColFilterActive(col: string): boolean {
   const f = _colFilters[col];
   if (!f) return false;
   if (f.type === 'num') return f.min !== null || f.max !== null || f.exact !== null;
-  if (f.type === 'set') {
-    const def = COL_FILTER_DEFS[col];
-    return def && f.values.size > 0 && f.values.size < def.options.length;
-  }
+  if (f.type === 'set') return f.values.size > 0 && f.values.size < COL_FILTER_DEFS[col]?.options?.length;
   return false;
 }
 
-function passesColFilters(r: AnyResult): boolean {
+function passesColFilters(r: CoveringSetResult): boolean {
   for (const [col, f] of Object.entries(_colFilters)) {
     const def = COL_FILTER_DEFS[col];
     if (!def) continue;
@@ -338,35 +350,20 @@ function passesColFilters(r: AnyResult): boolean {
   return true;
 }
 
-function clearColFilter(col: string) {
-  delete _colFilters[col];
-  closeColFilterPopover();
-  renderPage();
-}
-
-function clearAllColFilters() {
-  _colFilters = {};
-  closeColFilterPopover();
-  renderPage();
-}
+function clearColFilter(col: string) { delete _colFilters[col]; closeColFilterPopover(); renderPage(); }
+function clearAllColFilters() { _colFilters = {}; closeColFilterPopover(); renderPage(); }
 
 function applyColFilterFromPopover(col: string) {
   const def = COL_FILTER_DEFS[col];
   if (def.type === 'num') {
     const parse = (id: string) => { const v = (document.getElementById(id) as HTMLInputElement)?.value.trim(); return v === '' || v == null ? null : parseFloat(v); };
     const min = parse('ff-cfp-min'), max = parse('ff-cfp-max'), exact = parse('ff-cfp-exact');
-    if (min === null && max === null && exact === null) {
-      delete _colFilters[col];
-    } else {
-      _colFilters[col] = { type: 'num', min, max, exact };
-    }
+    if (min === null && max === null && exact === null) delete _colFilters[col];
+    else _colFilters[col] = { type: 'num', min, max, exact };
   } else if (def.type === 'set') {
     const checked = new Set([...document.querySelectorAll('#ff-cfp-body input[type=checkbox]:checked')].map(cb => (cb as HTMLInputElement).value));
-    if (checked.size === 0 || checked.size === def.options.length) {
-      delete _colFilters[col];
-    } else {
-      _colFilters[col] = { type: 'set', values: checked };
-    }
+    if (checked.size === 0 || checked.size === def.options.length) delete _colFilters[col];
+    else _colFilters[col] = { type: 'set', values: checked };
   }
   closeColFilterPopover();
   renderPage();
@@ -432,209 +429,26 @@ function thFilter(col: string, label: string, extraClass = ''): string {
   </div>`;
 }
 
-// ===== TABLE ROW HELPERS =====
+// ===== TABLE ROW =====
 
-function rowMethod(result: AnyResult): string {
-  if (result.method === 1) return 'Séq.';
-  if (result.method === 2) return 'Couv. complète';
-  if (result.method === 3) return 'Hybride FB';
-  if (result.method === 4) return 'Multi-sites';
-  return '';
-}
-
-function rowMatches(result: AnyResult): number | string {
-  if (result.method === 1) return new Set((result as SeqResult).legs.map(l => l.eventKey)).size;
-  return (result as ToutFBResult | HybridFBResult).nMatches ?? '-';
-}
-
-function rowFirstDate(result: AnyResult): string {
-  if (result.method === 1) {
-    const first = (result as SeqResult).legs.reduce((min: number | null, l) =>
-      (l.dateTime && (!min || l.dateTime < min)) ? l.dateTime : min, null);
-    return first ? formatDate(new Date(first).toISOString()) : '—';
-  }
-  const keys = (result as ToutFBResult | HybridFBResult).eventKeys || [];
-  let first: string | null = null;
-  for (const ek of keys) {
-    const dt = _data?.[ek]?.dateTime;
-    if (dt && (!first || dt < first)) first = dt;
-  }
-  return first ? formatDate(first) : '—';
-}
-
-function resultEventKeys(result: AnyResult): string[] {
-  if (result.method === 1) return [...new Set((result as SeqResult).legs.map(l => l.eventKey))];
-  return (result as ToutFBResult | HybridFBResult).eventKeys || [];
-}
-
-function rowMarketsHtml(result: AnyResult): string {
-  if (result.method === 1) {
-    return resultEventKeys(result).map(ek => {
-      const mkts = [...new Set((result as SeqResult).legs.filter(l => l.eventKey === ek).map(l => l.marketName))];
-      return `<span>${esc(mkts.join(', '))}</span>`;
-    }).join('');
-  }
-  if (result.method === 3) {
-    const r = result as HybridFBResult;
-    const allBets = [r.fbBet, ...r.cashBets];
-    return resultEventKeys(result).map(ek => {
-      const mkts = [...new Set(allBets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
-      return `<span>${esc(mkts.join(', '))}</span>`;
-    }).join('');
-  }
-  if (result.method === 2 || result.method === 4) {
-    return resultEventKeys(result).map(ek => {
-      const mkts = [...new Set((result as ToutFBResult).bets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
-      return `<span>${esc(mkts.join(', '))}</span>`;
-    }).join('');
-  }
-  return '';
-}
-
-function coverTypeLabel(cover: any): string {
-  if (!cover) return '';
-  const exch = isExchangeSite(cover.site);
-  const suffix = cover.type === 'lay' ? ' Lay' : cover.type === 'dc' ? '' : (exch ? ' Back' : '');
-  return (cover.site || '') + suffix;
-}
-
-function outcomesPerEvent(bets: FinalizedBet[], ek: string): number {
-  return new Set(bets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.outcomeName))).size;
-}
-
-function rowTypeHtml(result: AnyResult): string {
-  if (result.method === 1) {
-    return resultEventKeys(result).map(ek => {
-      const leg = (result as SeqResult).legs.find(l => l.eventKey === ek);
-      return `<span>${esc(leg ? coverTypeLabel(leg.cover) : '')}</span>`;
-    }).join('');
-  }
-  if (result.method === 3) {
-    const r = result as HybridFBResult;
-    const allBets = [r.fbBet, ...r.cashBets];
-    return resultEventKeys(result).map(ek => {
-      const n = new Set(allBets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.outcomeName))).size;
-      return `<span>${n}\u00a0issues</span>`;
-    }).join('');
-  }
-  if (result.method === 2 || result.method === 4) {
-    return resultEventKeys(result).map(ek => {
-      const n = outcomesPerEvent((result as ToutFBResult).bets, ek);
-      return `<span>${n}\u00a0issues</span>`;
-    }).join('');
-  }
-  return '';
-}
-
-function eventsLines(result: AnyResult): string {
-  return resultEventKeys(result).map(ek => {
-    const ev = _data?.[ek];
-    return `<span>${esc(ev ? eventDisplayName(ek, ev) : ek)}</span>`;
-  }).join('');
-}
-
-function rowParis(result: AnyResult): string | number {
-  if (result.method === 1) {
-    const r = result as SeqResult;
-    const count = r.legs.length * 2;
-    if (r.profitFb != null && r.nLegs > 1) {
-      const scale = getDisplayScale(r);
-      return `${count}<br><span class="ff-paris-sub">+${fmt(r.profitFb * scale)}\u00a0\u20ac Fb</span><br><span class="ff-paris-sub">+${fmt((r.profit ?? 0) * scale)}\u00a0\u20ac Cash</span>`;
-    }
-    return count;
-  }
-  if (result.method === 3) return (result as HybridFBResult).nBets;
-  if (result.method === 2 || result.method === 4) return (result as ToutFBResult).nBets;
-  return '-';
-}
-
-function rowCashEngaged(result: AnyResult): number | null {
-  if (result.method === 1) return (result as SeqResult).legs.reduce((s, l) => s + (l.liability ?? l.stake), 0);
-  if (result.method === 3) return (result as HybridFBResult).totalCashAmount;
-  return null;
-}
-
-function rowCote(result: AnyResult): string {
-  if (result.method === 1) return fmt((result as SeqResult).B);
-  if (result.method === 3) {
-    const r = result as HybridFBResult;
-    const odds = [r.fbBet, ...r.cashBets].map(b => b.odds);
-    const min = Math.min(...odds), max = Math.max(...odds);
-    return Math.abs(max - min) < 0.01 ? fmt(min) : `${fmt(min)}\u2013${fmt(max)}`;
-  }
-  if (result.method === 2 || result.method === 4) {
-    const odds = (result as ToutFBResult).bets.map(b => b.odds);
-    const min = Math.min(...odds), max = Math.max(...odds);
-    return Math.abs(max - min) < 0.01 ? fmt(min) : `${fmt(min)}\u2013${fmt(max)}`;
-  }
-  return '\u2013';
-}
-
-function resultMinOdds(result: AnyResult): number {
-  if (result.method === 1) return (result as SeqResult).B;
-  if (result.method === 3) { const r = result as HybridFBResult; return Math.min(r.fbBet.odds, ...r.cashBets.map(b => b.odds)); }
-  if (result.method === 2 || result.method === 4) return Math.min(...(result as ToutFBResult).bets.map(b => b.odds));
-  return 0;
-}
-
-function resultMinStake(result: AnyResult): number {
-  if (result.method === 1) return _amount;
-  if (result.method === 3) { const r = result as HybridFBResult; return Math.min(r.fbBet.stake, ...r.cashBets.map(b => b.stake)); }
-  if (result.method === 2 || result.method === 4) return Math.min(...(result as ToutFBResult).bets.map(b => b.stake));
-  return _amount;
-}
-
-function resultSortKey(result: AnyResult): number {
-  const scale = getDisplayScale(result);
-  if (result.betType !== 'cash') return ((result as any).profit ?? 0) * scale;
-  const obj = (result as SeqResult)._cashObjective;
-  if (obj === 'gagner') return ((result as SeqResult).netIfWins ?? 0) * scale;
-  if (obj === 'perdre') return ((result as SeqResult).netIfLoses ?? 0) * scale;
-  return -((result as any).loss * scale);
-}
-
-function getDisplayScale(result: AnyResult): number {
-  if (_amountMode !== 'min') return 1;
-  const ms = resultMinStake(result);
-  return ms > 0 ? _amountMin / ms : 1;
-}
-
-function buildTableRow(result: AnyResult, idx: number): string {
-  const isCash = result.betType === 'cash';
-  const scale = getDisplayScale(result);
-  const liab = rowCashEngaged(result);
-  const obj = (result as SeqResult)._cashObjective;
-  let profitClass: string, valueStr: string;
-  if (obj === 'gagner') {
-    const n = ((result as SeqResult).netIfWins ?? 0) * scale;
-    profitClass = n >= 0 ? 'pos' : 'neg';
-    valueStr = `${n >= 0 ? '+' : '\u2212'}${fmt(Math.abs(n))}\u00a0\u20ac`;
-  } else if (obj === 'perdre') {
-    const n = ((result as SeqResult).netIfLoses ?? 0) * scale;
-    profitClass = 'neg';
-    valueStr = `si\u00a0perdu\u00a0: \u2212${fmt(Math.abs(n))}\u00a0\u20ac`;
-  } else {
-    profitClass = isCash ? 'neg' : 'pos';
-    valueStr = isCash
-      ? `\u2212${fmt((result as any).loss * scale)}\u00a0\u20ac`
-      : `+${fmt((result as any).profit * scale)}\u00a0\u20ac`;
-  }
-  const liabStr = liab !== null ? `${fmt(liab * scale)}\u00a0\u20ac` : '\u2013';
-  const rClass = isCash ? rateClassCash(result.rate) : rateClass(result.rate);
+function buildTableRow(r: CoveringSetResult, idx: number): string {
+  const { cls: profitCls, text: profitText } = resultProfitDisplay(r);
+  const isCash = _betType === 'cash';
+  const rc = rateClass(r.rate, isCash);
+  const cashStr = r.totalCash > 0 ? `${fmt(r.totalCash)}\u00a0\u20ac` : '\u2013';
   return `
     <button class="ff-row-expand" id="ff-expand-${idx}" onclick="toggleDetail(${idx})" aria-label="Détails"><span class="ff-expand-icon">&#9654;</span></button>
-    <div class="ff-td ff-td-muted">${esc(rowMethod(result))}</div>
-    <div class="ff-td ff-td-center">${rowMatches(result)}</div>
-    <div class="ff-td ff-td-mono ff-td-date">${esc(rowFirstDate(result))}</div>
-    <div class="ff-td ff-td-events">${eventsLines(result)}</div>
-    <div class="ff-td ff-td-muted ff-td-events">${rowMarketsHtml(result)}</div>
-    <div class="ff-td ff-td-muted ff-td-events">${rowTypeHtml(result)}</div>
-    <div class="ff-td ff-td-center">${rowParis(result)}</div>
-    <div class="ff-td ff-td-mono">${esc(liabStr)}</div>
-    <div class="ff-td ff-td-mono">${esc(rowCote(result))}</div>
-    <div class="ff-td ff-td-mono ${profitClass}">${esc(valueStr)}</div>
-    <div class="ff-td ${rClass} ff-td-bold">${fmt(result.rate * 100, 1)}\u00a0%</div>
-    <div class="ff-tr-detail" id="ff-detail-${idx}" hidden>${buildDetailContent(result, scale)}</div>`;
+    <div class="ff-td ff-td-muted ff-method-cell">${esc(resultMethodLabel(r))}</div>
+    <div class="ff-td ff-td-center">${r.nMatches}</div>
+    <div class="ff-td ff-td-mono ff-td-date">${esc(resultFirstDate(r))}</div>
+    <div class="ff-td ff-td-events">${resultEventsHtml(r)}</div>
+    <div class="ff-td ff-td-muted ff-td-events">${resultMarketsHtml(r)}</div>
+    <div class="ff-td ff-td-center">${r.bets.length}</div>
+    <div class="ff-td ff-td-mono">${esc(cashStr)}</div>
+    <div class="ff-td ff-td-mono">${esc(resultOddsRange(r))}</div>
+    <div class="ff-td ff-td-mono ${profitCls}">${profitText}</div>
+    <div class="ff-td ${rc} ff-td-bold">${fmt(r.rate * 100, 1)}\u00a0%</div>
+    <div class="ff-tr-detail" id="ff-detail-${idx}" hidden>${buildDetailContent(r)}</div>`;
 }
 
 function toggleDetail(idx: number) {
@@ -647,7 +461,7 @@ function toggleDetail(idx: number) {
 
 // ===== RESULTS RENDERING =====
 
-function renderResults(results: AnyResult[]) {
+function renderResults(results: AllResults) {
   _results = results;
   _visibleCount = 50;
   const el = document.getElementById('ff-results')!;
@@ -658,16 +472,14 @@ function renderResults(results: AnyResult[]) {
     return;
   }
 
-  const isTout = _method === 0;
-  const topHtml = isTout
-    ? `<div class="ff-search-row">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        <input id="ff-search" class="ff-search-input" placeholder="Rechercher un match…" oninput="onSearchInput()" />
-      </div>
-      <p id="ff-summary" class="ff-summary"></p>`
-    : `<p id="ff-count" class="ff-summary"></p>`;
-
-  el.innerHTML = `${topHtml}<div id="ff-cards"></div><div id="ff-more"></div>`;
+  el.innerHTML = `
+    <div class="ff-search-row">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="ff-search" class="ff-search-input" placeholder="Rechercher un match…" oninput="onSearchInput()" />
+    </div>
+    <p id="ff-summary" class="ff-summary"></p>
+    <div id="ff-cards"></div>
+    <div id="ff-more"></div>`;
   renderPage();
 }
 
@@ -678,52 +490,43 @@ function renderPage() {
   const q = ((document.getElementById('ff-search') as HTMLInputElement)?.value ?? '').trim().toLowerCase();
 
   const filtered = _results.filter(r => {
-    if (_filterMinOdds > 0 && resultMinOdds(r) < _filterMinOdds) return false;
     if (!passesColFilters(r)) return false;
     if (!q) return true;
-    if (r.method === 1) return (r as SeqResult).legs.some(l => l.evName.toLowerCase().includes(q) || l.evComp.toLowerCase().includes(q));
-    return (r as ToutFBResult).eventKeys.some(ek => {
+    return r.eventKeys.some(ek => {
       const ev = _data?.[ek];
-      if (!ev) return false;
-      return eventDisplayName(ek, ev).toLowerCase().includes(q);
+      return ev && eventDisplayName(ek, ev).toLowerCase().includes(q);
     });
   });
 
-  filtered.sort((a, b) => resultSortKey(b) - resultSortKey(a));
+  filtered.sort((a, b) => b.profit - a.profit);
   const visible = filtered.slice(0, _visibleCount);
 
   const summaryEl = document.getElementById('ff-summary');
   if (summaryEl) {
-    if (q) {
-      summaryEl.textContent = `${filtered.length} combinaison${filtered.length > 1 ? 's' : ''} trouvée${filtered.length > 1 ? 's' : ''} — affichage des ${Math.min(_visibleCount, filtered.length)} meilleures`;
-    } else {
-      summaryEl.textContent = `${_results.length} combinaison${_results.length > 1 ? 's' : ''} — ${Math.min(_visibleCount, filtered.length)} affichées`;
-    }
-  } else {
-    const countEl = document.getElementById('ff-count');
-    if (countEl) countEl.textContent = `${_results.length} combinaison${_results.length > 1 ? 's' : ''}`;
+    summaryEl.textContent = q
+      ? `${filtered.length} résultat${filtered.length > 1 ? 's' : ''} — ${Math.min(_visibleCount, filtered.length)} affiché${filtered.length > 1 ? 's' : ''}`
+      : `${_results.length} combinaison${_results.length > 1 ? 's' : ''} — ${Math.min(_visibleCount, filtered.length)} affichée${_results.length > 1 ? 's' : ''}`;
   }
 
   const headers = `
     <div class="ff-th"></div>
     ${thFilter('method', 'Méthode')}
     ${thFilter('matches', 'Matchs', 'ff-th-center')}
-    <div class="ff-th">Date event</div>
+    <div class="ff-th">Date</div>
     <div class="ff-th">Événement(s)</div>
     <div class="ff-th">Marchés</div>
-    <div class="ff-th">Type</div>
     ${thFilter('paris', 'Paris', 'ff-th-center')}
-    ${thFilter('liab', 'Cash engagé')}
-    ${thFilter('cote', 'Cote')}
+    ${thFilter('cash', 'Cash engagé')}
+    ${thFilter('cote', 'Cotes')}
     ${thFilter('result', 'Résultat')}
     ${thFilter('taux', 'Taux')}`;
 
   if (!visible.length) {
-    const hasColFilters = Object.keys(_colFilters).length > 0;
-    const emptyMsg = hasColFilters
-      ? `<p class="ff-empty">Aucun résultat pour ces filtres. <button class="ff-link-btn" onclick="clearAllColFilters()">Effacer tous les filtres</button></p>`
+    const hasFilters = Object.keys(_colFilters).length > 0;
+    const msg = hasFilters
+      ? `<p class="ff-empty">Aucun résultat. <button class="ff-link-btn" onclick="clearAllColFilters()">Effacer les filtres</button></p>`
       : `<p class="ff-empty">Aucun match correspondant.</p>`;
-    cards.innerHTML = `<div class="ff-table-wrap"><div class="ff-table">${headers}</div></div>${emptyMsg}`;
+    cards.innerHTML = `<div class="ff-table-wrap"><div class="ff-table">${headers}</div></div>${msg}`;
     if (more) more.innerHTML = '';
     return;
   }
@@ -740,111 +543,85 @@ function renderPage() {
 
 function showMore() { _visibleCount += 50; renderPage(); }
 
-// ===== UI STATE FUNCTIONS =====
+// ===== UI STATE =====
 
-function updateTabSummaries() {
-  const applyFilter = (arr: AnyResult[]) => _filterMinOdds > 0 ? arr.filter(r => resultMinOdds(r) >= _filterMinOdds) : arr;
-  document.querySelectorAll('.ff-count-btn[data-method][data-legs]').forEach(btn => {
-    const el = btn as HTMLElement;
-    const m = +el.dataset.method!;
-    const n = +el.dataset.legs!;
-    const res = applyFilter(_allResults[`${m}_${n}`] ?? []);
-    const num = el.dataset.legs!;
-    if (!res.length) { el.innerHTML = esc(num); return; }
-    const best = res[0];
-    const scale = getDisplayScale(best);
-    const isCash = best.betType === 'cash';
-    const valueStr = isCash ? `\u2212${fmt((best as any).loss * scale, 2)}\u00a0\u20ac` : `+${fmt((best as any).profit * scale, 2)}\u00a0\u20ac`;
-    el.innerHTML = `${esc(num)}<span class="ff-count-summary">${fmt(best.rate * 100, 1)}\u00a0%<br>${valueStr}</span>`;
-  });
-  const toutLabel = document.querySelector('.ff-method-label[data-name="Tout"]');
-  if (toutLabel) {
-    const all = applyFilter(Object.values(_allResults).flat());
-    if (all.length) {
-      const best = all.reduce((b, r) => r.rate > b.rate ? r : b);
-      const scale = getDisplayScale(best);
-      const isCash = best.betType === 'cash';
-      const valueStr = isCash ? `\u2212${fmt((best as any).loss * scale, 2)}\u00a0\u20ac` : `+${fmt((best as any).profit * scale, 2)}\u00a0\u20ac`;
-      toutLabel.innerHTML = `Tout<span class="ff-count-summary">${fmt(best.rate * 100, 1)}\u00a0%<br>${valueStr}</span>`;
-    } else {
-      toutLabel.innerHTML = 'Tout';
-    }
-  }
-}
-
-function clearTabSummaries() {
-  document.querySelectorAll('.ff-count-btn[data-legs]').forEach(btn => {
-    const el = btn as HTMLElement;
-    el.innerHTML = esc(el.dataset.legs!);
-  });
-  document.querySelectorAll('.ff-method-label[data-name]').forEach(label => {
-    const el = label as HTMLElement;
-    el.innerHTML = esc(el.dataset.name!);
-  });
-}
-
-function setMinOddsFilter(val: string) {
-  _filterMinOdds = parseFloat(val) || 0;
-  _allResults = {};
-  clearTabSummaries();
-  (document.getElementById('ff-results') as any).hidden = true;
-  savePrefs();
-}
-
-function setMethodLegs(m: number, n: number) {
-  _method = m;
-  _nLegs = n;
-  document.querySelectorAll('.ff-method-group').forEach(g =>
-    g.classList.toggle('ff-method-group--active', +(g as HTMLElement).dataset.method! === m)
-  );
-  document.querySelectorAll('.ff-count-btn').forEach(b => {
-    const el = b as HTMLElement;
-    el.classList.toggle('ff-count-btn--active', +el.dataset.method! === m && +el.dataset.legs! === n);
-  });
-  if (Object.keys(_allResults).length) showCurrentResults();
-  savePrefs();
-}
-
-function setMethod(m: number) { setMethodLegs(m, _nLegs); }
-function setLegs(n: number) { setMethodLegs(_method, n); }
-
-function setBetType(t: string) {
+function setBetType(t: 'fb' | 'cash') {
   _betType = t;
   document.querySelectorAll('.ff-bettype-btn').forEach(b =>
     b.classList.toggle('ff-btn--active', (b as HTMLElement).dataset.bettype === t)
   );
   const objField = document.getElementById('ff-objective-field');
   if (objField) (objField as any).hidden = t !== 'cash';
-  const fbField = document.getElementById('ff-freebet-sites-field');
-  if (fbField && Object.keys(_freebetBySite).length) (fbField as any).hidden = t !== 'fb';
-  _allResults = {};
-  clearTabSummaries();
-  (document.getElementById('ff-results') as any).hidden = true;
+  updateAmountLabel();
+  resetResults();
   savePrefs();
 }
 
-function setAsymCov(val: boolean) {
-  _asymCov = val;
-  const cb = document.getElementById('ff-asymcov-cb') as HTMLInputElement;
-  if (cb) cb.checked = val;
-  _allResults = {};
-  clearTabSummaries();
-  (document.getElementById('ff-results') as any).hidden = true;
+function setObjective(obj: 'gagner' | 'miser' | 'perdre') {
+  _simpleCashObjective = obj;
+  document.querySelectorAll('.ff-objective-btn').forEach(b =>
+    b.classList.toggle('ff-btn--active', (b as HTMLElement).dataset.objective === obj)
+  );
+  resetResults();
   savePrefs();
 }
 
-function updateTabCounts() {
-  document.querySelectorAll('.ff-count-btn[data-legs]').forEach(btn => {
-    const el = btn as HTMLElement;
-    const method = +el.dataset.method!;
-    const n = +el.dataset.legs!;
-    const visible = _allowedNLegs.has(n);
-    (el as any).hidden = !visible;
-    if (!visible && el.classList.contains('ff-count-btn--active')) {
-      const first = document.querySelector(`.ff-count-btn[data-method="${method}"]:not([hidden])`) as HTMLElement;
-      if (first) setMethodLegs(method, +first.dataset.legs!);
-    }
-  });
+function updateAmountLabel() {
+  const lbl = document.getElementById('ff-amount-label');
+  if (!lbl) return;
+  const labels: Record<string, Record<string, string>> = {
+    fb: {
+      mise_totale: 'Montant Freebet',
+      mise_min_par_pari: 'Mise min. / pari FB',
+      profit_net_min: 'Profit net min.',
+      profit_brut: 'Profit brut min.',
+    },
+    cash: {
+      mise_totale: 'Mise totale',
+      mise_min_par_pari: 'Mise min. par pari',
+      profit_net_min: 'Profit net min.',
+      profit_brut: 'Profit brut min.',
+    },
+  };
+  lbl.textContent = labels[_betType]?.[_simpleAmountMode] ?? 'Montant';
+}
+
+function setAmountMode(mode: 'mise_totale' | 'mise_min_par_pari' | 'profit_net_min' | 'profit_brut') {
+  _simpleAmountMode = mode;
+  document.querySelectorAll('.ff-amountmode-btn').forEach(b =>
+    b.classList.toggle('ff-btn--active', (b as HTMLElement).dataset.mode === mode)
+  );
+  updateAmountLabel();
+  resetResults();
+  savePrefs();
+}
+
+function onAmountInput(val: string) {
+  _simpleAmount = parseFloat(val) || 10;
+  resetResults();
+  savePrefs();
+}
+
+function stepAmount(delta: number) {
+  const input = document.getElementById('ff-amount-input') as HTMLInputElement;
+  if (!input) return;
+  const min = parseFloat(input.min) || 0.5;
+  input.value = String(Math.max(min, (parseFloat(input.value) || 0) + delta));
+  _simpleAmount = parseFloat(input.value);
+  resetResults();
+  savePrefs();
+}
+
+function setMinOddsFilter(val: string) {
+  _simpleCoteMin = parseFloat(val) || 0;
+  resetResults();
+  savePrefs();
+}
+
+function setMinOddsPerSelection(val: string) {
+  _simpleCoteMinSel = parseFloat(val) || 0;
+  resetResults();
+  savePrefs();
 }
 
 function toggleNLegs(n: number) {
@@ -855,59 +632,224 @@ function toggleNLegs(n: number) {
   );
   if (_allowedNLegs.size > 0)
     document.getElementById('ff-nlegs-field')?.classList.remove('ff-field--error');
-  updateTabCounts();
-  _allResults = {};
-  clearTabSummaries();
-  (document.getElementById('ff-results') as any).hidden = true;
+  resetResults();
   savePrefs();
 }
 
-function setMinOddsPerSelection(val: string) {
-  _minOddsPerSelection = parseFloat(val) || 0;
-  _allResults = {};
-  clearTabSummaries();
-  (document.getElementById('ff-results') as any).hidden = true;
+function setMethodToggle(method: string, val: boolean) {
+  switch (method) {
+    case 'seq': _allowSeq = val; break;
+    case 'simult': _allowSimult = val; break;
+    case 'uni': _allowUni = val; break;
+    case 'multi': _allowMulti = val; break;
+    case 'sym': _allowSym = val; break;
+    case 'asym': _allowAsym = val; break;
+  }
+  resetResults();
   savePrefs();
 }
 
-function setObjective(obj: 'miser' | 'gagner' | 'perdre') {
-  _cashObjective = obj;
-  document.querySelectorAll('.ff-objective-btn').forEach(b =>
-    b.classList.toggle('ff-btn--active', (b as HTMLElement).dataset.objective === obj)
+function setAdvancedMode(val: boolean) {
+  _advancedMode = val;
+  const simple = document.getElementById('ff-simple-mode');
+  const advanced = document.getElementById('ff-advanced-mode');
+  if (simple) (simple as any).hidden = val;
+  if (advanced) (advanced as any).hidden = !val;
+  if (val && _data) renderAdvancedSites(collectSites(_data));
+  resetResults();
+  savePrefs();
+}
+
+// ===== ADVANCED MODE UI =====
+
+function ensureAdvSite(site: string) {
+  if (!_advSites[site]) {
+    _advSites[site] = { freebetAmount: 0, freebetPriority: 3, missions: [] };
+  }
+}
+
+function setAdvFbAmount(site: string, val: string) {
+  ensureAdvSite(site);
+  _advSites[site].freebetAmount = parseFloat(val) || 0;
+  resetResults(); savePrefs();
+}
+
+function setAdvFbPriority(site: string, prio: 1 | 2 | 3) {
+  ensureAdvSite(site);
+  _advSites[site].freebetPriority = prio;
+  const wrap = document.getElementById(`ff-adv-prio-${site}`);
+  wrap?.querySelectorAll('.ff-adv-prio-btn').forEach(b =>
+    b.classList.toggle('ff-btn--active', +(b as HTMLElement).dataset.prio! === prio)
   );
-  _allResults = {};
-  clearTabSummaries();
-  (document.getElementById('ff-results') as any).hidden = true;
+  resetResults(); savePrefs();
+}
+
+function addAdvMission(site: string) {
+  ensureAdvSite(site);
+  const id = `m_${site}_${Date.now()}`;
+  const mission: Mission = {
+    id,
+    importance: 'obligatoire',
+    montantMode: 'mise_min',
+    montant: 10,
+    objectif: 'miser',
+    coteMin: 0,
+    coteMinParSelection: 0,
+    nbCombinesMin: 1,
+  };
+  _advSites[site].missions.push(mission);
+  renderAdvancedSites(Object.keys(_advSites));
+  resetResults(); savePrefs();
+}
+
+function removeAdvMission(site: string, missionId: string) {
+  ensureAdvSite(site);
+  _advSites[site].missions = _advSites[site].missions.filter(m => m.id !== missionId);
+  renderAdvancedSites(Object.keys(_advSites));
+  resetResults(); savePrefs();
+}
+
+function setAdvMissionField(site: string, missionId: string, field: string, val: any) {
+  ensureAdvSite(site);
+  const m = _advSites[site].missions.find(m => m.id === missionId);
+  if (!m) return;
+  (m as any)[field] = val;
+  resetResults(); savePrefs();
+}
+
+function renderAdvancedSites(sites: string[]) {
+  const wrap = document.getElementById('ff-advanced-sites-wrap');
+  if (!wrap) return;
+
+  // Ensure all sites have a default config
+  for (const s of sites) ensureAdvSite(s);
+
+  const isFb = _betType === 'fb';
+
+  wrap.innerHTML = sites.map(site => {
+    const cfg = _advSites[site];
+    const prioHtml = isFb ? `
+      <div class="ff-adv-row">
+        <span class="ff-sublabel">Priorité freebets</span>
+        <div class="ff-legs-toggle ff-legs-toggle--sm" id="ff-adv-prio-${esc(site)}">
+          ${[1, 2, 3].map(p => `
+            <button class="ff-adv-prio-btn ff-btn ff-btn--sm${cfg.freebetPriority === p ? ' ff-btn--active' : ''}"
+              data-prio="${p}"
+              onclick="setAdvFbPriority('${esc(site)}', ${p})">${p === 1 ? '1 – Tout' : p === 2 ? '2 – Compl.' : '3 – Non'}</button>
+          `).join('')}
+        </div>
+      </div>
+      <div class="ff-adv-row">
+        <label class="ff-sublabel" for="ff-adv-fb-${esc(site)}">Freebet disponible</label>
+        <div class="numinput numinput--sm">
+          <input type="number" id="ff-adv-fb-${esc(site)}" value="${cfg.freebetAmount}" min="0" step="5"
+            onclick="this.select()"
+            oninput="setAdvFbAmount('${esc(site)}', this.value)" />
+          <span class="unit">€</span>
+        </div>
+      </div>` : '';
+
+    const missionsHtml = cfg.missions.map(m => `
+      <div class="ff-adv-mission" id="ff-adv-mission-${m.id}">
+        <div class="ff-adv-mission-header">
+          <span class="ff-sublabel">Mission</span>
+          <button class="ff-adv-mission-del" onclick="removeAdvMission('${esc(site)}', '${m.id}')" title="Supprimer">✕</button>
+        </div>
+        <div class="ff-adv-mission-fields">
+          <div class="ff-adv-row">
+            <span class="ff-sublabel">Importance</span>
+            <div class="ff-legs-toggle ff-legs-toggle--sm">
+              <button class="ff-btn ff-btn--sm${m.importance === 'obligatoire' ? ' ff-btn--active' : ''}"
+                onclick="setAdvMissionField('${esc(site)}','${m.id}','importance','obligatoire'); renderAdvancedSites(Object.keys(window._advSites))">Obligatoire</button>
+              <button class="ff-btn ff-btn--sm${m.importance === 'optionnelle' ? ' ff-btn--active' : ''}"
+                onclick="setAdvMissionField('${esc(site)}','${m.id}','importance','optionnelle'); renderAdvancedSites(Object.keys(window._advSites))">Optionnelle</button>
+            </div>
+          </div>
+          <div class="ff-adv-row">
+            <span class="ff-sublabel">Mode montant</span>
+            <div class="ff-legs-toggle ff-legs-toggle--sm">
+              ${(['mise_min', 'profit_net_min', 'profit_brut'] as const).map(mode => `
+                <button class="ff-btn ff-btn--sm${m.montantMode === mode ? ' ff-btn--active' : ''}"
+                  onclick="setAdvMissionField('${esc(site)}','${m.id}','montantMode','${mode}'); renderAdvancedSites(Object.keys(window._advSites))">
+                  ${mode === 'mise_min' ? 'Mise min.' : mode === 'profit_net_min' ? 'Profit net' : 'Profit brut'}
+                </button>`).join('')}
+            </div>
+          </div>
+          <div class="ff-adv-row">
+            <span class="ff-sublabel">Objectif</span>
+            <div class="ff-legs-toggle ff-legs-toggle--sm">
+              ${(['gagner', 'miser', 'perdre'] as const).map(obj => `
+                <button class="ff-btn ff-btn--sm${m.objectif === obj ? ' ff-btn--active' : ''}"
+                  onclick="setAdvMissionField('${esc(site)}','${m.id}','objectif','${obj}'); renderAdvancedSites(Object.keys(window._advSites))">
+                  ${obj.charAt(0).toUpperCase() + obj.slice(1)}
+                </button>`).join('')}
+            </div>
+          </div>
+          <div class="ff-adv-row">
+            <label class="ff-sublabel">Montant</label>
+            <div class="numinput numinput--sm">
+              <input type="number" value="${m.montant}" min="0" step="1" onclick="this.select()"
+                oninput="setAdvMissionField('${esc(site)}','${m.id}','montant',parseFloat(this.value)||0)" />
+              <span class="unit">€</span>
+            </div>
+          </div>
+          <div class="ff-adv-row">
+            <label class="ff-sublabel">Cote min.</label>
+            <div class="numinput numinput--sm">
+              <input type="number" value="${m.coteMin || ''}" min="1" step="0.05" placeholder="—" onclick="this.select()"
+                oninput="setAdvMissionField('${esc(site)}','${m.id}','coteMin',parseFloat(this.value)||0)" />
+            </div>
+          </div>
+          <div class="ff-adv-row">
+            <label class="ff-sublabel">Cote min. / sél.</label>
+            <div class="numinput numinput--sm">
+              <input type="number" value="${m.coteMinParSelection || ''}" min="1" step="0.05" placeholder="—" onclick="this.select()"
+                oninput="setAdvMissionField('${esc(site)}','${m.id}','coteMinParSelection',parseFloat(this.value)||0)" />
+            </div>
+          </div>
+          <div class="ff-adv-row">
+            <label class="ff-sublabel">Combinés min.</label>
+            <div class="ff-legs-toggle ff-legs-toggle--sm">
+              ${[1,2,3,4,5].map(nb => `
+                <button class="ff-btn ff-btn--sm${m.nbCombinesMin === nb ? ' ff-btn--active' : ''}"
+                  onclick="setAdvMissionField('${esc(site)}','${m.id}','nbCombinesMin',${nb}); renderAdvancedSites(Object.keys(window._advSites))">${nb}</button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>`).join('');
+
+    return `
+      <div class="ff-adv-site card">
+        <div class="ff-adv-site-header">
+          <span class="ff-label">${esc(site)}</span>
+        </div>
+        ${prioHtml}
+        ${missionsHtml}
+        <button class="ff-adv-add-mission" onclick="addAdvMission('${esc(site)}')">+ Mission</button>
+      </div>`;
+  }).join('');
+}
+
+// Expose _advSites for inline onclick references
+(window as any)._advSites = _advSites;
+
+function setSite(site: string) {
+  _simpleSite = site;
+  document.querySelectorAll('.ff-site-btn').forEach(b =>
+    b.classList.toggle('ff-btn--active', (b as HTMLElement).dataset.site === site)
+  );
+  resetResults();
   savePrefs();
 }
 
-function showCurrentResults() {
-  updateTabSummaries();
-  const el = document.getElementById('ff-results')!;
-  if (_method === 0) {
-    const all = Object.values(_allResults).flat();
-    if (!all.length) {
-      (el as any).hidden = false;
-      el.innerHTML = '<p class="ff-empty">Cliquez sur Calculer pour voir toutes les combinaisons.</p>';
-      return;
-    }
-    all.sort((a, b) => b.rate - a.rate);
-    renderResults(all);
-    return;
-  }
-  const key = `${_method}_${_nLegs}`;
-  const results = _allResults[key];
-  if (results === undefined) {
-    (el as any).hidden = false;
-    el.innerHTML = (_method === 1 || _method === 3)
-      ? '<p class="ff-empty">Sélectionnez un site freebet pour calculer cette méthode.</p>'
-      : '<p class="ff-empty">Cliquez sur Calculer.</p>';
-    return;
-  }
-  renderResults(results);
+
+function resetResults() {
+  _results = [];
+  (document.getElementById('ff-results') as any).hidden = true;
 }
 
-// ===== WORKER LIFECYCLE =====
+// ===== WORKER =====
 
 function cancelCalc() {
   if (_worker) {
@@ -928,50 +870,51 @@ async function tryRender() {
     return;
   }
   document.getElementById('ff-nlegs-field')?.classList.remove('ff-field--error');
-  _amountTotal = parseFloat((document.getElementById('ff-amount-total') as HTMLInputElement)?.value) || 10;
-  _amountMin = parseFloat((document.getElementById('ff-amount-min') as HTMLInputElement)?.value) || 2;
-  _amount = _amountTotal;
-  _fbSite = (document.getElementById('ff-site-select') as HTMLSelectElement)?.value ?? '';
-  _allResults = {};
+
+  // Read current amount
+  const amountInput = parseFloat((document.getElementById('ff-amount-input') as HTMLInputElement)?.value);
+  if (!isNaN(amountInput) && amountInput > 0) _simpleAmount = amountInput;
+
+  _results = [];
   _colFilters = {};
 
   const btn = document.getElementById('ff-calc-btn') as HTMLButtonElement;
   const overlay = document.getElementById('ff-calc-overlay')!;
   const overlayLabel = document.getElementById('ff-calc-overlay-label')!;
+  const overlayDetail = document.getElementById('ff-calc-overlay-detail')!;
+  const overlayCount = document.getElementById('ff-calc-overlay-count')!;
   const overlayBar = document.getElementById('ff-calc-overlay-bar')!;
 
   btn.disabled = true;
   (overlay as any).hidden = false;
   (overlayBar as HTMLElement).style.width = '0%';
   overlayLabel.textContent = 'Démarrage…';
+  overlayDetail.textContent = '';
+  overlayCount.textContent = '';
 
-  // Terminate any previous worker
   if (_worker) { _worker.terminate(); _worker = null; }
   _worker = new EngineWorker();
 
-  const opts: EngineOpts = {
-    coverageRules: _coverageRules,
-    filterMinOdds: _filterMinOdds,
-    minOddsPerSelection: _minOddsPerSelection,
-    asymCov: _asymCov,
-    freebetBySite: { ..._freebetBySite },
-    cashObjective: _cashObjective,
-  };
+  const opts = buildEngineOpts();
 
   _worker.onmessage = (e: MessageEvent<WorkerOutMessage>) => {
     const msg = e.data;
     if (msg.type === 'progress') {
       overlayLabel.textContent = msg.label;
+      overlayDetail.textContent = msg.detail ?? '';
+      overlayCount.textContent = (msg.total && msg.total > 0)
+        ? `${(msg.done ?? 0).toLocaleString('fr-FR')} / ${msg.total.toLocaleString('fr-FR')} combinaisons`
+        : '';
       (overlayBar as HTMLElement).style.width = `${msg.pct}%`;
     } else if (msg.type === 'result') {
-      _allResults = msg.allResults;
+      _results = msg.results;
       (overlayBar as HTMLElement).style.width = '100%';
       overlayLabel.textContent = 'Terminé';
       setTimeout(() => {
         (overlay as any).hidden = true;
         btn.disabled = false;
         _worker = null;
-        showCurrentResults();
+        renderResults(_results);
       }, 150);
     } else if (msg.type === 'cancelled') {
       (overlayBar as HTMLElement).style.width = '0%';
@@ -990,18 +933,7 @@ async function tryRender() {
     _worker = null;
   };
 
-  _worker.postMessage({
-    type: 'compute',
-    payload: {
-      data: _data,
-      opts,
-      fbSite: _fbSite,
-      amount: _amount,
-      allowedNLegs: [..._allowedNLegs],
-      betType: _betType,
-      hasSeq: !!_fbSite,
-    },
-  });
+  _worker.postMessage({ type: 'compute', payload: { data: _data, opts } });
 }
 
 // ===== JSON / DATA =====
@@ -1009,100 +941,43 @@ async function tryRender() {
 function onJsonChange() {
   const raw = (document.getElementById('ff-json') as HTMLTextAreaElement)?.value.trim();
   const errEl = document.getElementById('ff-json-error')!;
-  _allResults = {};
-  clearTabSummaries();
-  (document.getElementById('ff-results') as any).hidden = true;
+  resetResults();
   if (!raw) {
     _data = null;
     (errEl as any).hidden = true;
     updateSiteSelect([]);
-    updateFreebetSites([]);
   } else {
     try {
       _data = JSON.parse(raw);
       (errEl as any).hidden = true;
       const sites = collectSites(_data);
       updateSiteSelect(sites);
-      updateFreebetSites(sites);
     } catch (e: any) {
       _data = null;
       errEl.textContent = 'JSON invalide : ' + e.message;
       (errEl as any).hidden = false;
       updateSiteSelect([]);
-      updateFreebetSites([]);
     }
   }
   (document.getElementById('ff-calc-btn') as HTMLButtonElement).disabled = !_data;
 }
 
-function updateFreebetSites(sites: string[]) {
-  const wrap = document.getElementById('ff-freebet-sites-wrap')!;
-  const field = document.getElementById('ff-freebet-sites-field')!;
-  if (!wrap || !field) return;
-  if (!sites.length) {
-    (field as any).hidden = true;
-    _freebetBySite = {};
-    return;
-  }
-  const prev = { ..._freebetBySite };
-  _freebetBySite = {};
-  for (const s of sites) _freebetBySite[s] = prev[s] ?? 0;
-  wrap.innerHTML = sites.map(s => `
-    <div class="ff-fb-site-row">
-      <span class="ff-fb-site-name">${esc(s)}</span>
-      <div class="numinput numinput--sm">
-        <input type="number" class="ff-fb-amount-input" data-site="${esc(s)}"
-          value="${_freebetBySite[s] || ''}"
-          min="0" step="5" placeholder="0"
-          oninput="setFreebetAmount('${esc(s)}', this.value)"
-          onclick="this.select()" />
-        <span class="unit">€</span>
-      </div>
-    </div>`).join('');
-  (field as any).hidden = _betType !== 'fb';
-}
-
-function setFreebetAmount(site: string, value: string) {
-  _freebetBySite[site] = parseFloat(value) || 0;
-}
-
 function updateSiteSelect(sites: string[]) {
-  const sel = document.getElementById('ff-site-select') as HTMLSelectElement;
-  const field = document.getElementById('ff-site-field')!;
-  if (!sel || !field) return;
+  const wrap = document.getElementById('ff-site-select-wrap')!;
+  if (!wrap) return;
   if (!sites.length) {
-    (field as any).hidden = true;
-    sel.innerHTML = '<option value="">— Sélectionner un site —</option>';
+    wrap.innerHTML = '<p class="ff-no-sites">Chargez un JSON pour voir les sites.</p>';
+    _simpleSite = '';
     return;
   }
-  sel.innerHTML = '<option value="">— Sélectionner un site —</option>'
-    + sites.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
-  const savedSite = loadPrefs().site;
-  if (savedSite && sites.includes(savedSite)) sel.value = savedSite;
-  (field as any).hidden = false;
-}
+  // Keep previous selection if still valid
+  if (!sites.includes(_simpleSite)) _simpleSite = sites[0] ?? '';
+  wrap.innerHTML = sites.map(s => `
+    <button class="ff-site-btn ff-btn${s === _simpleSite ? ' ff-btn--active' : ''}"
+      data-site="${esc(s)}" onclick="setSite('${esc(s)}')">${esc(s)}</button>`).join('');
 
-function stepAmountTotal(delta: number) {
-  const input = document.getElementById('ff-amount-total') as HTMLInputElement;
-  input.value = String(Math.max(1, (parseFloat(input.value) || 0) + delta));
-  savePrefs();
-}
-
-function stepAmountMin(delta: number) {
-  const input = document.getElementById('ff-amount-min') as HTMLInputElement;
-  input.value = String(Math.max(0.5, (parseFloat(input.value) || 0) + delta));
-  savePrefs();
-}
-
-function setAmountMode(mode: string) {
-  _amountMode = mode;
-  document.querySelectorAll('.ff-amountmode-btn').forEach(b =>
-    b.classList.toggle('ff-btn--active', (b as HTMLElement).dataset.mode === mode)
-  );
-  (document.getElementById('ff-amount-total-wrap') as any).hidden = mode !== 'total';
-  (document.getElementById('ff-amount-min-wrap') as any).hidden = mode !== 'min';
-  savePrefs();
-  if (Object.keys(_allResults).length) showCurrentResults();
+  // Refresh advanced mode panel if active
+  if (_advancedMode) renderAdvancedSites(sites);
 }
 
 async function pasteFromClipboard() {
@@ -1116,7 +991,7 @@ async function pasteFromClipboard() {
 
 function onSearchInput() { renderPage(); }
 
-// ===== EXPOSE TO WINDOW (for HTML onclick handlers) =====
+// ===== WINDOW EXPORTS =====
 
 declare global { interface Window { [key: string]: any; } }
 
@@ -1126,18 +1001,22 @@ window.onJsonChange = onJsonChange;
 window.onSearchInput = onSearchInput;
 window.pasteFromClipboard = pasteFromClipboard;
 window.setBetType = setBetType;
-window.setMethod = setMethod;
-window.setLegs = setLegs;
-window.setMethodLegs = setMethodLegs;
-window.setAsymCov = setAsymCov;
 window.setObjective = setObjective;
+window.setAmountMode = setAmountMode;
 window.setMinOddsFilter = setMinOddsFilter;
 window.setMinOddsPerSelection = setMinOddsPerSelection;
 window.toggleNLegs = toggleNLegs;
-window.setAmountMode = setAmountMode;
-window.stepAmountTotal = stepAmountTotal;
-window.stepAmountMin = stepAmountMin;
-window.setFreebetAmount = setFreebetAmount;
+window.setMethodToggle = setMethodToggle;
+window.setAdvancedMode = setAdvancedMode;
+window.setSite = setSite;
+window.stepAmount = stepAmount;
+window.onAmountInput = onAmountInput;
+window.renderAdvancedSites = renderAdvancedSites;
+window.setAdvFbAmount = setAdvFbAmount;
+window.setAdvFbPriority = setAdvFbPriority;
+window.addAdvMission = addAdvMission;
+window.removeAdvMission = removeAdvMission;
+window.setAdvMissionField = setAdvMissionField;
 window.toggleDetail = toggleDetail;
 window.showMore = showMore;
 window.openColFilterPopover = openColFilterPopover;
@@ -1146,38 +1025,139 @@ window.clearColFilter = clearColFilter;
 window.clearAllColFilters = clearAllColFilters;
 window.applyColFilterFromPopover = applyColFilterFromPopover;
 
+// ===== DEBUG =====
+
+let _debugMode = false;
+
+function toggleDebug() {
+  _debugMode = !_debugMode;
+  const btn = document.getElementById('ff-debug-btn')!;
+  const iconOff = document.getElementById('ff-debug-icon-off')!;
+  const iconOn = document.getElementById('ff-debug-icon-on')!;
+  const dlBtn = document.getElementById('ff-debug-dl-btn')!;
+  btn.classList.toggle('ff-debug-btn--active', _debugMode);
+  (iconOff as any).hidden = _debugMode;
+  (iconOn as any).hidden = !_debugMode;
+  (dlBtn as any).hidden = !_debugMode;
+}
+
+function downloadDebugJson() {
+  const opts = buildEngineOpts();
+  const payload = {
+    _meta: {
+      timestamp: new Date().toISOString(),
+      version: '6.0.0',
+    },
+    ui: {
+      betType: _betType,
+      advancedMode: _advancedMode,
+      simpleSite: _simpleSite,
+      simpleAmountMode: _simpleAmountMode,
+      simpleAmount: _simpleAmount,
+      simpleCashObjective: _simpleCashObjective,
+      simpleCoteMin: _simpleCoteMin,
+      simpleCoteMinSel: _simpleCoteMinSel,
+      allowedNLegs: [..._allowedNLegs],
+      allowSeq: _allowSeq,
+      allowSimult: _allowSimult,
+      allowUni: _allowUni,
+      allowMulti: _allowMulti,
+      allowSym: _allowSym,
+      allowAsym: _allowAsym,
+      advSites: _advSites,
+    },
+    engineOpts: opts,
+    data: _data,
+    coverageRules: _coverageRules,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `magotculteur-debug-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+window.toggleDebug = toggleDebug;
+window.downloadDebugJson = downloadDebugJson;
+
 // ===== INIT =====
 
 document.addEventListener('DOMContentLoaded', async () => {
+  (document.getElementById('ff-debug-icon-off') as HTMLImageElement).src = bugOffUrl;
+  (document.getElementById('ff-debug-icon-on') as HTMLImageElement).src = bugUrl;
+
   const prefs = loadPrefs();
   if (prefs.betType) setBetType(prefs.betType);
-  if (prefs.cashObjective) setObjective(prefs.cashObjective);
-  if (prefs.amountMode) setAmountMode(prefs.amountMode);
-  const savedTotal = prefs.amountTotal ?? prefs.amount;
-  if (savedTotal) { const i = document.getElementById('ff-amount-total') as HTMLInputElement; if (i) i.value = savedTotal; }
-  if (prefs.amountMin) { const i = document.getElementById('ff-amount-min') as HTMLInputElement; if (i) i.value = prefs.amountMin; }
-  if (prefs.method && prefs.nLegs) setMethodLegs(prefs.method, prefs.nLegs);
-  if (prefs.asymCov) setAsymCov(true);
-  if (prefs.filterMinOdds > 0) {
-    _filterMinOdds = prefs.filterMinOdds;
-    const i = document.getElementById('ff-filter-odds') as HTMLInputElement;
-    if (i) i.value = prefs.filterMinOdds;
+  if (prefs.simpleCashObjective) setObjective(prefs.simpleCashObjective);
+
+  setAmountMode((prefs.simpleAmountMode as any) || 'mise_totale');
+
+  if (prefs.simpleAmount) {
+    _simpleAmount = prefs.simpleAmount;
+    const i = document.getElementById('ff-amount-input') as HTMLInputElement;
+    if (i) i.value = String(prefs.simpleAmount);
+  }
+
+  if (prefs.advancedMode != null) {
+    const cb = document.getElementById('ff-advanced-cb') as HTMLInputElement;
+    if (cb) cb.checked = prefs.advancedMode;
+    setAdvancedMode(prefs.advancedMode);
   }
   if (Array.isArray(prefs.allowedNLegs) && prefs.allowedNLegs.length > 0) {
     _allowedNLegs = new Set(prefs.allowedNLegs);
     document.querySelectorAll('.ff-nlegs-btn').forEach(b =>
       b.classList.toggle('ff-btn--active', _allowedNLegs.has(+(b as HTMLElement).dataset.n!))
     );
-    updateTabCounts();
   }
-  if (prefs.minOddsPerSelection > 0) {
-    _minOddsPerSelection = prefs.minOddsPerSelection;
+  if (prefs.simpleCoteMin > 0) {
+    _simpleCoteMin = prefs.simpleCoteMin;
+    const i = document.getElementById('ff-filter-odds') as HTMLInputElement;
+    if (i) i.value = String(prefs.simpleCoteMin);
+  }
+  if (prefs.simpleCoteMinSel > 0) {
+    _simpleCoteMinSel = prefs.simpleCoteMinSel;
     const i = document.getElementById('ff-min-odds-sel') as HTMLInputElement;
-    if (i) i.value = prefs.minOddsPerSelection;
+    if (i) i.value = String(prefs.simpleCoteMinSel);
   }
-  document.getElementById('ff-amount-total')?.addEventListener('change', savePrefs);
-  document.getElementById('ff-amount-min')?.addEventListener('change', savePrefs);
-  document.getElementById('ff-site-select')?.addEventListener('change', savePrefs);
+  // Method toggles from prefs
+  if (prefs.allowSeq != null) {
+    _allowSeq = prefs.allowSeq;
+    const cb = document.getElementById('ff-cb-seq') as HTMLInputElement;
+    if (cb) cb.checked = _allowSeq;
+  }
+  if (prefs.allowSimult != null) {
+    _allowSimult = prefs.allowSimult;
+    const cb = document.getElementById('ff-cb-simult') as HTMLInputElement;
+    if (cb) cb.checked = _allowSimult;
+  }
+  if (prefs.allowUni != null) {
+    _allowUni = prefs.allowUni;
+    const cb = document.getElementById('ff-cb-uni') as HTMLInputElement;
+    if (cb) cb.checked = _allowUni;
+  }
+  if (prefs.allowMulti != null) {
+    _allowMulti = prefs.allowMulti;
+    const cb = document.getElementById('ff-cb-multi') as HTMLInputElement;
+    if (cb) cb.checked = _allowMulti;
+  }
+  if (prefs.allowSym != null) {
+    _allowSym = prefs.allowSym;
+    const cb = document.getElementById('ff-cb-sym') as HTMLInputElement;
+    if (cb) cb.checked = _allowSym;
+  }
+  if (prefs.allowAsym != null) {
+    _allowAsym = prefs.allowAsym;
+    const cb = document.getElementById('ff-cb-asym') as HTMLInputElement;
+    if (cb) cb.checked = _allowAsym;
+  }
+
+  document.getElementById('ff-amount-input')?.addEventListener('change', () => {
+    _simpleAmount = parseFloat((document.getElementById('ff-amount-input') as HTMLInputElement).value) || 10;
+    savePrefs();
+  });
 
   // Load coverage rules
   try {
@@ -1191,6 +1171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Auto-paste
   if (new URLSearchParams(location.search).get('autopaste') === '1') {
     try {
       const text = await navigator.clipboard.readText();

@@ -13,18 +13,60 @@ export interface CoverageRule {
   C?: BetSpec[];
 }
 
-// ===== ENGINE OPTIONS (replaces global state used by engine) =====
+// ===== SITE CONFIGURATION =====
+
+export interface Mission {
+  id: string;
+  importance: 'obligatoire' | 'optionnelle';
+  montantMode: 'mise_min' | 'profit_net_min' | 'profit_brut';
+  montant: number;
+  objectif: 'gagner' | 'miser' | 'perdre';
+  coteMin: number;
+  coteMinParSelection: number;
+  nbCombinesMin: number; // nombre de legs minimum pour qu'un pari compte pour cette mission
+}
+
+export interface SiteConfig {
+  freebetAmount: number;       // 0 = pas de freebet
+  freebetPriority: 1 | 2 | 3; // 1=tout utiliser, 2=pour compléter, 3=ne pas utiliser
+  missions: Mission[];
+}
+
+// ===== ENGINE OPTIONS =====
+
+export type AmountMode = 'mise_totale' | 'mise_min_par_pari' | 'profit_net_min' | 'profit_brut';
+export type CashObjective = 'gagner' | 'miser' | 'perdre';
+export type BetType = 'fb' | 'cash';
 
 export interface EngineOpts {
   coverageRules: CoverageRule[];
-  filterMinOdds: number;
-  minOddsPerSelection: number;
-  asymCov: boolean;
-  freebetBySite: Record<string, number>;
-  cashObjective: 'miser' | 'gagner' | 'perdre';
+  betType: BetType;
+  sites: Record<string, SiteConfig>; // tous les sites présents dans le JSON
+  allowedNLegs: number[];             // ex: [1, 2, 3]
+  // Montant de référence (mode simple ou global)
+  amountMode: AmountMode;
+  amount: number;
+  // Cash uniquement
+  cashObjective: CashObjective;
+  // Filtres globaux (mode simple)
+  coteMin: number;
+  coteMinParSelection: number;
+  // Toggles de méthodes
+  allowSeq: boolean;
+  allowSimult: boolean;
+  allowUni: boolean;
+  allowMulti: boolean;
+  allowSym: boolean;
+  allowAsym: boolean;
 }
 
-// ===== DATA STRUCTURES =====
+// ===== STRUCTURES INTERNES (moteur) =====
+
+export interface LegRef {
+  eventKey: string;
+  marketName: string;
+  outcomeName: string;
+}
 
 export interface LayInfo {
   lGross: number;
@@ -62,83 +104,43 @@ export interface LegWithCover extends Leg {
   cover: Cover;
   stake: number;
   liability: number | null;
-  fbCover?: Cover | null;
 }
 
-export interface LegRef {
-  eventKey: string;
-  marketName: string;
-  outcomeName: string;
-}
+// ===== DETAIL D'UN PARI =====
 
-export interface RawBet {
+export interface BetDetail {
   legs: LegRef[];
   site: string;
-  odds: number;
-}
-
-export interface FinalizedBet extends RawBet {
+  odds: number;       // cote combinée si multi-legs
   stake: number;
+  betType: BetType;
+  role: 'principal' | 'cover';
+  seqStep?: number;   // séquentiel uniquement : 0=toujours placé, 1+=conditionnel
+  liability?: number; // lay uniquement
 }
 
-// ===== RESULT TYPES =====
+// ===== RESULTAT UNIFIE =====
 
-export interface SeqResult {
-  method: 1;
-  nLegs: number;
-  betType: string;
-  _cashObjective?: string;
-  B: number;
-  profit?: number;
-  rate: number;
-  loss?: number;
-  netIfWins?: number;
-  netIfLoses?: number;
-  profitFb?: number | null;
-  rateFb?: number | null;
-  gaps?: number[];
-  legs: LegWithCover[];
-}
-
-export interface ToutFBResult {
-  method: 2 | 4;
-  nMatches: number;
-  nBets: number;
-  betType: string;
-  rate: number;
-  profit?: number;
-  loss?: number;
-  bets: FinalizedBet[];
-  totalAmount: number;
+export interface CoveringSetResult {
+  timing: 'seq' | 'simult';
+  placement: 'uni' | 'multi';
+  symmetry: 'sym' | 'asym';
+  bets: BetDetail[];
   eventKeys: string[];
-}
-
-export interface HybridFBResult {
-  method: 3;
   nMatches: number;
-  nBets: number;
-  betType: 'fb';
-  rate: number;
-  profit: number;
-  fbBet: FinalizedBet;
-  cashBets: FinalizedBet[];
-  totalCashAmount: number;
-  eventKeys: string[];
+  profit: number;      // signé : positif=gain, négatif=perte
+  rate: number;        // profit / mise principale (freebets ou cash selon betType)
+  totalCash: number;   // total cash engagé (liability comprise)
+  satisfiedMissions: string[]; // ids des missions satisfaites
 }
 
-export type AnyResult = SeqResult | ToutFBResult | HybridFBResult;
-export type AllResults = Record<string, AnyResult[]>;
+export type AllResults = CoveringSetResult[];
 
-// ===== WORKER MESSAGES =====
+// ===== MESSAGES WORKER =====
 
 export interface WorkerComputePayload {
   data: any;
   opts: EngineOpts;
-  fbSite: string;
-  amount: number;
-  allowedNLegs: number[];
-  betType: string;
-  hasSeq: boolean;
 }
 
 export type WorkerInMessage =
@@ -146,6 +148,6 @@ export type WorkerInMessage =
   | { type: 'cancel' };
 
 export type WorkerOutMessage =
-  | { type: 'progress'; label: string; pct: number }
-  | { type: 'result'; allResults: AllResults }
+  | { type: 'progress'; label: string; detail?: string; pct: number; done?: number; total?: number }
+  | { type: 'result'; results: AllResults }
   | { type: 'cancelled' };
