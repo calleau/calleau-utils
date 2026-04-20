@@ -304,6 +304,7 @@ npm install
 cd magotculteur/
 npm run dev
 ```
+http://localhost:5173
 
 Vite démarre sur **http://localhost:5173** par défaut. Le hot-reload est actif : toute modification d'un fichier `src/*.ts` est reflétée immédiatement sans rechargement complet de la page.
 

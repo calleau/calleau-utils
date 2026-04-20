@@ -986,7 +986,6 @@ function coverBadge(cover) {
 }
 
 const _SITE_KEYS = ['piwi', 'olybet', 'betclic', 'winamax', 'bwin', 'unibet', 'feelingbet', 'pokerstars'];
-const _EXCHANGE_SITE_KEYS = ['piwi'];
 
 function isExchangeSite(name) {
 	if (!name) return false;

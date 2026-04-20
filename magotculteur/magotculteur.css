@@ -896,15 +896,20 @@
 	white-space: nowrap;
 }
 
-.ff-site-pill[data-site="piwi"]       { background: var(--site-piwi-bg);       color: var(--site-piwi-text); }
-.ff-site-pill[data-site="piwi"].ff-site-pill--lay { color: var(--site-piwi-lay); }
-.ff-site-pill[data-site="olybet"]     { background: var(--site-olybet-bg);     color: var(--site-olybet-text); outline: 1px solid #ddd; }
-.ff-site-pill[data-site="betclic"]    { background: var(--site-betclic-bg);    color: var(--site-betclic-text); }
-.ff-site-pill[data-site="winamax"]    { background: var(--site-winamax-bg);    color: var(--site-winamax-text); }
-.ff-site-pill[data-site="bwin"]       { background: var(--site-bwin-bg);       color: var(--site-bwin-text); }
-.ff-site-pill[data-site="unibet"]     { background: var(--site-unibet-bg);     color: var(--site-unibet-text); }
+.ff-site-pill[data-site="betclic"] { background: var(--site-betclic-bg); color: var(--site-betclic-text); }
+.ff-site-pill[data-site="betify"] { background: var(--site-betify-bg); color: var(--site-betify-text); }
+.ff-site-pill[data-site="betsson"] { background: var(--site-betsson-bg); color: var(--site-betsson-text); }
+.ff-site-pill[data-site="bwin"] { background: var(--site-bwin-bg); color: var(--site-bwin-text); }
+.ff-site-pill[data-site="daznbet"] { background: var(--site-daznbet-bg); color: var(--site-daznbet-text); }
 .ff-site-pill[data-site="feelingbet"] { background: var(--site-feelingbet-bg); color: var(--site-feelingbet-text); }
+.ff-site-pill[data-site="olybet"] { background: var(--site-olybet-bg); color: var(--site-olybet-text); }
+.ff-site-pill[data-site="piwix"] { background: var(--site-piwix-bg); color: var(--site-piwix-text); }
+.ff-site-pill[data-site="piwix"].ff-site-pill--lay { color: var(--site-piwix-lay); }
+.ff-site-pill[data-site="pmu"] { background: var(--site-daznbet-bg); color: var(--site-pmu-text); }
 .ff-site-pill[data-site="pokerstars"] { background: var(--site-pokerstars-bg); color: var(--site-pokerstars-text); }
+.ff-site-pill[data-site="unibet"] { background: var(--site-unibet-bg); color: var(--site-unibet-text); }
+.ff-site-pill[data-site="vbet"] { background: var(--site-vbet-bg); color: var(--site-vbet-text); }
+.ff-site-pill[data-site="winamax"] { background: var(--site-winamax-bg); color: var(--site-winamax-text); }
 
 /* Mise type tag */
 
@@ -970,21 +975,38 @@
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: 3px;
 	min-width: 0;
 }
 
-.ff-betrow-title {
-	font-size: 0.85rem;
-	font-weight: 600;
+.ff-betrow-legline {
+	font-size: 0.82rem;
+	color: var(--color-muted);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-.ff-betrow-detail {
-	font-size: 0.78rem;
-	color: var(--color-muted);
+.ff-betrow-summary-row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75rem;
+}
+
+.ff-betrow-summary {
+	font-size: 0.85rem;
+	color: var(--color-text);
+	flex: 1;
+	min-width: 0;
+}
+
+.ff-betrow-gain {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.85rem;
+	font-weight: 600;
+	white-space: nowrap;
+	color: var(--color-text);
+	flex-shrink: 0;
 }
 
 /* =========================================================

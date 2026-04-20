@@ -446,46 +446,51 @@ function makeSimultResult(
   const bets: BetDetail[] = [];
 
   if (opts.betType === 'fb') {
-    const sumInv = oddsPerGroup.reduce((s, o) => s + 1 / (o - 1), 0);
-    if (!isFinite(sumInv) || sumInv <= 0) return null;
-    rate = 1 / sumInv;
+    // A bet is "freebet" if placed on an obligatory (P1) site, otherwise it's a cash cover.
+    // Mixed dutch formula: α = Σ(1/o) for cash bets, β = Σ(1/(o-1)) for fb bets
+    // T = FB_total / β → fb stake_i = T/(o_i-1), cash stake_i = T/o_i
+    // profit = T*(1-α) - 0 = FB_total*(1-α)/β  (all pocket costs are cash stakes only)
+    const isFbBet = oddsPerGroup.map((_, i) => obligSites.size === 0 || obligSites.has(sitePerGroup[i]));
+    const alpha = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s : s + 1 / o, 0);
+    const beta  = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s + 1 / (o - 1) : s, 0);
+    if (!isFinite(beta) || beta <= 0) return null;
+    rate = (1 - alpha) / beta;
+    if (!isFinite(rate) || rate <= 0) return null;
 
-    // Determine total freebet amount from P1 sites
     const p1Sites = [...obligSites];
     let totalFB = p1Sites.reduce((s, site) => s + (opts.sites[site]?.freebetAmount ?? 0), 0);
     if (totalFB <= 0) totalFB = opts.amount;
 
     // Scale for amountMode
     if (opts.amountMode === 'mise_min_par_pari') {
-      // stake_i = profit/(o_i-1) >= opts.amount → profit >= opts.amount*(o_i-1) → totalFB >= opts.amount*max(o_i-1)/rate
-      const needed = opts.amount * Math.max(...oddsPerGroup.map(o => o - 1)) / rate;
-      if (needed > totalFB) totalFB = needed;
+      const fbOdds = oddsPerGroup.filter((_, i) => isFbBet[i]);
+      if (fbOdds.length) {
+        const needed = opts.amount * Math.max(...fbOdds.map(o => o - 1)) * beta;
+        if (needed > totalFB) totalFB = needed;
+      }
     } else if (opts.amountMode === 'profit_net_min') {
-      // profit = totalFB * rate >= opts.amount
       if (totalFB * rate < opts.amount) totalFB = opts.amount / rate;
     } else if (opts.amountMode === 'profit_brut') {
-      // gain_i = odds_i * stake_i = profit * odds_i/(odds_i-1); min gain = profit * min(o/(o-1)) >= opts.amount
-      // min(o/(o-1)) achieved at max odds: 1 + 1/(maxOdds-1)
-      const maxOdds = Math.max(...oddsPerGroup);
-      const minGainFactor = maxOdds / (maxOdds - 1);
-      const needed = opts.amount / (rate * minGainFactor);
-      if (needed > totalFB) totalFB = needed;
+      // min gross return = T (cash bets return exactly T if they win)
+      const T0 = totalFB / beta;
+      if (T0 < opts.amount) totalFB = opts.amount * beta;
     }
 
     profit = totalFB * rate;
+    const T = totalFB / beta;
 
     for (let i = 0; i < n; i++) {
-      const stake = profit / (oddsPerGroup[i] - 1);
+      const stake = isFbBet[i] ? T / (oddsPerGroup[i] - 1) : T / oddsPerGroup[i];
       bets.push({
         legs: betsLegsArray[i],
         site: sitePerGroup[i],
         odds: oddsPerGroup[i],
         stake,
-        betType: 'fb',
-        role: 'principal',
+        betType: isFbBet[i] ? 'fb' : 'cash',
+        role: isFbBet[i] ? 'principal' : 'cover',
       });
     }
-    totalCash = 0;
+    totalCash = bets.filter(b => b.betType === 'cash').reduce((s, b) => s + b.stake, 0);
   } else {
     // Cash mode
     const sumInv = oddsPerGroup.reduce((s, o) => s + 1 / o, 0);
@@ -666,10 +671,9 @@ function trySimult(
 
   // --- MULTI-SITE ---
   if (opts.allowMulti) {
-    // Each bet group goes to its best site
-    const sitesToUse = opts.betType === 'fb'
-      ? (fbSites.length > 0 ? fbSites : allSites)
-      : allSites;
+    // Use all sites: freebet cover bets can be placed as cash on any site (e.g. exchange).
+    // The obligatory-site check below ensures P1 freebet sites are included.
+    const sitesToUse = allSites;
 
     const sitePerGroup: string[] = [];
     let valid = true;
@@ -695,35 +699,34 @@ function trySimult(
       }
     }
 
-    // If there are obligatory sites not in the best assignment, try forcing them in
+    // Exhaustive 2^n multi-site assignments: try all combinations of (obligatory/non-obligatory)
+    // per group, generating e.g. [B,B,P], [B,P,B], [P,B,B] in addition to [B,P,P].
+    // Guards: skip if no non-oblig site can bet any group (e.g. exchange can't do multi-leg
+    // combined bets), and cap n≤8 to avoid 2^n explosion on large multi-event covers.
     if (obligSites.length >= 1) {
-      for (const obligSite of obligSites) {
-        // Find which group is best for this obligatory site and try assigning it there
-        let bestGroupIdx = -1, bestOdds = 0;
-        for (let i = 0; i < betsLegsArray.length; i++) {
-          const o = legGroupOdds(data, betsLegsArray[i], obligSite, opts.coteMinParSelection);
-          if (o && o > bestOdds) { bestOdds = o; bestGroupIdx = i; }
-        }
-        if (bestGroupIdx < 0) continue;
+      const n = betsLegsArray.length;
+      const nonObligSites = allSites.filter(s => !obligSites.includes(s));
+      const obligChoice: (string | null)[] = betsLegsArray.map(legRefs =>
+        bestSiteForGroup(legRefs, obligSites)?.site ?? null
+      );
+      const nonObligChoice: (string | null)[] = betsLegsArray.map(legRefs =>
+        bestSiteForGroup(legRefs, nonObligSites.length > 0 ? nonObligSites : allSites)?.site ?? null
+      );
 
-        const forcedSitePerGroup = betsLegsArray.map((legRefs, i) => {
-          if (i === bestGroupIdx) return obligSite;
-          // Best from remaining sites
-          const remaining = sitesToUse.filter(s => s !== obligSite);
-          const best = bestSiteForGroup(legRefs, remaining.length > 0 ? remaining : sitesToUse);
-          return best?.site ?? obligSite;
-        });
-
-        const uniqueForced = new Set(forcedSitePerGroup);
-        if (uniqueForced.size >= 2) {
-          const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, forcedSitePerGroup, opts);
-          if (r) {
-            const key = r.bets.map(b => b.site + ':' + b.legs.map(l => l.outcomeName).join('+')).join('|');
-            if (!results.some(existing => {
-              const ek = existing.bets.map(b => b.site + ':' + b.legs.map(l => l.outcomeName).join('+')).join('|');
-              return ek === key;
-            })) results.push(r);
+      if (n <= 8 && nonObligChoice.some(c => c !== null)) {
+        for (let mask = 1; mask < (1 << n); mask++) {
+          const assignment: string[] = [];
+          let valid = true;
+          for (let i = 0; i < n; i++) {
+            const choice = ((mask >> i) & 1) ? obligChoice[i] : nonObligChoice[i];
+            if (!choice) { valid = false; break; }
+            assignment.push(choice);
           }
+          if (!valid) continue;
+          if (new Set(assignment).size < 2) continue;
+          if (obligSites.some(os => !assignment.includes(os))) continue;
+          const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, assignment, opts);
+          if (r) results.push(r);
         }
       }
     }

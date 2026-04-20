@@ -10,31 +10,46 @@
 	--c-secondary: #FFFCEF;
 	--c-tertiary: #C07850;
 
-	/* Sites */
-	--site-piwi-bg:          #172530;
-	--site-piwi-text:        #539afb;
-	--site-piwi-lay:         #fbcc04;
+    /* ── Sites ──────────────────────────────────────────────────────── */
+    --site-betclic-text: #ffffff;
+    --site-betclic-bg: #d2161e;
 
-	--site-olybet-bg:        #ffffff;
-	--site-olybet-text:      #f73535;
+    --site-betify-text: #101112;
+    --site-betify-bg: #1ed760;
 
-	--site-betclic-bg:       #d2161e;
-	--site-betclic-text:     #ffffff;
+    --site-betsson-text: #ff6600;
+    --site-betsson-bg: #111576;
 
-	--site-winamax-bg:       #000000;
-	--site-winamax-text:     #eb2222;
+    --site-bwin-text: #333;
+    --site-bwin-bg: #ffcc00;
 
-	--site-bwin-bg:          #ffcc00;
-	--site-bwin-text:        #333333;
+    --site-daznbet-text: #080808;
+    --site-daznbet-bg: #f5ff08;
 
-	--site-unibet-bg:        #307f2d;
-	--site-unibet-text:      #ffffff;
+    --site-feelingbet-text: #fdd435;
+    --site-feelingbet-bg: #8f004f;
 
-	--site-feelingbet-bg:    #8f004f;
-	--site-feelingbet-text:  #fdd435;
+    --site-olybet-text: #f73535;
+    --site-olybet-bg: #ffffff;
 
-	--site-pokerstars-bg:    #d70022;
-	--site-pokerstars-text:  #000000;
+    --site-piwix-text: #539afb;
+    --site-piwix-lay: #fbcc04;
+    --site-piwix-bg: #172530;
+
+    --site-pmu-text: #ffdc82;
+    --site-pmu-bg: #005049;
+
+    --site-pokerstars-text: #000000;
+    --site-pokerstars-bg: #d70022;
+
+    --site-unibet-text: #ffffff;
+    --site-unibet-bg: #307f2d;
+
+    --site-vbet-text: #fff;
+    --site-vbet-bg: #d93093;
+
+    --site-winamax-text: #eb2222;
+    --site-winamax-bg: #000000;
 }
 
 /* =========================================================

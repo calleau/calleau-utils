@@ -1,13 +1,14 @@
 import EngineWorker from './worker.ts?worker';
-import { collectSites, eventDisplayName, formatDate } from './engine';
-import bugOffUrl from '../../icons/bug-off.svg?url';
-import bugUrl from '../../icons/bug.svg?url';
-import type { AllResults, CoveringSetResult, BetDetail, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission } from './types';
+import { collectSites, eventDisplayName, formatDate, getBackOdds } from './engine';
+import bugOffUrl from '../../assets/icons/bug-off.svg?url';
+import bugUrl from '../../assets/icons/bug.svg?url';
+import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission } from './types';
 
 // ===== STATE =====
 let _data: any = null;
 let _results: AllResults = [];
 let _coverageRules: CoverageRule[] = [];
+let _sitesInfo: any = null;
 let _worker: Worker | null = null;
 let _visibleCount = 50;
 let _colFilters: Record<string, any> = {};
@@ -69,6 +70,12 @@ function loadPrefs(): Record<string, any> {
 
 // ===== HELPERS =====
 
+function siteHasFb(name: string): boolean {
+  const entry = _sitesInfo?.[name];
+  if (entry && 'has_fb' in entry) return entry.has_fb;
+  return _sitesInfo?.default?.has_fb ?? true;
+}
+
 function esc(s: any): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -86,21 +93,20 @@ function rateClass(rate: number, isCash: boolean): string {
   return 'ff-rate-bad';
 }
 
-const _SITE_KEYS = ['piwi', 'olybet', 'betclic', 'winamax', 'bwin', 'unibet', 'feelingbet', 'pokerstars'];
-const _EXCHANGE_SITE_KEYS = ['piwi'];
-
 function isExchangeSite(name: string): boolean {
-  const low = (name || '').toLowerCase();
-  return _EXCHANGE_SITE_KEYS.some(k => low.includes(k));
+  if (!_sitesInfo) return false;
+  for (const [key, val] of Object.entries(_sitesInfo) as [string, any][]) {
+    if (key === 'default') continue;
+    if ((val as any).type === 'Exchange' && name.toLowerCase().includes(key.toLowerCase())) return true;
+  }
+  return false;
 }
 
 function sitePill(name: string, isLay = false): string {
-  const key = _SITE_KEYS.find(k => name.toLowerCase().includes(k));
-  const dataSite = key ? ` data-site="${key}"` : '';
-  const isExch = _EXCHANGE_SITE_KEYS.includes(key!);
+  const isExch = isExchangeSite(name);
   const layClass = isLay && isExch ? ' ff-site-pill--lay' : '';
   const label = isExch ? `${esc(name)} ${isLay ? 'Lay' : 'Back'}` : esc(name);
-  return `<span class="ff-site-pill${layClass}"${dataSite}>${label}</span>`;
+  return `<span class="ff-site-pill${layClass}" data-site="${esc(name.toLowerCase())}">${label}</span>`;
 }
 
 function miseTag(type: 'fb' | 'cash'): string {
@@ -109,17 +115,21 @@ function miseTag(type: 'fb' | 'cash'): string {
     : `<span class="ff-mise-tag ff-mise-tag--cash">Cash</span>`;
 }
 
-function resolveOutcome(outcomeName: string, eventKey: string, marketName: string): string {
+function resolveIssueLabel(outcomeName: string, eventKey: string): string {
   const ev = _data?.[eventKey];
   const opp = ev?.opponents;
-  if (!opp) return `${esc(marketName)} · ${esc(outcomeName)}`;
+  if (!opp) return esc(outcomeName);
   const k = outcomeName.trim();
-  let label: string;
-  if (k === '1') label = esc(opp['1'] ?? outcomeName);
-  else if (k === '2') label = esc(opp['2'] ?? outcomeName);
-  else if (k === 'X') label = 'Nul';
-  else label = esc(outcomeName);
-  return `${esc(marketName)} · ${label}`;
+  if (k === '1') return esc(String(opp['1'] ?? outcomeName));
+  if (k === '2') return esc(String(opp['2'] ?? outcomeName));
+  if (k === 'X') return 'Nul';
+  return esc(outcomeName);
+}
+
+function getLegIndivOdds(leg: LegRef, site: string): number | null {
+  const oddsMap = _data?.[leg.eventKey]?.markets?.[leg.marketName]?.[leg.outcomeName];
+  if (!oddsMap) return null;
+  return getBackOdds(oddsMap[site]);
 }
 
 function formatGap(ms: number): string {
@@ -148,7 +158,7 @@ function buildEngineOpts(): EngineOpts {
     if (_data) {
       const allSites = collectSites(_data);
       for (const s of allSites) {
-        if (s === _simpleSite && _betType === 'fb') {
+        if (s === _simpleSite && _betType === 'fb' && siteHasFb(s)) {
           sites[s] = { freebetAmount: _simpleAmount, freebetPriority: 1, missions: [] };
         } else if (s === _simpleSite && _betType === 'cash') {
           // Obligatory cash site: add a default mission
@@ -251,23 +261,36 @@ function resultProfitDisplay(r: CoveringSetResult): { cls: string; text: string 
 // ===== DETAIL RENDERING =====
 
 function buildBetDetailRow(bet: BetDetail, idx: number): string {
-  const titleParts = [...new Set(bet.legs.map(l => {
-    const ev = _data?.[l.eventKey];
-    return ev ? eventDisplayName(l.eventKey, ev) : l.eventKey;
-  }))].join(' + ');
-
-  const outcomeParts = bet.legs.map(l => resolveOutcome(l.outcomeName, l.eventKey, l.marketName)).join(' + ');
+  const isLay = bet.liability != null;
   const stepLabel = bet.seqStep != null ? `Seq.\u00a0${bet.seqStep + 1}` : `Pari\u00a0${idx + 1}`;
-  const liabilityStr = bet.liability != null ? ` · Liability <strong>${fmt(bet.liability)}\u00a0\u20ac</strong>` : '';
   const roleClass = bet.role === 'principal' ? 'ff-betrow-badge--back' : 'ff-betrow-badge--cover';
   const roleLabel = bet.role === 'principal' ? stepLabel : `Couv.\u00a0${idx + 1}`;
+
+  const legLines = bet.legs.map(l => {
+    const evName = _data?.[l.eventKey] ? eventDisplayName(l.eventKey, _data[l.eventKey]) : l.eventKey;
+    const issueLabel = resolveIssueLabel(l.outcomeName, l.eventKey);
+    const indivOdds = bet.legs.length === 1 ? bet.odds : (getLegIndivOdds(l, bet.site) ?? bet.odds);
+    const marketIssue = isLay
+      ? `<strong>Lay ${esc(l.marketName)} ${issueLabel}</strong>`
+      : `<strong>${esc(l.marketName)} ${issueLabel}</strong>`;
+    return `<span class="ff-betrow-legline">${esc(evName)} \u2022 ${marketIssue} \u2022 ${fmt(indivOdds)}</span>`;
+  }).join('');
+
+  const liabilityStr = isLay
+    ? ` \u2022 <strong>Liability\u00a0${fmt(bet.liability!)}\u00a0\u20ac</strong>`
+    : '';
+  const summaryLine = `${sitePill(bet.site, isLay)} \u2022 ${fmt(bet.odds)} \u2022 ${miseTag(bet.betType)} Mise <strong>${fmt(bet.stake)}\u00a0\u20ac</strong>${liabilityStr}`;
+  const grossGain = fmt(bet.stake * bet.odds);
 
   return `
   <div class="ff-betrow">
     <span class="ff-betrow-badge ${roleClass}">${esc(roleLabel)}</span>
     <div class="ff-betrow-body">
-      <span class="ff-betrow-title">${esc(titleParts)}</span>
-      <span class="ff-betrow-detail">${sitePill(bet.site)} · ${outcomeParts} · Mise <strong>${fmt(bet.stake)}\u00a0\u20ac</strong> ${miseTag(bet.betType)} · Cote <strong>${fmt(bet.odds)}</strong>${liabilityStr}</span>
+      ${legLines}
+      <div class="ff-betrow-summary-row">
+        <span class="ff-betrow-summary">${summaryLine}</span>
+        <span class="ff-betrow-gain">${grossGain}\u00a0\u20ac</span>
+      </div>
     </div>
   </div>`;
 }
@@ -553,6 +576,7 @@ function setBetType(t: 'fb' | 'cash') {
   const objField = document.getElementById('ff-objective-field');
   if (objField) (objField as any).hidden = t !== 'cash';
   updateAmountLabel();
+  if (_data) updateSiteSelect(collectSites(_data));
   resetResults();
   savePrefs();
 }
@@ -728,7 +752,7 @@ function renderAdvancedSites(sites: string[]) {
 
   wrap.innerHTML = sites.map(site => {
     const cfg = _advSites[site];
-    const prioHtml = isFb ? `
+    const prioHtml = isFb && siteHasFb(site) ? `
       <div class="ff-adv-row">
         <span class="ff-sublabel">Priorité freebets</span>
         <div class="ff-legs-toggle ff-legs-toggle--sm" id="ff-adv-prio-${esc(site)}">
@@ -970,9 +994,11 @@ function updateSiteSelect(sites: string[]) {
     _simpleSite = '';
     return;
   }
-  // Keep previous selection if still valid
-  if (!sites.includes(_simpleSite)) _simpleSite = sites[0] ?? '';
-  wrap.innerHTML = sites.map(s => `
+  // In freebet mode, only show sites that support freebets as principal site
+  const visibleSites = _betType === 'fb' ? sites.filter(s => siteHasFb(s)) : sites;
+  const pool = visibleSites.length > 0 ? visibleSites : sites;
+  if (!pool.includes(_simpleSite)) _simpleSite = pool[0] ?? '';
+  wrap.innerHTML = pool.map(s => `
     <button class="ff-site-btn ff-btn${s === _simpleSite ? ' ff-btn--active' : ''}"
       data-site="${esc(s)}" onclick="setSite('${esc(s)}')">${esc(s)}</button>`).join('');
 
@@ -1159,14 +1185,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     savePrefs();
   });
 
-  // Load coverage rules
+  // Load coverage rules and sites info in parallel
   try {
-    const r = await fetch('../assets/coverage-rules.json');
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    _coverageRules = await r.json();
+    const [rulesRes, sitesRes] = await Promise.all([
+      fetch('../assets/coverage-rules.json'),
+      fetch('../assets/sites-informations.json'),
+    ]);
+    if (!rulesRes.ok) throw new Error(`coverage-rules.json HTTP ${rulesRes.status}`);
+    _coverageRules = await rulesRes.json();
+    if (sitesRes.ok) _sitesInfo = await sitesRes.json();
   } catch (e: any) {
     const errEl = document.getElementById('ff-json-error')!;
-    errEl.textContent = `Erreur : impossible de charger coverage-rules.json (${e.message}). Ouvrez la page via un serveur local.`;
+    errEl.textContent = `Erreur : impossible de charger les fichiers de config (${e.message}). Ouvrez la page via un serveur local.`;
     (errEl as any).hidden = false;
     return;
   }

@@ -1,0 +1,17 @@
+{
+    "PIWIx": {
+        "type": "Exchange",
+        "has_fb": false
+    },
+    "Betify": {
+        "fb_splitable": false
+    },
+    "PMU": {
+        "fb_splitable": false
+    },
+    "default": {
+        "type": "Bookmaker",
+        "has_fb": true,
+        "fb_splitable": true
+    }
+}
