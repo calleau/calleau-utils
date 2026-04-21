@@ -167,6 +167,10 @@
 							Symétrique
 						</label>
 						<label class="ff-toggle-label">
+							<input type="checkbox" id="ff-cb-asym-light" onchange="setMethodToggle('asym-light', this.checked)" />
+							Asym. léger
+						</label>
+						<label class="ff-toggle-label">
 							<input type="checkbox" id="ff-cb-asym" onchange="setMethodToggle('asym', this.checked)" />
 							Asymétrique
 						</label>
@@ -178,9 +182,12 @@
 					Calculer
 				</button>
 
-				<!-- Bouton debug (visible uniquement en mode debug) -->
+				<!-- Boutons debug (visibles uniquement en mode debug) -->
 				<button id="ff-debug-dl-btn" class="ff-debug-dl-btn" onclick="downloadDebugJson()" hidden>
 					⬇ Télécharger les paramètres (debug)
+				</button>
+				<button id="ff-debug-state-btn" class="ff-debug-dl-btn" onclick="downloadDebugStateJson()" hidden>
+					<img id="ff-debug-state-icon" width="12" height="12" alt="" style="vertical-align:middle;margin-right:5px;" />Télécharger état actuel (debug)
 				</button>
 
 			</div>
@@ -193,7 +200,7 @@
 		</div>
 
 		<footer class="page-footer">
-			<span class="footer-version">v6.0.10</span>
+			<span class="footer-version">v6.0.13</span>
 			<button id="ff-debug-btn" class="ff-debug-btn" onclick="toggleDebug()" title="Mode debug">
 				<img id="ff-debug-icon-off" class="ff-debug-icon" width="12" height="12" alt="" />
 				<img id="ff-debug-icon-on" class="ff-debug-icon" width="12" height="12" alt="" hidden />

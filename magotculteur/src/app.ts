@@ -7,9 +7,10 @@ import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage
 // ===== STATE =====
 let _data: any = null;
 let _results: AllResults = [];
+let _filteredResults: AllResults = [];
 let _coverageRules: CoverageRule[] = [];
 let _sitesInfo: any = null;
-let _worker: Worker | null = null;
+let _workers: Worker[] = [];
 let _visibleCount = 50;
 let _colFilters: Record<string, any> = {};
 let _cfpOpenCol: string | null = null;
@@ -40,7 +41,9 @@ let _allowSimult = true;
 let _allowUni = true;
 let _allowMulti = true;
 let _allowSym = true;
+let _allowAsymLight = false;
 let _allowAsym = false;
+let _savedMethods: { seq: boolean; simult: boolean; sym: boolean; asymLight: boolean; asym: boolean } | null = null;
 
 // ===== PREFS =====
 const PREFS_KEY = 'ff_prefs_v2';
@@ -57,9 +60,12 @@ function savePrefs() {
       simpleCoteMin: _simpleCoteMin,
       simpleCoteMinSel: _simpleCoteMinSel,
       allowedNLegs: [..._allowedNLegs],
-      allowSeq: _allowSeq, allowSimult: _allowSimult,
+      allowSeq: _savedMethods ? _savedMethods.seq : _allowSeq,
+      allowSimult: _savedMethods ? _savedMethods.simult : _allowSimult,
       allowUni: _allowUni, allowMulti: _allowMulti,
-      allowSym: _allowSym, allowAsym: _allowAsym,
+      allowSym: _savedMethods ? _savedMethods.sym : _allowSym,
+      allowAsymLight: _savedMethods ? _savedMethods.asymLight : _allowAsymLight,
+      allowAsym: _savedMethods ? _savedMethods.asym : _allowAsym,
     }));
   } catch {}
 }
@@ -200,6 +206,7 @@ function buildEngineOpts(): EngineOpts {
     allowUni: _allowUni,
     allowMulti: _allowMulti,
     allowSym: _allowSym,
+    allowAsymLight: _allowAsymLight,
     allowAsym: _allowAsym,
   };
 }
@@ -209,7 +216,7 @@ function buildEngineOpts(): EngineOpts {
 function resultMethodLabel(r: CoveringSetResult): string {
   const timing = r.timing === 'seq' ? 'Séq.' : 'Simult.';
   const placement = r.placement === 'uni' ? 'Uni' : 'Multi';
-  const sym = r.symmetry === 'sym' ? 'Sym.' : 'Asym.';
+  const sym = r.symmetry === 'sym' ? 'Sym.' : r.symmetry === 'asym-light' ? 'Asym. lég.' : 'Asym.';
   return `${timing} · ${placement} · ${sym}`;
 }
 
@@ -311,6 +318,8 @@ const COL_FILTER_DEFS: Record<string, any> = {
       { value: 'seq_multi_sym', label: 'Séq. · Multi · Sym.' },
       { value: 'simult_uni_sym', label: 'Simult. · Uni · Sym.' },
       { value: 'simult_multi_sym', label: 'Simult. · Multi · Sym.' },
+      { value: 'simult_uni_asym-light', label: 'Simult. · Uni · Asym. lég.' },
+      { value: 'simult_multi_asym-light', label: 'Simult. · Multi · Asym. lég.' },
       { value: 'simult_uni_asym', label: 'Simult. · Uni · Asym.' },
       { value: 'simult_multi_asym', label: 'Simult. · Multi · Asym.' },
     ],
@@ -520,6 +529,7 @@ function renderPage() {
       return ev && eventDisplayName(ek, ev).toLowerCase().includes(q);
     });
   });
+  _filteredResults = filtered;
 
   filtered.sort((a, b) => b.profit - a.profit);
   const visible = filtered.slice(0, _visibleCount);
@@ -656,8 +666,43 @@ function toggleNLegs(n: number) {
   );
   if (_allowedNLegs.size > 0)
     document.getElementById('ff-nlegs-field')?.classList.remove('ff-field--error');
+  updateMethodAvailability();
   resetResults();
   savePrefs();
+}
+
+function updateMethodAvailability() {
+  const onlyOne = _allowedNLegs.size === 1 && _allowedNLegs.has(1);
+  if (onlyOne && !_savedMethods) {
+    _savedMethods = { seq: _allowSeq, simult: _allowSimult, sym: _allowSym, asymLight: _allowAsymLight, asym: _allowAsym };
+    _allowSeq = false;
+    _allowSimult = true;
+    _allowSym = true;
+    _allowAsymLight = false;
+    _allowAsym = false;
+  } else if (!onlyOne && _savedMethods) {
+    _allowSeq = _savedMethods.seq;
+    _allowSimult = _savedMethods.simult;
+    _allowSym = _savedMethods.sym;
+    _allowAsymLight = _savedMethods.asymLight;
+    _allowAsym = _savedMethods.asym;
+    _savedMethods = null;
+  }
+  const mapping: Array<[string, boolean]> = [
+    ['ff-cb-seq', _allowSeq],
+    ['ff-cb-simult', _allowSimult],
+    ['ff-cb-sym', _allowSym],
+    ['ff-cb-asym-light', _allowAsymLight],
+    ['ff-cb-asym', _allowAsym],
+  ];
+  for (const [id, checked] of mapping) {
+    const cb = document.getElementById(id) as HTMLInputElement | null;
+    if (!cb) continue;
+    cb.disabled = onlyOne;
+    cb.checked = checked;
+    const label = cb.closest('.ff-toggle-label') as HTMLElement | null;
+    if (label) label.classList.toggle('ff-toggle-label--disabled', onlyOne);
+  }
 }
 
 function setMethodToggle(method: string, val: boolean) {
@@ -667,6 +712,7 @@ function setMethodToggle(method: string, val: boolean) {
     case 'uni': _allowUni = val; break;
     case 'multi': _allowMulti = val; break;
     case 'sym': _allowSym = val; break;
+    case 'asym-light': _allowAsymLight = val; break;
     case 'asym': _allowAsym = val; break;
   }
   resetResults();
@@ -876,11 +922,11 @@ function resetResults() {
 // ===== WORKER =====
 
 function cancelCalc() {
-  if (_worker) {
-    _worker.postMessage({ type: 'cancel' });
-    _worker.terminate();
-    _worker = null;
+  for (const w of _workers) {
+    try { w.postMessage({ type: 'cancel' }); } catch {}
+    w.terminate();
   }
+  _workers = [];
   const btn = document.getElementById('ff-calc-btn') as HTMLButtonElement;
   const overlay = document.getElementById('ff-calc-overlay')!;
   if (btn) btn.disabled = false;
@@ -916,48 +962,78 @@ async function tryRender() {
   overlayDetail.textContent = '';
   overlayCount.textContent = '';
 
-  if (_worker) { _worker.terminate(); _worker = null; }
-  _worker = new EngineWorker();
+  for (const w of _workers) w.terminate();
+  _workers = [];
 
   const opts = buildEngineOpts();
 
-  _worker.onmessage = (e: MessageEvent<WorkerOutMessage>) => {
-    const msg = e.data;
-    if (msg.type === 'progress') {
-      overlayLabel.textContent = msg.label;
-      overlayDetail.textContent = msg.detail ?? '';
-      overlayCount.textContent = (msg.total && msg.total > 0)
-        ? `${(msg.done ?? 0).toLocaleString('fr-FR')} / ${msg.total.toLocaleString('fr-FR')} combinaisons`
-        : '';
-      (overlayBar as HTMLElement).style.width = `${msg.pct}%`;
-    } else if (msg.type === 'result') {
-      _results = msg.results;
-      (overlayBar as HTMLElement).style.width = '100%';
-      overlayLabel.textContent = 'Terminé';
-      setTimeout(() => {
-        (overlay as any).hidden = true;
-        btn.disabled = false;
-        _worker = null;
-        renderResults(_results);
-      }, 150);
-    } else if (msg.type === 'cancelled') {
-      (overlayBar as HTMLElement).style.width = '0%';
-      overlayLabel.textContent = 'Annulé';
-      setTimeout(() => {
-        (overlay as any).hidden = true;
-        btn.disabled = false;
-        _worker = null;
-      }, 150);
-    }
-  };
+  const hw = (navigator as any).hardwareConcurrency || 4;
+  const poolSize = Math.max(1, Math.min(hw, 8));
 
-  _worker.onerror = () => {
-    (overlay as any).hidden = true;
-    btn.disabled = false;
-    _worker = null;
-  };
+  const progressPerWorker: Array<{ done: number; total: number; detail: string }> =
+    Array.from({ length: poolSize }, () => ({ done: 0, total: 0, detail: '' }));
+  const aggregatedResults: any[][] = Array.from({ length: poolSize }, () => []);
+  let finished = 0;
+  let anyCancelled = false;
 
-  _worker.postMessage({ type: 'compute', payload: { data: _data, opts } });
+  for (let i = 0; i < poolSize; i++) {
+    const w = new EngineWorker();
+    _workers.push(w);
+
+    w.onmessage = (e: MessageEvent<WorkerOutMessage>) => {
+      const msg = e.data;
+      if (msg.type === 'progress') {
+        progressPerWorker[i] = { done: msg.done ?? 0, total: msg.total ?? 0, detail: msg.detail ?? '' };
+        const totalDone = progressPerWorker.reduce((s, p) => s + p.done, 0);
+        const totalAll = progressPerWorker.reduce((s, p) => s + p.total, 0);
+        overlayLabel.textContent = msg.label;
+        overlayDetail.textContent = msg.detail ?? '';
+        overlayCount.textContent = totalAll > 0
+          ? `${totalDone.toLocaleString('fr-FR')} / ${totalAll.toLocaleString('fr-FR')} combinaisons`
+          : '';
+        const pct = totalAll > 0 ? Math.round(5 + (totalDone / totalAll) * 88) : 5;
+        (overlayBar as HTMLElement).style.width = `${pct}%`;
+      } else if (msg.type === 'result') {
+        aggregatedResults[i] = msg.results;
+        finished++;
+        if (finished === poolSize) {
+          if (anyCancelled) return;
+          _results = aggregatedResults.flat().sort((a, b) => b.profit - a.profit);
+          (overlayBar as HTMLElement).style.width = '100%';
+          overlayLabel.textContent = 'Terminé';
+          setTimeout(() => {
+            (overlay as any).hidden = true;
+            btn.disabled = false;
+            for (const ww of _workers) ww.terminate();
+            _workers = [];
+            renderResults(_results);
+          }, 150);
+        }
+      } else if (msg.type === 'cancelled') {
+        anyCancelled = true;
+        finished++;
+        if (finished === poolSize) {
+          (overlayBar as HTMLElement).style.width = '0%';
+          overlayLabel.textContent = 'Annulé';
+          setTimeout(() => {
+            (overlay as any).hidden = true;
+            btn.disabled = false;
+            for (const ww of _workers) ww.terminate();
+            _workers = [];
+          }, 150);
+        }
+      }
+    };
+
+    w.onerror = () => {
+      (overlay as any).hidden = true;
+      btn.disabled = false;
+      for (const ww of _workers) ww.terminate();
+      _workers = [];
+    };
+
+    w.postMessage({ type: 'compute', payload: { data: _data, opts, shard: { index: i, count: poolSize } } });
+  }
 }
 
 // ===== JSON / DATA =====
@@ -1061,10 +1137,12 @@ function toggleDebug() {
   const iconOff = document.getElementById('ff-debug-icon-off')!;
   const iconOn = document.getElementById('ff-debug-icon-on')!;
   const dlBtn = document.getElementById('ff-debug-dl-btn')!;
+  const stateBtn = document.getElementById('ff-debug-state-btn')!;
   btn.classList.toggle('ff-debug-btn--active', _debugMode);
   (iconOff as any).hidden = _debugMode;
   (iconOn as any).hidden = !_debugMode;
   (dlBtn as any).hidden = !_debugMode;
+  (stateBtn as any).hidden = !_debugMode;
 }
 
 function downloadDebugJson() {
@@ -1089,6 +1167,7 @@ function downloadDebugJson() {
       allowUni: _allowUni,
       allowMulti: _allowMulti,
       allowSym: _allowSym,
+      allowAsymLight: _allowAsymLight,
       allowAsym: _allowAsym,
       advSites: _advSites,
     },
@@ -1106,14 +1185,57 @@ function downloadDebugJson() {
   URL.revokeObjectURL(url);
 }
 
+function downloadDebugStateJson() {
+  const opts = buildEngineOpts();
+  const payload = {
+    _meta: {
+      timestamp: new Date().toISOString(),
+      version: '6.0.0',
+    },
+    ui: {
+      betType: _betType,
+      advancedMode: _advancedMode,
+      simpleSite: _simpleSite,
+      simpleAmountMode: _simpleAmountMode,
+      simpleAmount: _simpleAmount,
+      simpleCashObjective: _simpleCashObjective,
+      simpleCoteMin: _simpleCoteMin,
+      simpleCoteMinSel: _simpleCoteMinSel,
+      allowedNLegs: [..._allowedNLegs],
+      allowSeq: _allowSeq,
+      allowSimult: _allowSimult,
+      allowUni: _allowUni,
+      allowMulti: _allowMulti,
+      allowSym: _allowSym,
+      allowAsymLight: _allowAsymLight,
+      allowAsym: _allowAsym,
+      advSites: _advSites,
+    },
+    engineOpts: opts,
+    data: _data,
+    coverageRules: _coverageRules,
+    results: _filteredResults.slice(0, 10),
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `magotculteur-state-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 window.toggleDebug = toggleDebug;
 window.downloadDebugJson = downloadDebugJson;
+window.downloadDebugStateJson = downloadDebugStateJson;
 
 // ===== INIT =====
 
 document.addEventListener('DOMContentLoaded', async () => {
   (document.getElementById('ff-debug-icon-off') as HTMLImageElement).src = bugOffUrl;
   (document.getElementById('ff-debug-icon-on') as HTMLImageElement).src = bugUrl;
+  (document.getElementById('ff-debug-state-icon') as HTMLImageElement).src = bugUrl;
 
   const prefs = loadPrefs();
   if (prefs.betType) setBetType(prefs.betType);
@@ -1174,11 +1296,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cb = document.getElementById('ff-cb-sym') as HTMLInputElement;
     if (cb) cb.checked = _allowSym;
   }
+  if (prefs.allowAsymLight != null) {
+    _allowAsymLight = prefs.allowAsymLight;
+    const cb = document.getElementById('ff-cb-asym-light') as HTMLInputElement;
+    if (cb) cb.checked = _allowAsymLight;
+  }
   if (prefs.allowAsym != null) {
     _allowAsym = prefs.allowAsym;
     const cb = document.getElementById('ff-cb-asym') as HTMLInputElement;
     if (cb) cb.checked = _allowAsym;
   }
+  updateMethodAvailability();
 
   document.getElementById('ff-amount-input')?.addEventListener('change', () => {
     _simpleAmount = parseFloat((document.getElementById('ff-amount-input') as HTMLInputElement).value) || 10;

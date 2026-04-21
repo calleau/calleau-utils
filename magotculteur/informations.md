@@ -217,10 +217,12 @@ On peut séléctionner chaque nombre individuellement (donc faire des combinaiso
 Warning sur le 4 et 5 qui indiquent que si il y a une grosse d'events et de sites inclus dans la données, ça peut prendre énormement de temps à calculer.
 
 #### Méthodes de placement
-Sur chaque ligne à chaque fois deux options qui permet d'activer le calcul de certaines méthodes de placement.
+Des checkboxes indépendantes qui permettent d'activer/désactiver le calcul de certaines méthodes de placement.
 - "Séquentiel" "Simultané"
 - "Uni-site" "Multi-sites"
-- "Symétrie" "Asymétrie"
+- "Symétrique" "Asym. léger" "Asymétrique"
+
+Quand "Nb combinés à calculer" ne contient que la valeur 1, les méthodes "Séquentiel/Simultané" et "Symétrique/Asym. léger/Asymétrique" sont automatiquement désactivées (grisées) et forcées à "Simult. + Sym." uniquement, les valeurs précédemment cochées sont restaurées dès qu'une autre valeur est ajoutée dans "Nb combinés à calculer".
 
 ## Méthode de placement
 ### Timing
@@ -283,6 +285,182 @@ M1 X M2 1X
 M1 X M2 2
 M1 2
 
+#### Covering set asymétrique léger
+Un cas intermédiaire entre symétrique et asymétrique. Pour chaque combiné, un event est considéré comme "ancre" (MF) : un sous-ensemble de ses issues est placé côté combiné (en produit cartésien symétrique avec les autres events), les issues restantes de l'ancre sont couvertes en simples. Le calculateur itère sur chaque event possible comme ancre, chaque market de l'ancre et chaque sous-ensemble K ∈ [1, k-1] de ses issues.
+
+Exemple (3 events, M1 2 issues, M2 3 issues, M3 2 issues, ancre = M1, K=1) :
+M1 1 • M2 1 • M3 1X
+M1 1 • M2 1 • M3 2
+M1 1 • M2 X • M3 1X
+M1 1 • M2 X • M3 2
+M1 1 • M2 2 • M3 1X
+M1 1 • M2 2 • M3 2
+M1 X2
+
+Exemple (3 events, M1 3 issues, M2 2 issues, M3 2 issues, ancre = M1, K=1) :
+M1 1 • M2 BTTS Oui • M3 1X
+M1 1 • M2 BTTS Oui • M3 2
+M1 1 • M2 BTTS Non • M3 1X
+M1 1 • M2 BTTS Non • M3 2
+M1 X
+M1 2
+
+Seule la méthode Simultané produit des résultats asymétriques légers (incompatible avec le paradigme séquentiel qui repose sur un unique pari principal). Pour contenir la combinatoire, le calculateur ne retient que les top 20 variantes les plus prometteuses par combinaison d'events, classées par un score rapide basé sur les meilleures cotes disponibles par site.
+
+### Exemples
+Pour les multi-sites les sites de chaque pari est précisé via les indications :
+- SP (Site principal)
+- S1 (Site optionnel 1)
+- S2 (Site optionnel 2)
+
+#### Séquentiel • Uni • Sym
+##### 1 event
+Séquentiel impossible pour 1 seul event
+
+##### 2 events combinés
+Exemple 1 - 2 events (M1 3 issues; M2 3 issues)
+M1 A • M2 A
+M1 B
+M1 C
+Seq 1 - M2 B
+Seq 1 - M2 C
+
+Exemple 2 - 2 events (M1 3 issues; M2 3 issues)
+M1 A • M2 A
+M1 A • M2 B
+M1 B
+M1 C
+Seq 1 - M2 C
+
+Exemple 3 - 2 events (M1 3 issues; M2 3 issues)
+M1 A • M2 A
+M1 B • M2 A
+M1 C
+Seq 1 - M2 B
+Seq 1 - M2 C
+
+Exemple 4 - 2 events (M1 2 issues; M2 3 issues)
+M1 A • M2 A
+M1 A • M2 B
+M1 B
+Seq 1 - M2 C
+
+Exemple 5 - 2 events (M1 2 issues; M2 3 issues)
+M1 A • M2 A
+M1 B
+Seq 1 - M2 B
+Seq 1 - M2 C
+
+Exemple 6 - 2 events (M1 2 issues; M2 2 issues)
+M1 A • M2 A
+M1 B
+Seq 1 - M2 B
+
+##### 3 events combinés
+Exemple 1 - 2 events (M1 3 issues; M2 3 issues; M3 3 issues)
+M1 A • M2 A • M3 A
+M1 B
+M1 C
+Seq 1 - M2 B
+Seq 1 - M2 C
+
+Exemple 2 - 2 events (M1 3 issues; M2 3 issues)
+M1 A • M2 A
+M1 A • M2 B
+M1 B
+M1 C
+Seq 1 - M2 C
+
+Exemple 3 - 2 events (M1 3 issues; M2 3 issues)
+M1 A • M2 A
+M1 B • M2 A
+M1 C
+Seq 1 - M2 B
+Seq 1 - M2 C
+
+Exemple 4 - 2 events (M1 2 issues; M2 3 issues)
+M1 A • M2 A
+M1 A • M2 B
+M1 B
+Seq 1 - M2 C
+
+Exemple 5 - 2 events (M1 2 issues; M2 3 issues)
+M1 A • M2 A
+M1 B
+Seq 1 - M2 B
+Seq 1 - M2 C
+
+Exemple 6 - 2 events (M1 2 issues; M2 2 issues)
+M1 A • M2 A
+M1 B
+Seq 1 - M2 B
+
+#### Séquentiel • Uni • Asym. léger
+##### 1 event
+Séquentiel impossible pour 1 seul event
+
+##### 2 events combinés
+##### 3 events combinés
+
+#### Séquentiel • Uni • Asym
+##### 1 event
+Séquentiel impossible pour 1 seul event
+
+##### 2 events combinés
+##### 3 events combinés
+
+#### Séquentiel • Multi • Sym
+##### 1 event
+Séquentiel impossible pour 1 seul event
+
+##### 2 events combinés
+##### 3 events combinés
+
+#### Séquentiel • Multi • Asym. léger
+##### 1 event
+Séquentiel impossible pour 1 seul event
+
+##### 2 events combinés
+##### 3 events combinés
+
+#### Séquentiel • Multi • Asym
+##### 1 event
+Séquentiel impossible pour 1 seul event
+
+##### 2 events combinés
+##### 3 events combinés
+
+#### Simultané • Uni • Sym
+##### 1 event
+##### 2 events combinés
+##### 3 events combinés
+
+#### Simultané • Uni • Asym. léger
+##### 1 event
+##### 2 events combinés
+##### 3 events combinés
+
+#### Simultané • Uni • Asym
+##### 1 event
+##### 2 events combinés
+##### 3 events combinés
+
+#### Simultané • Multi • Sym
+##### 1 event
+##### 2 events combinés
+##### 3 events combinés
+
+#### Simultané • Multi • Asym. léger
+##### 1 event
+##### 2 events combinés
+##### 3 events combinés
+
+#### Simultané • Multi • Asym
+##### 1 event
+##### 2 events combinés
+##### 3 events combinés
+
+
 ## Résultats
 L'affichage des résultats doit se faire dans un tableau dont chaque ligne contient un covering set. Il est possible d'ouvrir le détail d'une ligne pour voir les différents paris qui sont placés pour ce covering set.
 
@@ -328,20 +506,21 @@ Affiche en € la perte totale du covering set
 ### Taux
 Affiche le TRJ du covering set
 
+### Filtres par colonne
+Chaque colonne du tableau de résultats propose un filtre. Le filtre "Méthode" propose notamment les combinaisons :
+- Séq. · Uni · Sym.
+- Séq. · Multi · Sym.
+- Simult. · Uni · Sym.
+- Simult. · Multi · Sym.
+- Simult. · Uni · Asym. lég.
+- Simult. · Multi · Asym. lég.
+- Simult. · Uni · Asym.
+- Simult. · Multi · Asym.
 
+## Architecture technique
+### Moteur de calcul
+Le moteur est exécuté dans un pool de Web Workers (un par cœur CPU, jusqu'à 8) pour paralléliser les calculs. Chaque worker reçoit un shard `{ index, count }` et ne traite que les combinaisons d'events où `counter % count === index`. Les résultats de chaque worker sont agrégés et triés par profit sur le thread principal.
 
-
-Actuellement pour les paramètres ci-joint je n'ai aucune proposition qui serait dans le format suivant : 
-Pour la méthode simultané - multi-sites
-Uni M1 1 - M2 1X - M3 1X
-Uni M1 1 - M2 1X - M3 2
-Uni M1 1 - M2 2 - M3 1X
-Uni M1 1 - M2 2 - M3 2
-PIWI M1 2X
-
-ou au format suivant : 
-Pour la méthode séquentiel - multi-sites
-Uni M1 1 - M2 1 - M3 1X
-Uni M1 1 - M2 1 - M3 2
-PIWI M1 2X
-PIWI M2 2X
+### Missions et filtres
+- Le filtre global "Cote min. par sélection" ne s'applique qu'aux combinés (≥ 2 legs), pas aux paris simples.
+- Chaque mission peut définir ses propres `coteMin` et `coteMinParSelection` ; `coteMinParSelection` est vérifiée sur chaque leg individuel des paris combinés côté site de la mission.

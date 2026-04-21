@@ -168,6 +168,13 @@
 	cursor: pointer;
 	flex-shrink: 0;
 }
+.ff-toggle-label--disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+.ff-toggle-label--disabled input[type="checkbox"] {
+	cursor: not-allowed;
+}
 
 /* Cover badge variant */
 .ff-betrow-badge--cover {

@@ -58,6 +58,7 @@ export interface EngineOpts {
   allowMulti: boolean;
   allowSym: boolean;
   allowAsym: boolean;
+  allowAsymLight: boolean;
 }
 
 // ===== STRUCTURES INTERNES (moteur) =====
@@ -124,7 +125,7 @@ export interface BetDetail {
 export interface CoveringSetResult {
   timing: 'seq' | 'simult';
   placement: 'uni' | 'multi';
-  symmetry: 'sym' | 'asym';
+  symmetry: 'sym' | 'asym' | 'asym-light';
   bets: BetDetail[];
   eventKeys: string[];
   nMatches: number;
@@ -141,6 +142,7 @@ export type AllResults = CoveringSetResult[];
 export interface WorkerComputePayload {
   data: any;
   opts: EngineOpts;
+  shard?: { index: number; count: number };
 }
 
 export type WorkerInMessage =

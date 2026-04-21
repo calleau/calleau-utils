@@ -252,6 +252,72 @@ function getCoverSets(data: any, eventKey: string, opts: EngineOpts): LegRef[][]
   return sets;
 }
 
+// For asym-light: one "anchor" event has its cover sides split into K combined sides
+// (cross-producted with full sym covers of other events) + (total-K) single sides.
+export interface AsymLightSplit {
+  anchorIdx: number;
+  comboSides: LegRef[][];
+  singleSides: LegRef[][];
+  otherCoverSets: LegRef[][][]; // aligned with eventKeys excluding anchorIdx
+}
+
+function getAsymLightSplits(data: any, eventKeys: string[], opts: EngineOpts): AsymLightSplit[] {
+  const out: AsymLightSplit[] = [];
+  const csPerEvent = eventKeys.map(ek => getCoverSets(data, ek, opts));
+  if (csPerEvent.some(s => !s.length)) return out;
+
+  for (let anchorIdx = 0; anchorIdx < eventKeys.length; anchorIdx++) {
+    const anchorCoverSets = csPerEvent[anchorIdx];
+    const otherCoverSetLists = eventKeys.map((_, i) => csPerEvent[i]).filter((_, i) => i !== anchorIdx);
+    for (const anchorCs of anchorCoverSets) {
+      const k = anchorCs.length;
+      if (k < 2) continue;
+      const sideIdxs = anchorCs.map((_, i) => i);
+      for (let K = 1; K <= k - 1; K++) {
+        forEachCombo(sideIdxs, K, (subset) => {
+          const subsetSet = new Set(subset);
+          const comboSides = subset.map(i => anchorCs[i]);
+          const singleSides = anchorCs.filter((_, i) => !subsetSet.has(i));
+          forEachCoverSetCombo(otherCoverSetLists, (otherCs) => {
+            out.push({ anchorIdx, comboSides, singleSides, otherCoverSets: otherCs });
+          });
+        });
+      }
+    }
+  }
+  return out;
+}
+
+// Build the legs array (first singles, then combined groups) from an asym-light split
+function buildAsymLightLegs(split: AsymLightSplit): LegRef[][] {
+  const { comboSides, singleSides, otherCoverSets } = split;
+  const otherCrossed = generateCoveringBets(otherCoverSets); // list of leg groups (one leg per other event)
+  const combinedGroups: LegRef[][] = [];
+  for (const anchorSide of comboSides) {
+    for (const otherLegs of otherCrossed) {
+      combinedGroups.push([...anchorSide, ...otherLegs]);
+    }
+  }
+  return [...singleSides, ...combinedGroups];
+}
+
+// Cheap best-odds score for a legs array (uni-site approximation): rate = 1 / sum(1/oi)
+function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): number {
+  const sites = Object.keys(opts.sites).length > 0 ? Object.keys(opts.sites) : collectSites(data);
+  if (!sites.length) return 0;
+  let invSum = 0;
+  for (const legs of legsArray) {
+    let bestO = 0;
+    for (const s of sites) {
+      const o = legGroupOdds(data, legs, s, opts.coteMinParSelection);
+      if (o && o > bestO) bestO = o;
+    }
+    if (bestO <= 1) return 0;
+    invSum += opts.betType === 'fb' ? 1 / (bestO - 1) : 1 / bestO;
+  }
+  return invSum > 0 ? 1 / invSum : 0;
+}
+
 function getAsymSplits(data: any, eventKey: string, opts: EngineOpts) {
   const splits: Array<{ singleGroup: LegRef[]; combinedGroups: LegRef[][] }> = [];
   const seen = new Set<string>();
@@ -331,7 +397,7 @@ function legGroupOdds(data: any, legRefs: LegRef[], site: string, coteMinPerSel:
     if (legRefs.length > 1 && isExchange(val)) return null;
     const o = getBackOdds(val);
     if (!o || o <= 1) return null;
-    if (coteMinPerSel > 0 && o < coteMinPerSel) return null;
+    if (legRefs.length > 1 && coteMinPerSel > 0 && o < coteMinPerSel) return null;
     combined *= o;
   }
   return combined;
@@ -339,7 +405,7 @@ function legGroupOdds(data: any, legRefs: LegRef[], site: string, coteMinPerSel:
 
 // ===== MISSION CHECKING =====
 
-function checkAllMissions(bets: BetDetail[], opts: EngineOpts): { satisfiedMissions: string[]; obligatoryOk: boolean } {
+function checkAllMissions(data: any, bets: BetDetail[], opts: EngineOpts): { satisfiedMissions: string[]; obligatoryOk: boolean } {
   const satisfiedMissions: string[] = [];
   let obligatoryOk = true;
 
@@ -352,6 +418,15 @@ function checkAllMissions(bets: BetDetail[], opts: EngineOpts): { satisfiedMissi
       let ok = false;
       for (const bet of qualBets) {
         if (mission.coteMin > 0 && bet.odds < mission.coteMin) continue;
+        if (mission.coteMinParSelection > 0 && bet.legs.length > 1) {
+          let legOk = true;
+          for (const lg of bet.legs) {
+            const val = data[lg.eventKey]?.markets?.[lg.marketName]?.[lg.outcomeName]?.[bet.site];
+            const o = getBackOdds(val);
+            if (!o || o < mission.coteMinParSelection) { legOk = false; break; }
+          }
+          if (!legOk) continue;
+        }
         let meetsAmount = false;
         if (mission.montantMode === 'mise_min') {
           meetsAmount = bet.stake >= mission.montant;
@@ -420,7 +495,7 @@ function makeSimultResult(
   data: any,
   betsLegsArray: LegRef[][],
   eventKeys: string[],
-  symmetry: 'sym' | 'asym',
+  symmetry: 'sym' | 'asym' | 'asym-light',
   sitePerGroup: string[],
   opts: EngineOpts
 ): CoveringSetResult | null {
@@ -600,7 +675,7 @@ function makeSimultResult(
     }
   }
 
-  const { satisfiedMissions, obligatoryOk } = checkAllMissions(bets, opts);
+  const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
   if (!obligatoryOk) return null;
 
   const uniqueSites = new Set(sitePerGroup);
@@ -625,7 +700,7 @@ function trySimult(
   data: any,
   betsLegsArray: LegRef[][],
   eventKeys: string[],
-  symmetry: 'sym' | 'asym',
+  symmetry: 'sym' | 'asym' | 'asym-light',
   opts: EngineOpts
 ): CoveringSetResult[] {
   const results: CoveringSetResult[] = [];
@@ -737,7 +812,7 @@ function trySimult(
 
 // ===== SIMULT MAIN LOOP =====
 
-function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string, done: number, total: number) => void): CoveringSetResult[] {
+function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string, done: number, total: number) => void, shard?: ComputeShard): CoveringSetResult[] {
   const topEvents = getTopEvents(data, opts);
   const allEventKeys = Object.keys(data);
 
@@ -751,6 +826,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
   const results: CoveringSetResult[] = [];
   const bestPerCombo = new Map<string, CoveringSetResult>();
   let lastProgressReport = 0;
+  let globalCounter = 0;
 
   for (const n of opts.allowedNLegs) {
     const nStr = n === 1 ? '1 combiné' : `${n} combinés`;
@@ -762,6 +838,8 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
     const eventPool = n === 1 ? allEventKeys : topEvents;
 
     forEachCombo(eventPool, n, combo => {
+      const myIdx = globalCounter++;
+      if (shard && myIdx % shard.count !== shard.index) return;
       doneCombos++;
       const now = Date.now();
       if (now - lastProgressReport >= 50) {
@@ -829,6 +907,32 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
           }
         }
       });
+
+      // Asym-light (only for multi-match): enumerate splits, score cheaply, keep top-M
+      if (opts.allowAsymLight && n > 1) {
+        const MAX_ASYMLIGHT = 20;
+        const allSplits = getAsymLightSplits(data, combo, opts);
+        const scored: Array<{ s: AsymLightSplit; legs: LegRef[][]; score: number }> = [];
+        for (const s of allSplits) {
+          const legs = buildAsymLightLegs(s);
+          const score = scoreLegsArray(data, legs, opts);
+          if (score > 0) scored.push({ s, legs, score });
+        }
+        scored.sort((a, b) => b.score - a.score);
+        for (const { s, legs } of scored.slice(0, MAX_ASYMLIGHT)) {
+          const anchorKey = combo[s.anchorIdx];
+          const orderedKeys = [anchorKey, ...combo.filter((_, i) => i !== s.anchorIdx)];
+          const alCoverKey = legs
+            .map(group => group.map(l => l.marketName + ':' + l.outcomeName).sort().join('+'))
+            .sort().join('||');
+          const alResults = trySimult(data, legs, orderedKeys, 'asym-light', opts);
+          for (const r of alResults) {
+            const key = comboKey + '|asym-light|' + s.anchorIdx + '|' + alCoverKey + '|' + r.placement;
+            const prev = bestPerCombo.get(key);
+            if (!prev || r.rate > prev.rate) bestPerCombo.set(key, r);
+          }
+        }
+      }
     });
   }
 
@@ -837,7 +941,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
 
 // ===== SEQUENTIAL COMPUTATION =====
 
-function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, done: number, total: number) => void): CoveringSetResult[] {
+function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, done: number, total: number) => void, shard?: ComputeShard): CoveringSetResult[] {
   const obligSites = getObligatorySites(opts);
   const sitesToUse = obligSites.length > 0 ? obligSites
     : opts.betType === 'fb' ? getFreebetEligibleSites(opts)
@@ -852,6 +956,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
   }
 
   const results: CoveringSetResult[] = [];
+  let seqCounter = 0;
 
   for (const n of opts.allowedNLegs.filter(x => x >= 2 && x <= 3)) {
     const nStr = n === 1 ? '1 combiné' : `${n} combinés`;
@@ -875,7 +980,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 { legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName }], site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
               ];
 
-              const { satisfiedMissions, obligatoryOk } = checkAllMissions(bets, opts);
+              const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
               if (!obligatoryOk) continue;
               results.push({
                 timing: 'seq', placement: cover.site === site ? 'uni' : 'multi', symmetry: 'sym',
@@ -896,7 +1001,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 { legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName }], site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
               ];
 
-              const { satisfiedMissions, obligatoryOk } = checkAllMissions(bets, opts);
+              const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
               if (!obligatoryOk) continue;
               results.push({
                 timing: 'seq', placement: cover.site === site ? 'uni' : 'multi', symmetry: 'sym',
@@ -917,6 +1022,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
           .slice(0, TOP_SEQ);
 
         const trySeqCombo = (legList: Leg[]) => {
+          if (opts.coteMinParSelection > 0 && legList.some(l => l.b < opts.coteMinParSelection)) return;
           // Classify symmetry: sym if all principal legs use the same market type, asym otherwise
           const marketTypes = new Set(legList.map(l => norm(l.marketName)));
           const symmetry: 'sym' | 'asym' = marketTypes.size === 1 ? 'sym' : 'asym';
@@ -950,7 +1056,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               kPrev *= leg.bestK;
             }
 
-            const { satisfiedMissions, obligatoryOk } = checkAllMissions(bets, opts);
+            const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
             if (!obligatoryOk) return;
             const uniqueSites = new Set(bets.map(b => b.site));
             results.push({
@@ -981,7 +1087,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               });
             }
 
-            const { satisfiedMissions, obligatoryOk } = checkAllMissions(bets, opts);
+            const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
             if (!obligatoryOk) return;
             const uniqueSites = new Set(bets.map(b => b.site));
             results.push({
@@ -1001,6 +1107,8 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const l2 = pool[j];
               if (!l2.dateTime || !l1.dateTime || l2.dateTime <= l1.dateTime) continue;
               if (l2.dateTime - l1.dateTime < MIN_GAP_MS) continue;
+              const idx = seqCounter++;
+              if (shard && idx % shard.count !== shard.index) continue;
               trySeqCombo([l1, l2]);
             }
           }
@@ -1017,6 +1125,8 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 const l3 = pool[m];
                 if (!l3.dateTime || l3.dateTime <= l2.dateTime) continue;
                 if (l3.dateTime - l2.dateTime < MIN_GAP_MS) continue;
+                const idx = seqCounter++;
+                if (shard && idx % shard.count !== shard.index) continue;
                 trySeqCombo([l1, l2, l3]);
               }
             }
@@ -1031,14 +1141,21 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
 
 // ===== MAIN EXPORT =====
 
-export function compute(data: any, opts: EngineOpts, onProgress?: (detail: string, done: number, total: number) => void): AllResults {
+export interface ComputeShard { index: number; count: number }
+
+export function compute(
+  data: any,
+  opts: EngineOpts,
+  onProgress?: (detail: string, done: number, total: number) => void,
+  shard?: ComputeShard,
+): AllResults {
   const results: CoveringSetResult[] = [];
 
   if (opts.allowSimult) {
-    results.push(...computeSimult(data, opts, onProgress));
+    results.push(...computeSimult(data, opts, onProgress, shard));
   }
   if (opts.allowSeq) {
-    results.push(...computeSeq(data, opts, onProgress));
+    results.push(...computeSeq(data, opts, onProgress, shard));
   }
 
   return results.sort((a, b) => b.profit - a.profit);

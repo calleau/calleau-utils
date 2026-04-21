@@ -11,7 +11,7 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
   if (msg.type !== 'compute') return;
 
   cancelled = false;
-  const { data, opts } = msg.payload;
+  const { data, opts, shard } = msg.payload;
 
   post({ type: 'progress', label: 'Analyse des données…', detail: '', pct: 5 });
 
@@ -21,7 +21,7 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
     if (cancelled) return;
     const pct = total > 0 ? Math.round(5 + (done / total) * 88) : 50;
     post({ type: 'progress', label: 'Calcul en cours…', detail, pct, done, total });
-  });
+  }, shard);
 
   if (cancelled) { post({ type: 'cancelled' }); return; }
 
