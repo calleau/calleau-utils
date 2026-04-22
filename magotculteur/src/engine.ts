@@ -862,7 +862,8 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
         if (opts.allowSym) {
           const symResults = trySimult(data, betsLegsArray, combo, 'sym', opts);
           for (const r of symResults) {
-            const key = comboKey + '|' + coverKey + '|sym|' + r.placement;
+            const sitesKey = r.bets.map(b => b.site).join('+');
+            const key = comboKey + '|' + coverKey + '|sym|' + r.placement + '|' + sitesKey;
             const prev = bestPerCombo.get(key);
             if (!prev || r.rate > prev.rate) bestPerCombo.set(key, r);
           }
@@ -898,7 +899,8 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
                   .sort().join('||');
                 const asymResults = trySimult(data, asymLegsArray, [ekS, ...ekCs], 'asym', opts);
                 for (const r of asymResults) {
-                  const key = comboKey + '|asym|' + si + '|' + asymCoverKey + '|' + r.placement;
+                  const sitesKey = r.bets.map(b => b.site).join('+');
+                  const key = comboKey + '|asym|' + si + '|' + asymCoverKey + '|' + r.placement + '|' + sitesKey;
                   const prev = bestPerCombo.get(key);
                   if (!prev || r.rate > prev.rate) bestPerCombo.set(key, r);
                 }
@@ -927,7 +929,8 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
             .sort().join('||');
           const alResults = trySimult(data, legs, orderedKeys, 'asym-light', opts);
           for (const r of alResults) {
-            const key = comboKey + '|asym-light|' + s.anchorIdx + '|' + alCoverKey + '|' + r.placement;
+            const sitesKey = r.bets.map(b => b.site).join('+');
+            const key = comboKey + '|asym-light|' + s.anchorIdx + '|' + alCoverKey + '|' + r.placement + '|' + sitesKey;
             const prev = bestPerCombo.get(key);
             if (!prev || r.rate > prev.rate) bestPerCombo.set(key, r);
           }
