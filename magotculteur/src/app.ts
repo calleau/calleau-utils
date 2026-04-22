@@ -250,11 +250,18 @@ function resultAllOdds(r: CoveringSetResult): number[] {
   return r.bets.map(b => b.odds);
 }
 
-function resultOddsRange(r: CoveringSetResult): string {
-  const odds = resultAllOdds(r);
-  if (!odds.length) return '—';
+function resultOddsFor(r: CoveringSetResult, role: 'principal' | 'cover'): number[] {
+  return r.bets.filter(b => b.role === role).map(b => b.odds);
+}
+
+function formatOddsRange(odds: number[]): string {
+  if (!odds.length) return '–';
   const mn = Math.min(...odds), mx = Math.max(...odds);
   return Math.abs(mx - mn) < 0.01 ? fmt(mn) : `${fmt(mn)}\u2013${fmt(mx)}`;
+}
+
+function resultOddsRange(r: CoveringSetResult): string {
+  return formatOddsRange(resultAllOdds(r));
 }
 
 function resultProfitDisplay(r: CoveringSetResult): { cls: string; text: string } {
@@ -340,10 +347,21 @@ const COL_FILTER_DEFS: Record<string, any> = {
     label: 'Cash engagé',
     getValue: (r: CoveringSetResult) => r.totalCash,
   },
-  cote: {
+  coteOblig: {
     type: 'num',
-    label: 'Cote min',
-    getValue: (r: CoveringSetResult) => Math.min(...r.bets.map(b => b.odds)),
+    label: 'Cote min (sites oblig.)',
+    getValue: (r: CoveringSetResult) => {
+      const odds = resultOddsFor(r, 'principal');
+      return odds.length ? Math.min(...odds) : Infinity;
+    },
+  },
+  coteAutres: {
+    type: 'num',
+    label: 'Cote min (autres)',
+    getValue: (r: CoveringSetResult) => {
+      const odds = resultOddsFor(r, 'cover');
+      return odds.length ? Math.min(...odds) : Infinity;
+    },
   },
   result: {
     type: 'num',
@@ -477,7 +495,8 @@ function buildTableRow(r: CoveringSetResult, idx: number): string {
     <div class="ff-td ff-td-muted ff-td-events">${resultMarketsHtml(r)}</div>
     <div class="ff-td ff-td-center">${r.bets.length}</div>
     <div class="ff-td ff-td-mono">${esc(cashStr)}</div>
-    <div class="ff-td ff-td-mono">${esc(resultOddsRange(r))}</div>
+    <div class="ff-td ff-td-mono">${esc(formatOddsRange(resultOddsFor(r, 'principal')))}</div>
+    <div class="ff-td ff-td-mono">${esc(formatOddsRange(resultOddsFor(r, 'cover')))}</div>
     <div class="ff-td ff-td-mono ${profitCls}">${profitText}</div>
     <div class="ff-td ${rc} ff-td-bold">${fmt(r.rate * 100, 1)}\u00a0%</div>
     <div class="ff-tr-detail" id="ff-detail-${idx}" hidden>${buildDetailContent(r)}</div>`;
@@ -550,7 +569,8 @@ function renderPage() {
     <div class="ff-th">Marchés</div>
     ${thFilter('paris', 'Paris', 'ff-th-center')}
     ${thFilter('cash', 'Cash engagé')}
-    ${thFilter('cote', 'Cotes')}
+    ${thFilter('coteOblig', 'Cotes oblig.')}
+    ${thFilter('coteAutres', 'Cotes autres')}
     ${thFilter('result', 'Résultat')}
     ${thFilter('taux', 'Taux')}`;
 
