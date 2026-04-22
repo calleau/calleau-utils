@@ -352,7 +352,7 @@ const COL_FILTER_DEFS: Record<string, any> = {
     label: 'Cote min (sites oblig.)',
     getValue: (r: CoveringSetResult) => {
       const odds = resultOddsFor(r, 'principal');
-      return odds.length ? Math.min(...odds) : Infinity;
+      return odds.length ? Math.min(...odds) : null;
     },
   },
   coteAutres: {
@@ -360,7 +360,7 @@ const COL_FILTER_DEFS: Record<string, any> = {
     label: 'Cote min (autres)',
     getValue: (r: CoveringSetResult) => {
       const odds = resultOddsFor(r, 'cover');
-      return odds.length ? Math.min(...odds) : Infinity;
+      return odds.length ? Math.min(...odds) : null;
     },
   },
   result: {
@@ -569,8 +569,8 @@ function renderPage() {
     <div class="ff-th">Marchés</div>
     ${thFilter('paris', 'Paris', 'ff-th-center')}
     ${thFilter('cash', 'Cash engagé')}
-    ${thFilter('coteOblig', 'Cotes oblig.')}
-    ${thFilter('coteAutres', 'Cotes autres')}
+    ${thFilter('coteOblig', 'Cotes oblig.', 'ff-th-center')}
+    ${thFilter('coteAutres', 'Cotes autres', 'ff-th-center')}
     ${thFilter('result', 'Résultat')}
     ${thFilter('taux', 'Taux')}`;
 
