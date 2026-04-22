@@ -1358,4 +1358,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('keydown', e => {
     if ((e as KeyboardEvent).key === 'Escape') closeColFilterPopover();
   });
+
+  // Footer version + widget versions précédentes
+  const w = window as any;
+  const footerVersion = document.getElementById('footer-version');
+  if (footerVersion && w.CURRENT_VERSION) footerVersion.textContent = w.CURRENT_VERSION;
+
+  const versionsWidget = document.getElementById('versions-widget');
+  const versionsBtn = document.getElementById('versions-btn');
+  const versionsDropdown = document.getElementById('versions-dropdown');
+  let versionsLoaded = false;
+  if (versionsBtn && versionsDropdown && versionsWidget) {
+    versionsBtn.addEventListener('click', () => {
+      const isOpen = !(versionsDropdown as any).hidden;
+      (versionsDropdown as any).hidden = isOpen;
+      if (isOpen || versionsLoaded) return;
+      versionsLoaded = true;
+      const versions: string[] = w.AVAILABLE_VERSIONS || [];
+      if (versions.length === 0) {
+        versionsDropdown.innerHTML = '<p class="versions-msg">Aucune version disponible</p>';
+      } else {
+        versionsDropdown.innerHTML =
+          '<p class="versions-header">Versions précédentes</p>' +
+          versions.map(v =>
+            `<a href="${v}/index.html" class="version-link">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              ${v}
+            </a>`
+          ).join('');
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!versionsWidget.contains(e.target as Node)) (versionsDropdown as any).hidden = true;
+    });
+  }
 });

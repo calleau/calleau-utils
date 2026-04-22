@@ -8,6 +8,7 @@
 	<link rel="stylesheet" href="../theme.css" />
 	<link rel="stylesheet" href="magotculteur.css" />
 	<script src="../theme-toggle.js"></script>
+	<script src="versions.js"></script>
 </head>
 
 <body>
@@ -200,7 +201,7 @@
 		</div>
 
 		<footer class="page-footer">
-			<span class="footer-version">v6.0.13</span>
+			<span class="footer-version" id="footer-version">v6.0.13</span>
 			<button id="ff-debug-btn" class="ff-debug-btn" onclick="toggleDebug()" title="Mode debug">
 				<img id="ff-debug-icon-off" class="ff-debug-icon" width="12" height="12" alt="" />
 				<img id="ff-debug-icon-on" class="ff-debug-icon" width="12" height="12" alt="" hidden />
@@ -210,7 +211,19 @@
 
 	</div>
 
-	<div id="floating-actions"></div>
+	<div id="floating-actions">
+		<div id="versions-widget">
+			<button id="versions-btn" class="btn-versions-toggle" aria-label="Versions précédentes" title="Versions précédentes">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>
+				</svg>
+			</button>
+			<div id="versions-dropdown" class="versions-dropdown" hidden>
+				<p class="versions-msg">Chargement…</p>
+			</div>
+		</div>
+	</div>
 
 	<!-- Popover filtre colonne -->
 	<div id="ff-col-filter-popover" hidden></div>

@@ -10,46 +10,31 @@
 	--c-secondary: #FFFCEF;
 	--c-tertiary: #C07850;
 
-    /* ── Sites ──────────────────────────────────────────────────────── */
-    --site-betclic-text: #ffffff;
-    --site-betclic-bg: #d2161e;
+	/* Sites */
+	--site-piwi-bg:          #172530;
+	--site-piwi-text:        #539afb;
+	--site-piwi-lay:         #fbcc04;
 
-    --site-betify-text: #101112;
-    --site-betify-bg: #1ed760;
+	--site-olybet-bg:        #ffffff;
+	--site-olybet-text:      #f73535;
 
-    --site-betsson-text: #ff6600;
-    --site-betsson-bg: #111576;
+	--site-betclic-bg:       #d2161e;
+	--site-betclic-text:     #ffffff;
 
-    --site-bwin-text: #333;
-    --site-bwin-bg: #ffcc00;
+	--site-winamax-bg:       #000000;
+	--site-winamax-text:     #eb2222;
 
-    --site-daznbet-text: #080808;
-    --site-daznbet-bg: #f5ff08;
+	--site-bwin-bg:          #ffcc00;
+	--site-bwin-text:        #333333;
 
-    --site-feelingbet-text: #fdd435;
-    --site-feelingbet-bg: #8f004f;
+	--site-unibet-bg:        #307f2d;
+	--site-unibet-text:      #ffffff;
 
-    --site-olybet-text: #f73535;
-    --site-olybet-bg: #ffffff;
+	--site-feelingbet-bg:    #8f004f;
+	--site-feelingbet-text:  #fdd435;
 
-    --site-piwix-text: #539afb;
-    --site-piwix-lay: #fbcc04;
-    --site-piwix-bg: #172530;
-
-    --site-pmu-text: #ffdc82;
-    --site-pmu-bg: #005049;
-
-    --site-pokerstars-text: #000000;
-    --site-pokerstars-bg: #d70022;
-
-    --site-unibet-text: #ffffff;
-    --site-unibet-bg: #307f2d;
-
-    --site-vbet-text: #fff;
-    --site-vbet-bg: #d93093;
-
-    --site-winamax-text: #eb2222;
-    --site-winamax-bg: #000000;
+	--site-pokerstars-bg:    #d70022;
+	--site-pokerstars-text:  #000000;
 }
 
 /* =========================================================
@@ -451,81 +436,6 @@ input[type="number"] { -moz-appearance: textfield; }
 	flex-direction: column;
 	align-items: center;
 	gap: 0.8rem;
-}
-
-/* =========================================================
-   Widget « versions précédentes » — partagé
-   ========================================================= */
-#versions-widget { position: relative; }
-
-.btn-versions-toggle {
-	width: 2.5rem;
-	height: 2.5rem;
-	border-radius: 50%;
-	border: 1px solid var(--color-divider);
-	background: var(--color-surface);
-	color: var(--color-text);
-	cursor: pointer;
-	display: grid;
-	place-items: center;
-	transition: background 0.2s, color 0.2s;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.btn-versions-toggle:hover {
-	background: var(--color-surface-2);
-	color: var(--color-text);
-}
-
-.versions-dropdown {
-	position: absolute;
-	right: 0;
-	top: calc(100% + 0.5rem);
-	min-width: 170px;
-	background: var(--color-surface);
-	border: 1px solid var(--color-divider);
-	border-radius: 10px;
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-	overflow: hidden;
-}
-
-.versions-header {
-	font-size: 0.65rem;
-	font-weight: 700;
-	letter-spacing: 0.12em;
-	text-transform: uppercase;
-	color: var(--color-muted);
-	padding: 0.7rem 1rem 0.5rem;
-	border-bottom: 1px solid var(--color-divider);
-	margin: 0;
-}
-
-.version-link {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	padding: 0.6rem 1rem;
-	font-family: 'DM Mono', monospace;
-	font-size: 0.875rem;
-	color: var(--color-text);
-	text-decoration: none;
-	border-bottom: 1px solid var(--color-divider);
-	transition: background 0.15s, color 0.15s;
-}
-
-.version-link:last-child { border-bottom: none; }
-
-.version-link:hover {
-	background: var(--color-surface-2);
-	color: var(--c-primary);
-	text-decoration: none;
-}
-
-.versions-msg {
-	padding: 0.7rem 1rem;
-	font-size: 0.85rem;
-	color: var(--color-muted);
-	margin: 0;
 }
 
 /* =========================================================
