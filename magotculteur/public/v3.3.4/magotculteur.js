@@ -1956,7 +1956,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 	// Chargement obligatoire des règles de couverture
 	try {
-		const r = await fetch('../assets/coverage-rules.json');
+		const r = await fetch('../../assets/coverage-rules.json');
 		if (!r.ok) throw new Error(`HTTP ${r.status}`);
 		_coverageRules = await r.json();
 	} catch (e) {
