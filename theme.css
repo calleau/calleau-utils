@@ -806,3 +806,51 @@ input[type="number"] { -moz-appearance: textfield; }
 	font-size: 0.78rem;
 	color: var(--color-muted);
 }
+
+/* Site pills */
+
+.ff-site-pill {
+	display: inline-block;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	padding: 1px 7px;
+	border-radius: 4px;
+	background: var(--color-surface-2);
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+.ff-site-pill[data-site="betclic"] { background: var(--site-betclic-bg); color: var(--site-betclic-text); }
+.ff-site-pill[data-site="betify"] { background: var(--site-betify-bg); color: var(--site-betify-text); }
+.ff-site-pill[data-site="betsson"] { background: var(--site-betsson-bg); color: var(--site-betsson-text); }
+.ff-site-pill[data-site="bwin"] { background: var(--site-bwin-bg); color: var(--site-bwin-text); }
+.ff-site-pill[data-site="daznbet"] { background: var(--site-daznbet-bg); color: var(--site-daznbet-text); }
+.ff-site-pill[data-site="feelingbet"] { background: var(--site-feelingbet-bg); color: var(--site-feelingbet-text); }
+.ff-site-pill[data-site="olybet"] { background: var(--site-olybet-bg); color: var(--site-olybet-text); }
+.ff-site-pill[data-site="piwix"] { background: var(--site-piwix-bg); color: var(--site-piwix-text); }
+.ff-site-pill[data-site="piwix"].ff-site-pill--lay { color: var(--site-piwix-lay); }
+.ff-site-pill[data-site="pmu"] { background: var(--site-pmu-bg); color: var(--site-pmu-text); }
+.ff-site-pill[data-site="pokerstars"] { background: var(--site-pokerstars-bg); color: var(--site-pokerstars-text); }
+.ff-site-pill[data-site="unibet"] { background: var(--site-unibet-bg); color: var(--site-unibet-text); }
+.ff-site-pill[data-site="vbet"] { background: var(--site-vbet-bg); color: var(--site-vbet-text); }
+.ff-site-pill[data-site="winamax"] { background: var(--site-winamax-bg); color: var(--site-winamax-text); }
+
+/* Mise type tag */
+
+.ff-mise-tag {
+	display: inline-block;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 0.62rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	padding: 1px 6px;
+	border-radius: 3px;
+	vertical-align: middle;
+}
+
+.ff-mise-tag--fb   { background: rgba(42, 157, 106, 0.18); color: var(--color-pos); }
+.ff-mise-tag--cash { background: rgba(251, 204, 4,  0.22); color: #a07800; }
+
+:root[data-theme="dark"] .ff-mise-tag--cash { color: #f0c030; }
