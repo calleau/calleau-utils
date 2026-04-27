@@ -1,0 +1,158 @@
+/* =========================================================
+   Welcome Bonus (JSON) — styles spécifiques
+   ========================================================= */
+
+.title-badge {
+	display: inline-block;
+	font-size: 0.7em;
+	font-weight: 600;
+	padding: 0.15em 0.5em;
+	margin-left: 0.4em;
+	border-radius: 999px;
+	background: var(--c-primary);
+	color: white;
+	vertical-align: middle;
+}
+
+/* Section JSON */
+.wbj-json-section {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.wbj-json-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.wbj-label {
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.wbj-textarea {
+	width: 100%;
+	min-height: 100px;
+	max-height: 240px;
+	padding: 0.6rem 0.8rem;
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 0.78rem;
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	background: var(--color-bg);
+	color: var(--color-text);
+	resize: vertical;
+}
+
+.wbj-textarea:focus {
+	outline: none;
+	border-color: var(--c-primary);
+}
+
+.wbj-json-error {
+	color: #c0392b;
+	font-size: 0.85rem;
+	margin: 0;
+}
+
+.wbj-paste-btn {
+	font-size: 0.85rem;
+	padding: 0.3rem 0.7rem;
+}
+
+/* Sélection d'événements */
+.wbj-events-card {
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	padding: 0.9rem 1rem;
+	background: var(--color-bg);
+	margin-bottom: 1rem;
+}
+
+.wbj-events-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 0.6rem;
+}
+
+.wbj-events-title {
+	font-weight: 600;
+	font-size: 0.95rem;
+}
+
+.wbj-events-count {
+	font-size: 0.8rem;
+	color: var(--color-text-muted, #888);
+}
+
+.wbj-events-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	max-height: 280px;
+	overflow-y: auto;
+}
+
+.wbj-event-row {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.4rem 0.6rem;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.wbj-event-row:hover {
+	background: var(--color-bg-alt, #f6f6f6);
+}
+
+.wbj-event-row input[type="checkbox"] {
+	margin: 0;
+	cursor: pointer;
+}
+
+.wbj-event-row.disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.wbj-event-row.disabled:hover {
+	background: transparent;
+}
+
+.wbj-event-name {
+	font-size: 0.9rem;
+	flex: 1;
+}
+
+.wbj-event-meta {
+	font-size: 0.75rem;
+	color: var(--color-text-muted, #888);
+}
+
+.wbj-events-empty {
+	font-size: 0.85rem;
+	color: var(--color-text-muted, #888);
+	margin: 0;
+}
+
+/* Read-only odds cells */
+.og-cell-readonly {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 32px;
+	font-variant-numeric: tabular-nums;
+	font-size: 0.85rem;
+	color: var(--color-text);
+}
+
+.og-cell-readonly.empty {
+	color: var(--color-text-muted, #aaa);
+}

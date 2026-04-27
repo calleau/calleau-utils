@@ -1,17 +1,60 @@
 {
+    "Betclic": {
+        "taux_fb": 0.85
+    },
+    "Betify": {
+        "fb_splitable": false,
+        "default_welcomebonus": null
+    },
+    "Betsson": {
+    },
+    "bwin": {
+        "fb_splitable": false
+    },
+    "Daznbet": {
+    },
+    "Feelingbet": {
+        "default_welcomebonus": {
+            "max_bonus": 50
+        }
+    },
+    "OlyBet": {
+        "default_welcomebonus": {
+            "max_bonus": 50
+        }
+    },
     "PIWIx": {
         "type": "Exchange",
         "has_fb": false
     },
-    "Betify": {
-        "fb_splitable": false
-    },
     "PMU": {
-        "fb_splitable": false
+        "fb_splitable": false,
+        "default_welcomebonus": {
+            "type": "cash"
+        }
+    },
+    "Pokerstars": {
+    },
+    "Unibet": {
+        "taux_fb": 0.85
+    },
+    "VBET": {
+    },
+    "Winamax": {
+        "default_welcomebonus": {
+            "type": "cash"
+        },
+        "taux_fb": 0.8
     },
     "default": {
         "type": "Bookmaker",
         "has_fb": true,
-        "fb_splitable": true
+        "fb_splitable": true,
+        "default_welcomebonus": {
+            "max_bonus": 100,
+            "type": "fb",
+            "mission": "bet_perdu"
+        },
+        "taux_fb": 0.7
     }
 }

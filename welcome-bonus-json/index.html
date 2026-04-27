@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Bonus de bienvenue (JSON)</title>
+	<link rel="stylesheet" href="../theme.css" />
+	<link rel="stylesheet" href="../welcome-bonus/welcome-bonus.css" />
+	<link rel="stylesheet" href="welcome-bonus-json.css" />
+	<script src="../theme-toggle.js"></script>
+</head>
+
+<body>
+	<div class="wrap">
+
+		<header class="toolbar">
+			<a href="../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Bonus de bienvenue <span class="title-badge">JSON</span></h1>
+		</header>
+
+		<!-- 1. Données JSON -->
+		<section class="wbj-json-section">
+			<div class="wbj-json-header">
+				<label class="wbj-label" for="wbj-json">Données JSON (Betxtractor)</label>
+				<button class="btn btn-ghost wbj-paste-btn" onclick="pasteFromClipboard()">Coller</button>
+			</div>
+			<textarea id="wbj-json" class="wbj-textarea"
+				placeholder="Coller votre JSON ici…"
+				oninput="onJsonChange()" spellcheck="false"></textarea>
+			<p id="wbj-json-error" class="wbj-json-error" hidden></p>
+		</section>
+
+		<!-- 2. Sélection d'événements -->
+		<section id="events-container" hidden></section>
+
+		<!-- 3. Configuration des bookmakers (auto-rempli) -->
+		<section id="bookies-container" hidden></section>
+
+		<!-- 4. Grille des cotes (lecture seule, depuis JSON) -->
+		<section id="odds-container" hidden></section>
+
+		<button class="btn btn-primary btn-calc" id="btn-calc" onclick="calculate()" disabled>Calculer les mises</button>
+
+		<div id="results" style="display:none">
+			<div id="error-container"></div>
+			<div id="results-tabs-wrapper" hidden>
+				<div class="results-tabs" role="tablist">
+					<button class="results-tab results-tab--active" onclick="switchTab('combos')" role="tab">Combinaisons</button>
+					<button class="results-tab" onclick="switchTab('result')" role="tab">Résultat</button>
+				</div>
+				<div id="tab-combos" class="results-tab-panel">
+					<div id="combos-container"></div>
+				</div>
+				<div id="tab-result" class="results-tab-panel" hidden>
+					<div id="gain-banner"></div>
+					<div id="stakes-grid" class="stakes-grid"></div>
+					<div id="breakdown-container"></div>
+				</div>
+			</div>
+		</div>
+
+		<footer class="page-footer">
+			<span class="footer-version">Bonus de bienvenue (JSON) — v1.0</span>
+		</footer>
+
+	</div>
+
+	<script src="welcome-bonus-json.js"></script>
+</body>
+
+</html>
