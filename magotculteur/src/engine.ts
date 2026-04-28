@@ -124,11 +124,23 @@ function matchBetSpec(spec: BetSpec, marketName: string, outcomeName: string): R
   return bindings;
 }
 
-function resolveCoverSpec(spec: BetSpec, bindings: Record<string, string>): { market: string; issue: string; betType: string } | null {
-  if (isRegexStr(spec.market)) return null;
+function resolveCoverSpec(spec: BetSpec, bindings: Record<string, string>): { market: string; issue: string; betType: 'Back' | 'Lay' } | null {
+  if (isRegexStr(spec.market) || isRegexStr(spec.issue)) return null;
   const market = resolveTemplate(spec.market, bindings);
   const issue = resolveTemplate(spec.issue, bindings);
   return (market && issue) ? { market, issue, betType: spec.betType } : null;
+}
+
+function hasPrice(oddsMap: any, betType: 'Back' | 'Lay'): boolean {
+  for (const val of Object.values(oddsMap || {})) {
+    if (betType === 'Back') {
+      const o = getBackOdds(val);
+      if (o && o > 1) return true;
+    } else {
+      if (getLayInfo(val)) return true;
+    }
+  }
+  return false;
 }
 
 function findMarketEntry(markets: any, marketName: string): [string, any] | null {
@@ -147,7 +159,7 @@ function findOutcomeEntry(market: any, outcomeName: string): [string, any] | nul
 
 // ===== COVER SEARCH (for sequential method) =====
 
-function findCoversForOutcome(event: any, mainMarketName: string, mainOutcomeName: string, site: string, opts: EngineOpts): Cover[] {
+function findCoversForOutcome(event: any, mainMarketName: string, mainOutcomeName: string, mainBetType: 'Back' | 'Lay', site: string, opts: EngineOpts): Cover[] {
   const covers: Cover[] = [];
   const seen = new Set<string>();
   for (const rule of opts.coverageRules) {
@@ -156,7 +168,7 @@ function findCoversForOutcome(event: any, mainMarketName: string, mainOutcomeNam
     for (const sideAKey of sideKeys) {
       const sideBKey = sideKeys.find(k => k !== sideAKey)!;
       for (const opt of rule[sideAKey]!) {
-        if (opt.betType !== 'Back') continue;
+        if (opt.betType !== mainBetType) continue;
         const bindings = matchBetSpec(opt, mainMarketName, mainOutcomeName);
         if (!bindings) continue;
         for (const coverOpt of rule[sideBKey]!) {
@@ -206,13 +218,34 @@ function collectLegsForSite(data: any, site: string, opts: EngineOpts): Leg[] {
         if (!oddsMap || typeof oddsMap !== 'object' || Array.isArray(oddsMap)) continue;
         const fbVal = oddsMap[site];
         if (fbVal == null) continue;
+
+        // Back principal candidate
         const b = getBackOdds(fbVal);
-        if (!b || b <= 1) continue;
-        if (opts.coteMin > 0 && b < opts.coteMin) continue;
-        const covers = findCoversForOutcome(event, marketName, outcomeName, site, opts);
-        if (!covers.length) continue;
-        const bestCover = covers.reduce((best, cov) => cov.k < best.k ? cov : best);
-        legs.push({ eventKey, evName, evDate, evComp, dateTime, marketName, outcomeName, b, covers, bestCover, bestK: bestCover.k });
+        if (b && b > 1 && (opts.coteMin <= 0 || b >= opts.coteMin)) {
+          const covers = findCoversForOutcome(event, marketName, outcomeName, 'Back', site, opts);
+          if (covers.length) {
+            const bestCover = covers.reduce((best, cov) => cov.k < best.k ? cov : best);
+            legs.push({ eventKey, evName, evDate, evComp, dateTime, marketName, outcomeName, betType: 'Back', b, layInfo: null, covers, bestCover, bestK: bestCover.k });
+          }
+        }
+
+        // Lay principal candidate (only when site is an exchange exposing lay odds).
+        // For seq math we want T = opts.amount × leg.b / cover.k — this requires
+        // leg.b = (lGross - c) for a Lay principal (vs. odds for a Back).
+        // Lay principals are cash-only (skipped in fb mode).
+        if (opts.betType !== 'fb') {
+          const lay = getLayInfo(fbVal);
+          if (lay) {
+            const bForSeq = lay.lGross - lay.c;
+            if (isFinite(bForSeq) && bForSeq > 1 && (opts.coteMin <= 0 || lay.lNet >= opts.coteMin)) {
+              const covers = findCoversForOutcome(event, marketName, outcomeName, 'Lay', site, opts);
+              if (covers.length) {
+                const bestCover = covers.reduce((best, cov) => cov.k < best.k ? cov : best);
+                legs.push({ eventKey, evName, evDate, evComp, dateTime, marketName, outcomeName, betType: 'Lay', b: bForSeq, layInfo: lay, covers, bestCover, bestK: bestCover.k });
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -221,33 +254,84 @@ function collectLegsForSite(data: any, site: string, opts: EngineOpts): Leg[] {
 
 // ===== COVER SET GENERATORS =====
 
-function ruleSideBackLeg(rule: CoverageRule, sideKey: 'A' | 'B' | 'C', event: any, eventKey: string): LegRef | null {
-  for (const opt of (rule[sideKey] || [])) {
-    if (opt.betType !== 'Back') continue;
-    for (const [marketName, market] of Object.entries(event.markets || {}) as [string, any][]) {
-      for (const [outcomeName] of Object.entries(market)) {
-        if (matchBetSpec(opt, marketName, outcomeName))
-          return { eventKey, marketName, outcomeName };
-      }
-    }
-  }
-  return null;
-}
-
+// Build covering sets for an event, supporting both literal rules (rule#1..#5)
+// and template/regex rules (rule#6..#7, wildcard). Strategy: try each side as
+// "anchor". An anchor opt with a directly-matchable spec is matched against
+// every market/outcome of the event, producing bindings. All sides then
+// resolve their alternatives (literal-or-template, via resolveCoverSpec) from
+// those bindings, including the anchor side itself (the anchor leg is added
+// directly). Cartesian product gives the covering sets; sorted (betType,market,
+// outcome) keys dedupe across anchors.
 function getCoverSets(data: any, eventKey: string, opts: EngineOpts): LegRef[][][] {
   const event = data[eventKey];
   if (!event) return [];
   const sets: LegRef[][][] = [];
   const seen = new Set<string>();
+
   for (const rule of opts.coverageRules) {
     const sideKeys = (['A', 'B', 'C'] as const).filter(k => rule[k]);
     if (sideKeys.length < 2) continue;
-    const legs = sideKeys.map(k => ruleSideBackLeg(rule, k, event, eventKey));
-    if (legs.some(l => !l)) continue;
-    const key = (legs as LegRef[]).map(l => l.marketName + ':' + l.outcomeName).sort().join('|');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    sets.push((legs as LegRef[]).map(l => [l]));
+
+    for (const anchorKey of sideKeys) {
+      for (const anchorOpt of rule[anchorKey]!) {
+        // The anchor opt must be directly matchable (not template-only).
+        // matchBetSpec returns null for opts with $-templates that aren't regex.
+        for (const [marketName, market] of Object.entries(event.markets || {}) as [string, any][]) {
+          for (const [outcomeName, oddsMap] of Object.entries(market) as [string, any][]) {
+            if (!oddsMap || typeof oddsMap !== 'object' || Array.isArray(oddsMap)) continue;
+            const bindings = matchBetSpec(anchorOpt, marketName, outcomeName);
+            if (!bindings) continue;
+            if (!hasPrice(oddsMap, anchorOpt.betType)) continue;
+
+            // Build per-side alternatives using these bindings.
+            const sideAlts: LegRef[][] = [];
+            let valid = true;
+            for (const sk of sideKeys) {
+              const alts: LegRef[] = [];
+              const seenLeg = new Set<string>();
+              const pushLeg = (mName: string, oName: string, betType: 'Back' | 'Lay') => {
+                const key = `${betType}:${mName}:${oName}`;
+                if (seenLeg.has(key)) return;
+                seenLeg.add(key);
+                alts.push({ eventKey, marketName: mName, outcomeName: oName, betType });
+              };
+              for (const opt of rule[sk]!) {
+                if (sk === anchorKey && opt === anchorOpt) {
+                  pushLeg(marketName, outcomeName, opt.betType);
+                  continue;
+                }
+                const resolved = resolveCoverSpec(opt, bindings);
+                if (!resolved) continue;
+                const mEntry = findMarketEntry(event.markets || {}, resolved.market);
+                if (!mEntry) continue;
+                const oEntry = findOutcomeEntry(mEntry[1], resolved.issue);
+                if (!oEntry) continue;
+                if (!hasPrice(oEntry[1], resolved.betType)) continue;
+                pushLeg(mEntry[0], oEntry[0], resolved.betType);
+              }
+              if (!alts.length) { valid = false; break; }
+              sideAlts.push(alts);
+            }
+            if (!valid) continue;
+
+            // Cartesian product over per-side alternatives
+            let combos: LegRef[][] = [[]];
+            for (const alts of sideAlts) {
+              const next: LegRef[][] = [];
+              for (const prev of combos)
+                for (const leg of alts) next.push([...prev, leg]);
+              combos = next;
+            }
+            for (const legs of combos) {
+              const key = legs.map(l => `${l.betType}:${l.marketName}:${l.outcomeName}`).sort().join('|');
+              if (seen.has(key)) continue;
+              seen.add(key);
+              sets.push(legs.map(l => [l]));
+            }
+          }
+        }
+      }
+    }
   }
   return sets;
 }
@@ -387,20 +471,71 @@ function getFreebetEligibleSites(opts: EngineOpts): string[] {
 
 // Combined back odds for a group of legs on one site; null if unavailable/filtered
 function legGroupOdds(data: any, legRefs: LegRef[], site: string, coteMinPerSel: number): number | null {
+  const info = legGroupInfo(data, legRefs, site, coteMinPerSel);
+  return info ? info.effOdds : null;
+}
+
+// Rich info for a leg group on a site:
+//  - Back combo (1+ legs, all Back): effOdds = combined back odds, displayOdds = same.
+//  - Lay single (1 leg, Lay): effOdds = (lGross-c)/(lGross-1), displayOdds = lNet, layInfo set.
+//  - Mixed Back/Lay or multi-leg containing a Lay: invalid (returns null).
+export interface LegGroupInfo {
+  effOdds: number;          // for dutching math: cashCommitted/T = 1/effOdds, payoutOnWin = T
+  displayOdds: number;      // Back: combined odds; Lay: lNet
+  isLay: boolean;
+  layInfo: LayInfo | null;
+}
+
+function legGroupInfo(data: any, legRefs: LegRef[], site: string, coteMinPerSel: number): LegGroupInfo | null {
+  const layCount = legRefs.filter(l => l.betType === 'Lay').length;
+  if (layCount > 0 && legRefs.length > 1) return null; // no combined Lay, no mixed Back+Lay
+  if (layCount === 1) {
+    const { eventKey, marketName, outcomeName } = legRefs[0];
+    const val = data[eventKey]?.markets?.[marketName]?.[outcomeName]?.[site];
+    if (val == null) return null;
+    const lay = getLayInfo(val);
+    if (!lay) return null;
+    const denom = lay.lGross - 1;
+    if (denom <= 0) return null;
+    const effOdds = (lay.lGross - lay.c) / denom;
+    if (!isFinite(effOdds) || effOdds <= 1) return null;
+    return { effOdds, displayOdds: lay.lNet, isLay: true, layInfo: lay };
+  }
+  // All-Back combo
   let combined = 1;
   for (const { eventKey, marketName, outcomeName } of legRefs) {
     const oddsMap = data[eventKey]?.markets?.[marketName]?.[outcomeName];
     if (!oddsMap) return null;
     const val = oddsMap[site];
     if (val == null) return null;
-    // Skip exchange objects for combined bets
     if (legRefs.length > 1 && isExchange(val)) return null;
     const o = getBackOdds(val);
     if (!o || o <= 1) return null;
     if (legRefs.length > 1 && coteMinPerSel > 0 && o < coteMinPerSel) return null;
     combined *= o;
   }
-  return combined;
+  return { effOdds: combined, displayOdds: combined, isLay: false, layInfo: null };
+}
+
+// For Lay groups, the per-group "stake" computed above represents the cash committed
+// (liability). Convert to the displayed exchange-style amounts: bet.stake = lay stake
+// (backer's amount on the exchange), bet.liability = cash committed.
+function patchLayBets(bets: BetDetail[], groupInfos: LegGroupInfo[]): void {
+  for (let i = 0; i < bets.length; i++) {
+    const info = groupInfos[i];
+    if (!info.isLay || !info.layInfo) continue;
+    const liability = bets[i].stake;
+    const denom = info.layInfo.lGross - 1;
+    if (denom <= 0) continue;
+    const layStake = liability / denom;
+    bets[i] = {
+      ...bets[i],
+      stake: layStake,
+      liability,
+      betType: 'cash',
+      odds: info.layInfo.lNet,
+    };
+  }
 }
 
 // ===== MISSION CHECKING =====
@@ -500,12 +635,14 @@ function makeSimultResult(
   opts: EngineOpts
 ): CoveringSetResult | null {
   const n = betsLegsArray.length;
-  const oddsPerGroup: number[] = [];
+  const groupInfos: LegGroupInfo[] = [];
+  const oddsPerGroup: number[] = []; // effective odds (for dutching math)
 
   for (let i = 0; i < n; i++) {
-    const o = legGroupOdds(data, betsLegsArray[i], sitePerGroup[i], opts.coteMinParSelection);
-    if (!o) return null;
-    oddsPerGroup.push(o);
+    const info = legGroupInfo(data, betsLegsArray[i], sitePerGroup[i], opts.coteMinParSelection);
+    if (!info) return null;
+    groupInfos.push(info);
+    oddsPerGroup.push(info.effOdds);
   }
 
   // Apply coteMin to obligatory sites' bets
@@ -513,8 +650,14 @@ function makeSimultResult(
   for (let i = 0; i < n; i++) {
     if (opts.coteMin > 0) {
       const isOblig = obligSites.size === 0 || obligSites.has(sitePerGroup[i]);
-      if (isOblig && oddsPerGroup[i] < opts.coteMin) return null;
+      // Compare against displayOdds (the user-visible odds). For Lay this is lNet.
+      if (isOblig && groupInfos[i].displayOdds < opts.coteMin) return null;
     }
+  }
+
+  // Lay groups cannot be on freebet (P1) sites — fb on exchange Lay is nonsense.
+  for (let i = 0; i < n; i++) {
+    if (groupInfos[i].isLay && obligSites.has(sitePerGroup[i]) && opts.betType === 'fb') return null;
   }
 
   let profit: number, rate: number, totalCash: number;
@@ -525,7 +668,7 @@ function makeSimultResult(
     // Mixed dutch formula: α = Σ(1/o) for cash bets, β = Σ(1/(o-1)) for fb bets
     // T = FB_total / β → fb stake_i = T/(o_i-1), cash stake_i = T/o_i
     // profit = T*(1-α) - 0 = FB_total*(1-α)/β  (all pocket costs are cash stakes only)
-    const isFbBet = oddsPerGroup.map((_, i) => obligSites.size === 0 || obligSites.has(sitePerGroup[i]));
+    const isFbBet = oddsPerGroup.map((_, i) => !groupInfos[i].isLay && (obligSites.size === 0 || obligSites.has(sitePerGroup[i])));
     const alpha = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s : s + 1 / o, 0);
     const beta  = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s + 1 / (o - 1) : s, 0);
     if (!isFinite(beta) || beta <= 0) return null;
@@ -559,13 +702,14 @@ function makeSimultResult(
       bets.push({
         legs: betsLegsArray[i],
         site: sitePerGroup[i],
-        odds: oddsPerGroup[i],
+        odds: groupInfos[i].displayOdds,
         stake,
         betType: isFbBet[i] ? 'fb' : 'cash',
         role: isFbBet[i] ? 'principal' : 'cover',
       });
     }
-    totalCash = bets.filter(b => b.betType === 'cash').reduce((s, b) => s + b.stake, 0);
+    patchLayBets(bets, groupInfos);
+    totalCash = bets.reduce((s, b) => s + (b.betType === 'cash' ? (b.liability ?? b.stake) : 0), 0);
   } else {
     // Cash mode
     const sumInv = oddsPerGroup.reduce((s, o) => s + 1 / o, 0);
@@ -667,12 +811,14 @@ function makeSimultResult(
       bets.push({
         legs: betsLegsArray[i],
         site: sitePerGroup[i],
-        odds: oddsPerGroup[i],
+        odds: groupInfos[i].displayOdds,
         stake: stakes[i],
         betType: 'cash',
         role: isObligGroup[i] ? 'principal' : 'cover',
       });
     }
+    patchLayBets(bets, groupInfos);
+    totalCash = bets.reduce((s, b) => s + (b.liability ?? b.stake), 0);
   }
 
   const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
@@ -971,7 +1117,12 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
       if (n === 1) {
         if (!opts.allowSym) continue; // single-event sequential is always symmetric
         for (const leg of legs) {
+          // Lay principals are not allowed in freebet mode (no fb on exchange).
+          if (leg.betType === 'Lay' && opts.betType === 'fb') continue;
           for (const cover of leg.covers) {
+            const principalLegRef: LegRef = { eventKey: leg.eventKey, marketName: leg.marketName, outcomeName: leg.outcomeName, betType: leg.betType };
+            const coverLegRef: LegRef = { eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' };
+
             if (opts.betType === 'fb') {
               const profit = opts.amount * (leg.b - 1) / cover.k;
               const rate = profit / opts.amount;
@@ -979,8 +1130,8 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : null;
 
               const bets: BetDetail[] = [
-                { legs: [{ eventKey: leg.eventKey, marketName: leg.marketName, outcomeName: leg.outcomeName }], site, odds: leg.b, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0 },
-                { legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName }], site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
+                { legs: [principalLegRef], site, odds: leg.b, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0 },
+                { legs: [coverLegRef], site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
               ];
 
               const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
@@ -991,17 +1142,26 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 profit, rate, totalCash: liability != null ? liability : stake, satisfiedMissions,
               });
             } else {
-              // Cash
+              // Cash. Math: T = opts.amount × leg.b / cover.k where leg.b = back odds (Back)
+              // or (lGross - c) (Lay). Profit invariant: T - principal_cash_committed.
               const rate = leg.b / cover.k;
               const T = opts.amount * rate;
               const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
-              const stake = T / gain;
-              const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : null;
-              const profit = T - opts.amount;
+              const stakeCover = T / gain;
+              const liabilityCover = cover.type === 'lay' ? stakeCover * (cover.lGross! - 1) : null;
+
+              const principalCashCommitted = leg.betType === 'Lay' && leg.layInfo
+                ? opts.amount * (leg.layInfo.lGross - 1)
+                : opts.amount;
+              const profit = T - principalCashCommitted;
+
+              const principalBet: BetDetail = leg.betType === 'Lay' && leg.layInfo
+                ? { legs: [principalLegRef], site, odds: leg.layInfo.lNet, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0, liability: principalCashCommitted }
+                : { legs: [principalLegRef], site, odds: leg.b, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0 };
 
               const bets: BetDetail[] = [
-                { legs: [{ eventKey: leg.eventKey, marketName: leg.marketName, outcomeName: leg.outcomeName }], site, odds: leg.b, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0 },
-                { legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName }], site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
+                principalBet,
+                { legs: [coverLegRef], site: cover.site, odds: cover.odds, stake: stakeCover, betType: 'cash', role: 'cover', seqStep: 0, ...(liabilityCover != null ? { liability: liabilityCover } : {}) },
               ];
 
               const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
@@ -1009,15 +1169,15 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               results.push({
                 timing: 'seq', placement: cover.site === site ? 'uni' : 'multi', symmetry: 'sym',
                 bets, eventKeys: [leg.eventKey], nMatches: 1,
-                profit, rate, totalCash: (liability ?? 0) + opts.amount, satisfiedMissions,
+                profit, rate, totalCash: principalCashCommitted + (liabilityCover ?? stakeCover), satisfiedMissions,
               });
             }
           }
         }
       } else {
-        // n = 2 or 3: multi-leg sequential
+        // n = 2 or 3: multi-leg sequential — Lay can't be combined, so principal must be Back.
         const pool = [...legs]
-          .filter(l => l.dateTime !== null)
+          .filter(l => l.dateTime !== null && l.betType === 'Back')
           .sort((a, b) => (opts.betType === 'fb'
             ? (b.b - 1) / b.bestK - (a.b - 1) / a.bestK
             : b.b / b.bestK - a.b / a.bestK
@@ -1041,7 +1201,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
             let kPrev = 1;
             const bets: BetDetail[] = [
               {
-                legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName })),
+                legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
                 site, odds: B, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0,
               },
             ];
@@ -1052,7 +1212,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const stake = profit * kPrev / gain;
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
               bets.push({
-                legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName }],
+                legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
                 site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
                 ...(liability != null ? { liability } : {}),
               });
@@ -1073,7 +1233,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
             const T = opts.amount * rate;
             const bets: BetDetail[] = [
               {
-                legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName })),
+                legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
                 site, odds: B, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0,
               },
             ];
@@ -1084,7 +1244,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const stake = T / gain;
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
               bets.push({
-                legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName }],
+                legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
                 site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
                 ...(liability != null ? { liability } : {}),
               });

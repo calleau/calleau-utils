@@ -86,6 +86,15 @@
 		]
 	},
 	{
+		"issues": 2,
+		"A": [
+			{ "market": "/^(.+)$/", "issue": "/^(.+)$/", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "$market", "issue": "$1", "betType": "Lay" }
+		]
+	},
+	{
 		"issues": 3,
 		"A": [
 			{ "market": "1X2", "issue": "1", "betType": "Back" },

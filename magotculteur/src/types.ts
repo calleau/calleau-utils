@@ -67,6 +67,7 @@ export interface LegRef {
   eventKey: string;
   marketName: string;
   outcomeName: string;
+  betType: 'Back' | 'Lay';
 }
 
 export interface LayInfo {
@@ -95,7 +96,9 @@ export interface Leg {
   dateTime: number | null;
   marketName: string;
   outcomeName: string;
-  b: number;
+  betType: 'Back' | 'Lay';
+  b: number;          // for Back: back odds; for Lay: effective odds (lGross-c)/(lGross-1)
+  layInfo: LayInfo | null;
   covers: Cover[];
   bestCover: Cover;
   bestK: number;
