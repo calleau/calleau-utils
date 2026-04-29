@@ -12,6 +12,10 @@
         "fb_splitable": false
     },
     "Daznbet": {
+        "default_welcomebonus": {
+            "max_bonus": 50,
+            "mission": "mise"
+        }
     },
     "Feelingbet": {
         "default_welcomebonus": {
