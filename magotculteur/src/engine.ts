@@ -28,6 +28,16 @@ export function getBackOdds(val: any): number | null {
   return null;
 }
 
+// Gross back odds (pre-commission). For non-exchange sites this is the same as
+// getBackOdds; for exchange sites we return the listed `odds` (not odds_net).
+// Used for *display* — math always uses the net via getBackOdds.
+export function getBackOddsGross(val: any): number | null {
+  if (typeof val === 'number') return val;
+  if (isExchange(val)) return val.Back?.odds ?? val.Back?.odds_net ?? null;
+  if (val && typeof val === 'object' && typeof val.odds === 'number') return val.odds;
+  return null;
+}
+
 export function getLayInfo(val: any): LayInfo | null {
   if (!isExchange(val) || !val.Lay) return null;
   const lGross = val.Lay.odds ?? null;
@@ -188,14 +198,15 @@ function findCoversForOutcome(event: any, mainMarketName: string, mainOutcomeNam
               const key = `L:${mName}:${oName}:${s}`;
               if (seen.has(key)) continue; seen.add(key);
               covers.push({ type: 'lay', site: s, marketName: mName, outcomeName: oName,
-                odds: lay.lNet, lGross: lay.lGross, c: lay.c, k: lay.k });
+                odds: lay.lNet, oddsGross: lay.lGross, lGross: lay.lGross, c: lay.c, k: lay.k });
             } else {
               const o = getBackOdds(val);
               if (!o || o <= 1) continue;
+              const oGross = getBackOddsGross(val) ?? o;
               const key = `B:${mName}:${oName}:${s}`;
               if (seen.has(key)) continue; seen.add(key);
               covers.push({ type: 'bk', site: s, marketName: mName, outcomeName: oName,
-                odds: o, lGross: null, c: null, k: kFromBk(o) });
+                odds: o, oddsGross: oGross, lGross: null, c: null, k: kFromBk(o) });
             }
           }
         }
@@ -221,11 +232,12 @@ function collectLegsForSite(data: any, site: string, opts: EngineOpts): Leg[] {
 
         // Back principal candidate
         const b = getBackOdds(fbVal);
-        if (b && b > 1 && (opts.coteMin <= 0 || b >= opts.coteMin)) {
+        const bGross = getBackOddsGross(fbVal) ?? b;
+        if (b && b > 1 && bGross && (opts.coteMin <= 0 || bGross >= opts.coteMin)) {
           const covers = findCoversForOutcome(event, marketName, outcomeName, 'Back', site, opts);
           if (covers.length) {
             const bestCover = covers.reduce((best, cov) => cov.k < best.k ? cov : best);
-            legs.push({ eventKey, evName, evDate, evComp, dateTime, marketName, outcomeName, betType: 'Back', b, layInfo: null, covers, bestCover, bestK: bestCover.k });
+            legs.push({ eventKey, evName, evDate, evComp, dateTime, marketName, outcomeName, betType: 'Back', b, bGross, layInfo: null, covers, bestCover, bestK: bestCover.k });
           }
         }
 
@@ -237,11 +249,11 @@ function collectLegsForSite(data: any, site: string, opts: EngineOpts): Leg[] {
           const lay = getLayInfo(fbVal);
           if (lay) {
             const bForSeq = lay.lGross - lay.c;
-            if (isFinite(bForSeq) && bForSeq > 1 && (opts.coteMin <= 0 || lay.lNet >= opts.coteMin)) {
+            if (isFinite(bForSeq) && bForSeq > 1 && (opts.coteMin <= 0 || lay.lGross >= opts.coteMin)) {
               const covers = findCoversForOutcome(event, marketName, outcomeName, 'Lay', site, opts);
               if (covers.length) {
                 const bestCover = covers.reduce((best, cov) => cov.k < best.k ? cov : best);
-                legs.push({ eventKey, evName, evDate, evComp, dateTime, marketName, outcomeName, betType: 'Lay', b: bForSeq, layInfo: lay, covers, bestCover, bestK: bestCover.k });
+                legs.push({ eventKey, evName, evDate, evComp, dateTime, marketName, outcomeName, betType: 'Lay', b: bForSeq, bGross: lay.lGross, layInfo: lay, covers, bestCover, bestK: bestCover.k });
               }
             }
           }
@@ -499,10 +511,11 @@ function legGroupInfo(data: any, legRefs: LegRef[], site: string, coteMinPerSel:
     if (denom <= 0) return null;
     const effOdds = (lay.lGross - lay.c) / denom;
     if (!isFinite(effOdds) || effOdds <= 1) return null;
-    return { effOdds, displayOdds: lay.lNet, isLay: true, layInfo: lay };
+    return { effOdds, displayOdds: lay.lGross, isLay: true, layInfo: lay };
   }
-  // All-Back combo
+  // All-Back combo. effOdds (math) = product of net; displayOdds = product of gross.
   let combined = 1;
+  let combinedGross = 1;
   for (const { eventKey, marketName, outcomeName } of legRefs) {
     const oddsMap = data[eventKey]?.markets?.[marketName]?.[outcomeName];
     if (!oddsMap) return null;
@@ -512,9 +525,11 @@ function legGroupInfo(data: any, legRefs: LegRef[], site: string, coteMinPerSel:
     const o = getBackOdds(val);
     if (!o || o <= 1) return null;
     if (legRefs.length > 1 && coteMinPerSel > 0 && o < coteMinPerSel) return null;
+    const oGross = getBackOddsGross(val) ?? o;
     combined *= o;
+    combinedGross *= oGross;
   }
-  return { effOdds: combined, displayOdds: combined, isLay: false, layInfo: null };
+  return { effOdds: combined, displayOdds: combinedGross, isLay: false, layInfo: null };
 }
 
 // For Lay groups, the per-group "stake" computed above represents the cash committed
@@ -533,7 +548,7 @@ function patchLayBets(bets: BetDetail[], groupInfos: LegGroupInfo[]): void {
       stake: layStake,
       liability,
       betType: 'cash',
-      odds: info.layInfo.lNet,
+      odds: info.layInfo.lGross,
     };
   }
 }
@@ -1130,8 +1145,8 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : null;
 
               const bets: BetDetail[] = [
-                { legs: [principalLegRef], site, odds: leg.b, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0 },
-                { legs: [coverLegRef], site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
+                { legs: [principalLegRef], site, odds: leg.bGross, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0 },
+                { legs: [coverLegRef], site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
               ];
 
               const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
@@ -1156,12 +1171,12 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const profit = T - principalCashCommitted;
 
               const principalBet: BetDetail = leg.betType === 'Lay' && leg.layInfo
-                ? { legs: [principalLegRef], site, odds: leg.layInfo.lNet, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0, liability: principalCashCommitted }
-                : { legs: [principalLegRef], site, odds: leg.b, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0 };
+                ? { legs: [principalLegRef], site, odds: leg.layInfo.lGross, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0, liability: principalCashCommitted }
+                : { legs: [principalLegRef], site, odds: leg.bGross, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0 };
 
               const bets: BetDetail[] = [
                 principalBet,
-                { legs: [coverLegRef], site: cover.site, odds: cover.odds, stake: stakeCover, betType: 'cash', role: 'cover', seqStep: 0, ...(liabilityCover != null ? { liability: liabilityCover } : {}) },
+                { legs: [coverLegRef], site: cover.site, odds: cover.oddsGross, stake: stakeCover, betType: 'cash', role: 'cover', seqStep: 0, ...(liabilityCover != null ? { liability: liabilityCover } : {}) },
               ];
 
               const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
@@ -1193,6 +1208,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
           if (symmetry === 'asym' && !opts.allowAsym) return;
 
           const B = legList.reduce((p, l) => p * l.b, 1);
+          const BGross = legList.reduce((p, l) => p * l.bGross, 1);
           const K = legList.reduce((p, l) => p * l.bestK, 1);
 
           if (opts.betType === 'fb') {
@@ -1202,7 +1218,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
             const bets: BetDetail[] = [
               {
                 legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
-                site, odds: B, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0,
+                site, odds: BGross, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0,
               },
             ];
             for (let i = 0; i < legList.length; i++) {
@@ -1213,7 +1229,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
               bets.push({
                 legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
-                site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
+                site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
                 ...(liability != null ? { liability } : {}),
               });
               kPrev *= leg.bestK;
@@ -1234,7 +1250,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
             const bets: BetDetail[] = [
               {
                 legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
-                site, odds: B, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0,
+                site, odds: BGross, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0,
               },
             ];
             for (let i = 0; i < legList.length; i++) {
@@ -1245,7 +1261,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
               bets.push({
                 legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
-                site: cover.site, odds: cover.odds, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
+                site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
                 ...(liability != null ? { liability } : {}),
               });
             }

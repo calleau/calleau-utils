@@ -25,7 +25,8 @@
     },
     "PIWIx": {
         "type": "Exchange",
-        "has_fb": false
+        "has_fb": false,
+        "commission_winning": 0.03
     },
     "PMU": {
         "fb_splitable": false,
@@ -55,6 +56,7 @@
             "type": "fb",
             "mission": "bet_perdu"
         },
-        "taux_fb": 0.7
+        "taux_fb": 0.7,
+        "commission_winning": 0
     }
 }

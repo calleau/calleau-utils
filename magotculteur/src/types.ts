@@ -82,7 +82,8 @@ export interface Cover {
   site: string;
   marketName: string;
   outcomeName: string;
-  odds: number;
+  odds: number;       // for math: net odds (Back) / lNet (Lay)
+  oddsGross: number;  // for display: gross odds (Back) / lGross (Lay)
   lGross: number | null;
   c: number | null;
   k: number;
@@ -97,7 +98,8 @@ export interface Leg {
   marketName: string;
   outcomeName: string;
   betType: 'Back' | 'Lay';
-  b: number;          // for Back: back odds; for Lay: effective odds (lGross-c)/(lGross-1)
+  b: number;          // for math: net Back odds; for Lay: (lGross - c) — keeps T = amount × b / cover.k correct
+  bGross: number;     // for display: gross Back odds; for Lay: lGross
   layInfo: LayInfo | null;
   covers: Cover[];
   bestCover: Cover;

@@ -1,5 +1,5 @@
 import EngineWorker from './worker.ts?worker';
-import { collectSites, eventDisplayName, formatDate, getBackOdds } from './engine';
+import { collectSites, eventDisplayName, formatDate, getBackOddsGross } from './engine';
 import bugOffUrl from '../../assets/icons/bug-off.svg?url';
 import bugUrl from '../../assets/icons/bug.svg?url';
 import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission } from './types';
@@ -135,7 +135,7 @@ function resolveIssueLabel(outcomeName: string, eventKey: string): string {
 function getLegIndivOdds(leg: LegRef, site: string): number | null {
   const oddsMap = _data?.[leg.eventKey]?.markets?.[leg.marketName]?.[leg.outcomeName];
   if (!oddsMap) return null;
-  return getBackOdds(oddsMap[site]);
+  return getBackOddsGross(oddsMap[site]);
 }
 
 function formatGap(ms: number): string {
