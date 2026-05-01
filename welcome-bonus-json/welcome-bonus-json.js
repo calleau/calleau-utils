@@ -328,7 +328,7 @@ function renderBookies() {
 	container.hidden = false;
 	const TRASH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
 	container.innerHTML = `
-		<div class="bookies-grid" style="grid-template-columns: 36px 1fr minmax(140px,1fr) 90px 90px 80px 36px">
+		<div class="bookies-grid" style="grid-template-columns: 50px minmax(130px,auto) minmax(180px,auto) auto auto auto 40px">
 			<div class="bg-th">#</div>
 			<div class="bg-th">Site</div>
 			<div class="bg-th">Type de bonus</div>
