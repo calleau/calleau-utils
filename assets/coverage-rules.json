@@ -99,6 +99,17 @@
 	{
 		"issues": 2,
 		"A": [
+			{ "market": "Les deux joueurs gagnent un set", "issue": "Oui", "betType": "Back" },
+			{ "market": "Les deux joueurs gagnent un set", "issue": "Non", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Les deux joueurs gagnent un set", "issue": "Non", "betType": "Back" },
+			{ "market": "Les deux joueurs gagnent un set", "issue": "Oui", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
 			{ "market": "/^(.+)$/", "issue": "/^(.+)$/", "betType": "Back" }
 		],
 		"B": [
