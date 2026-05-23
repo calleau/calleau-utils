@@ -1244,6 +1244,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
           } else {
             const rate = B / K;
             const T = opts.amount * rate;
+            let kPrev = 1;
             const bets: BetDetail[] = [
               {
                 legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
@@ -1254,13 +1255,14 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const leg = legList[i];
               const cover = leg.bestCover;
               const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
-              const stake = T / gain;
+              const stake = T * kPrev / gain;
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
               bets.push({
                 legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
                 site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
                 ...(liability != null ? { liability } : {}),
               });
+              kPrev *= leg.bestK;
             }
 
             const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
