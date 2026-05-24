@@ -221,22 +221,34 @@ function resultMethodLabel(r: CoveringSetResult): string {
   return `${timing} · ${placement} · ${sym}`;
 }
 
+function sortedEventKeys(r: CoveringSetResult): string[] {
+  return [...r.eventKeys].sort((a, b) => {
+    const evA = _data?.[a], evB = _data?.[b];
+    const tA = evA?.dateTime ? new Date(evA.dateTime).getTime() : Infinity;
+    const tB = evB?.dateTime ? new Date(evB.dateTime).getTime() : Infinity;
+    if (tA !== tB) return tA - tB;
+    const nA = evA ? eventDisplayName(a, evA) : a;
+    const nB = evB ? eventDisplayName(b, evB) : b;
+    return nA.localeCompare(nB, 'fr', { sensitivity: 'base' });
+  });
+}
+
 function resultDatesHtml(r: CoveringSetResult): string {
-  return r.eventKeys.map(ek => {
+  return sortedEventKeys(r).map(ek => {
     const dt = _data?.[ek]?.dateTime;
     return `<span>${esc(dt ? formatDate(dt) : '—')}</span>`;
   }).join('');
 }
 
 function resultEventsHtml(r: CoveringSetResult): string {
-  return r.eventKeys.map(ek => {
+  return sortedEventKeys(r).map(ek => {
     const ev = _data?.[ek];
     return `<span>${esc(ev ? eventDisplayName(ek, ev) : ek)}</span>`;
   }).join('');
 }
 
 function resultMarketsHtml(r: CoveringSetResult): string {
-  return r.eventKeys.map(ek => {
+  return sortedEventKeys(r).map(ek => {
     const mkts = [...new Set(r.bets.flatMap(b => b.legs.filter(l => l.eventKey === ek).map(l => l.marketName)))];
     return `<span>${esc(mkts.join(', ') || '—')}</span>`;
   }).join('');

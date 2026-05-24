@@ -734,8 +734,38 @@ function makeSimultResult(
     if (!isFinite(sumInv) || sumInv <= 0) return null;
     rate = 1 / sumInv; // return rate
 
-    // Classify each group as principal (obligatory site) or cover
-    const isObligGroup = betsLegsArray.map((_, i) => obligSites.size === 0 || obligSites.has(sitePerGroup[i]));
+    // Classify each group as principal (satisfait au moins une mission obligatoire
+    // du site sur ses critères indépendants de la mise — nbCombinesMin, coteMin,
+    // coteMinParSelection) ou cover (sinon). On ne se contente plus du site
+    // obligatoire : un pari sur le site oblig. qui ne remplit pas les critères de
+    // la mission doit être traité comme cover pour rembourser totalStake en cas de
+    // victoire (objectif gagner) ou pour absorber la perte (objectif perdre).
+    const groupSatisfiesOblig = (i: number): boolean => {
+      const site = sitePerGroup[i];
+      const cfg = opts.sites[site];
+      if (!cfg) return false;
+      const legCount = betsLegsArray[i].length;
+      const dispOdds = groupInfos[i].displayOdds;
+      for (const m of cfg.missions) {
+        if (m.importance !== 'obligatoire') continue;
+        if ((m.nbCombinesMin || 1) > legCount) continue;
+        if (m.coteMin > 0 && dispOdds < m.coteMin) continue;
+        if (m.coteMinParSelection > 0 && legCount > 1) {
+          let ok = true;
+          for (const lg of betsLegsArray[i]) {
+            const val = data[lg.eventKey]?.markets?.[lg.marketName]?.[lg.outcomeName]?.[site];
+            const o = getBackOdds(val);
+            if (!o || o < m.coteMinParSelection) { ok = false; break; }
+          }
+          if (!ok) continue;
+        }
+        return true;
+      }
+      return false;
+    };
+    const isObligGroup = betsLegsArray.map((_, i) =>
+      obligSites.size === 0 ? true : (obligSites.has(sitePerGroup[i]) && groupSatisfiesOblig(i))
+    );
     const principalIdxs = betsLegsArray.map((_, i) => i).filter(i => isObligGroup[i]);
     const coverIdxs = betsLegsArray.map((_, i) => i).filter(i => !isObligGroup[i]);
 

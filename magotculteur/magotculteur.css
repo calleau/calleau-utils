@@ -893,15 +893,13 @@
 .ff-betlist {
 	display: grid;
 	grid-template-columns: max-content max-content max-content max-content;
-	column-gap: 0.75rem;
 	align-items: start;
 }
 
 .ff-betrow { display: contents; }
 
 .ff-betrow > * {
-	padding-top: 10px;
-	padding-bottom: 10px;
+	padding: 10px 0.375rem;
 	border-bottom: 1px solid var(--color-divider);
 }
 
