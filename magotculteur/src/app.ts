@@ -221,16 +221,11 @@ function resultMethodLabel(r: CoveringSetResult): string {
   return `${timing} · ${placement} · ${sym}`;
 }
 
-function resultFirstDate(r: CoveringSetResult): string {
-  let first: number | null = null;
-  for (const ek of r.eventKeys) {
+function resultDatesHtml(r: CoveringSetResult): string {
+  return r.eventKeys.map(ek => {
     const dt = _data?.[ek]?.dateTime;
-    if (dt) {
-      const t = new Date(dt).getTime();
-      if (!first || t < first) first = t;
-    }
-  }
-  return first ? formatDate(new Date(first).toISOString()) : '—';
+    return `<span>${esc(dt ? formatDate(dt) : '—')}</span>`;
+  }).join('');
 }
 
 function resultEventsHtml(r: CoveringSetResult): string {
@@ -319,7 +314,10 @@ function buildBetDetailRow(bet: BetDetail, idx: number): string {
         <span class="ff-betrow-summary">${summaryLine}</span>
       </div>
     </div>
-    <span class="ff-betrow-gain">${grossGain}\u00a0\u20ac</span>
+    <div class="ff-betrow-gain">
+      <span class="ff-betrow-gain-label">Profit</span>
+      <span class="ff-betrow-gain-value">${grossGain}\u00a0\u20ac</span>
+    </div>
     ${missionsHtml}
   </div>`;
 }
@@ -505,7 +503,7 @@ function buildTableRow(r: CoveringSetResult, idx: number): string {
     <button class="ff-row-expand" id="ff-expand-${idx}" onclick="toggleDetail(${idx})" aria-label="Détails"><span class="ff-expand-icon">&#9654;</span></button>
     <div class="ff-td ff-td-muted ff-method-cell">${esc(resultMethodLabel(r))}</div>
     <div class="ff-td ff-td-center">${r.nMatches}</div>
-    <div class="ff-td ff-td-mono ff-td-date">${esc(resultFirstDate(r))}</div>
+    <div class="ff-td ff-td-mono ff-td-date">${resultDatesHtml(r)}</div>
     <div class="ff-td ff-td-events">${resultEventsHtml(r)}</div>
     <div class="ff-td ff-td-muted ff-td-events">${resultMarketsHtml(r)}</div>
     <div class="ff-td ff-td-center">${r.bets.length}</div>
