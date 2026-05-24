@@ -931,7 +931,6 @@
 }
 
 .ff-betrow-body {
-	flex: 1;
 	display: flex;
 	flex-direction: column;
 	gap: 3px;
@@ -955,7 +954,6 @@
 .ff-betrow-summary {
 	font-size: 0.85rem;
 	color: var(--color-text);
-	flex: 1;
 	min-width: 0;
 }
 

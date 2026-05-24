@@ -317,9 +317,9 @@ function buildBetDetailRow(bet: BetDetail, idx: number): string {
       ${legLines}
       <div class="ff-betrow-summary-row">
         <span class="ff-betrow-summary">${summaryLine}</span>
-        <span class="ff-betrow-gain">${grossGain}\u00a0\u20ac</span>
       </div>
     </div>
+    <span class="ff-betrow-gain">${grossGain}\u00a0\u20ac</span>
     ${missionsHtml}
   </div>`;
 }
