@@ -172,6 +172,7 @@ function buildEngineOpts(): EngineOpts {
             freebetAmount: 0, freebetPriority: 3,
             missions: [{
               id: 'simple_main',
+              number: 1,
               importance: 'obligatoire',
               montantMode: (_simpleAmountMode === 'mise_totale' || _simpleAmountMode === 'mise_min_par_pari') ? 'mise_min' : _simpleAmountMode,
               // Pour mise_totale : montant=0 car l'amount est déjà appliqué
@@ -274,11 +275,24 @@ function resultProfitDisplay(r: CoveringSetResult): { cls: string; text: string 
 
 // ===== DETAIL RENDERING =====
 
+function missionLabel(site: string, missionId: string): string | null {
+  const m = _advSites[site]?.missions.find(m => m.id === missionId);
+  if (!m) return missionId === 'simple_main' ? `${site} #1` : null;
+  return `${site} #${m.number}`;
+}
+
 function buildBetDetailRow(bet: BetDetail, idx: number): string {
   const isLay = bet.liability != null;
   const stepLabel = bet.seqStep != null ? `Seq.\u00a0${bet.seqStep + 1}` : `Pari\u00a0${idx + 1}`;
   const roleClass = bet.role === 'principal' ? 'ff-betrow-badge--back' : 'ff-betrow-badge--cover';
   const roleLabel = bet.role === 'principal' ? stepLabel : `Couv.\u00a0${idx + 1}`;
+
+  const missionLabels = (bet.satisfiedMissions ?? [])
+    .map(id => missionLabel(bet.site, id))
+    .filter((s): s is string => !!s);
+  const missionsHtml = missionLabels.length
+    ? `<div class="ff-betrow-missions">${missionLabels.map(l => `<span class="ff-mission-pill">${esc(l)}</span>`).join('')}</div>`
+    : `<div class="ff-betrow-missions ff-betrow-missions--empty">\u2014</div>`;
 
   const legLines = bet.legs.map(l => {
     const evName = _data?.[l.eventKey] ? eventDisplayName(l.eventKey, _data[l.eventKey]) : l.eventKey;
@@ -306,6 +320,7 @@ function buildBetDetailRow(bet: BetDetail, idx: number): string {
         <span class="ff-betrow-gain">${grossGain}\u00a0\u20ac</span>
       </div>
     </div>
+    ${missionsHtml}
   </div>`;
 }
 
@@ -777,8 +792,11 @@ function setAdvFbPriority(site: string, prio: 1 | 2 | 3) {
 function addAdvMission(site: string) {
   ensureAdvSite(site);
   const id = `m_${site}_${Date.now()}`;
+  const existingNums = _advSites[site].missions.map(m => m.number).filter(n => typeof n === 'number');
+  const number = existingNums.length ? Math.max(...existingNums) + 1 : 1;
   const mission: Mission = {
     id,
+    number,
     importance: 'obligatoire',
     montantMode: 'mise_min',
     montant: 10,
@@ -814,6 +832,12 @@ function renderAdvancedSites(sites: string[]) {
   // Ensure all sites have a default config
   for (const s of sites) ensureAdvSite(s);
 
+  // Migration : attribue un numéro stable aux missions importées sans number
+  for (const cfg of Object.values(_advSites)) {
+    let maxN = Math.max(0, ...cfg.missions.map(m => m.number || 0));
+    for (const m of cfg.missions) if (!m.number) m.number = ++maxN;
+  }
+
   const isFb = _betType === 'fb';
 
   wrap.innerHTML = sites.map(site => {
@@ -842,7 +866,7 @@ function renderAdvancedSites(sites: string[]) {
     const missionsHtml = cfg.missions.map(m => `
       <div class="ff-adv-mission" id="ff-adv-mission-${m.id}">
         <div class="ff-adv-mission-header">
-          <span class="ff-sublabel">Mission</span>
+          <span class="ff-sublabel">Mission ${esc(site)} #${m.number}</span>
           <button class="ff-adv-mission-del" onclick="removeAdvMission('${esc(site)}', '${m.id}')" title="Supprimer">✕</button>
         </div>
         <div class="ff-adv-mission-fields">

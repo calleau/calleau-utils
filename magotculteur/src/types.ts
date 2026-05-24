@@ -17,6 +17,7 @@ export interface CoverageRule {
 
 export interface Mission {
   id: string;
+  number: number; // numéro stable d'affichage par site (ex: Unibet #1)
   importance: 'obligatoire' | 'optionnelle';
   montantMode: 'mise_min' | 'profit_net_min' | 'profit_brut';
   montant: number;
@@ -123,6 +124,7 @@ export interface BetDetail {
   role: 'principal' | 'cover';
   seqStep?: number;   // séquentiel uniquement : 0=toujours placé, 1+=conditionnel
   liability?: number; // lay uniquement
+  satisfiedMissions?: string[]; // ids des missions que CE pari remplit à lui seul
 }
 
 // ===== RESULTAT UNIFIE =====

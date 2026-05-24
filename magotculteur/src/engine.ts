@@ -585,7 +585,10 @@ function checkAllMissions(data: any, bets: BetDetail[], opts: EngineOpts): { sat
         } else if (mission.montantMode === 'profit_brut') {
           meetsAmount = bet.stake * bet.odds >= mission.montant;
         }
-        if (meetsAmount) { ok = true; break; }
+        if (meetsAmount) {
+          ok = true;
+          (bet.satisfiedMissions ||= []).push(mission.id);
+        }
       }
       if (ok) {
         satisfiedMissions.push(mission.id);
