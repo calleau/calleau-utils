@@ -514,6 +514,9 @@ function legGroupInfo(data: any, legRefs: LegRef[], site: string, coteMinPerSel:
     return { effOdds, displayOdds: lay.lGross, isLay: true, layInfo: lay };
   }
   // All-Back combo. effOdds (math) = product of net; displayOdds = product of gross.
+  // Note: coteMinPerSel filtering is NOT applied here — the caller (makeSimultResult)
+  // applies it only to principal-site groups, since covers on other sites should not
+  // be filtered by the principal-site coteMinParSelection.
   let combined = 1;
   let combinedGross = 1;
   for (const { eventKey, marketName, outcomeName } of legRefs) {
@@ -524,34 +527,43 @@ function legGroupInfo(data: any, legRefs: LegRef[], site: string, coteMinPerSel:
     if (legRefs.length > 1 && isExchange(val)) return null;
     const o = getBackOdds(val);
     if (!o || o <= 1) return null;
-    if (legRefs.length > 1 && coteMinPerSel > 0 && o < coteMinPerSel) return null;
     const oGross = getBackOddsGross(val) ?? o;
     combined *= o;
     combinedGross *= oGross;
   }
+  // Silence unused-param warnings for callers that still pass coteMinPerSel.
+  void coteMinPerSel;
   return { effOdds: combined, displayOdds: combinedGross, isLay: false, layInfo: null };
 }
 
 // For 'gagner'/'perdre' objective: every winning outcome returns a common gross X.
 // Stakes are stake_i = X/rate_i; cash committed is stake_i (Back) or stake_i*(lGross-1) (Lay).
 // X is derived from opts.amount according to amountMode so the user-facing constraint
-// (e.g. mise_min_par_pari, mise_totale) is honored — without this the unscaled X = amount
-// produces tiny stakes (X/B in seq n=3) that fail the mission's mise_min check.
+// is honored. constraintIdxs restricts the constraint to a subset (typically
+// principal-site bets) — without this the smallest cover stake on a non-principal
+// site would dominate min/sum and yield unintended scaling.
 function computeXForGagnerPerdre(
   returnRates: number[],
   laysGross: (number | null)[],
   amountMode: 'mise_totale' | 'mise_min_par_pari' | 'profit_net_min' | 'profit_brut',
   amount: number,
+  constraintIdxs?: number[],
 ): number {
   const stakes1 = returnRates.map(r => 1 / r);
   const committed1 = stakes1.map((s, i) => laysGross[i] != null ? s * (laysGross[i]! - 1) : s);
-  const totalCommitted1 = committed1.reduce((a, b) => a + b, 0);
-  const minStake1 = Math.min(...stakes1);
+  const cIdxs = constraintIdxs && constraintIdxs.length > 0
+    ? constraintIdxs
+    : returnRates.map((_, i) => i);
+  const cTotalCommitted = cIdxs.reduce((s, i) => s + committed1[i], 0);
+  const cMinStake = Math.min(...cIdxs.map(i => stakes1[i]));
   switch (amountMode) {
-    case 'mise_totale':       return amount / totalCommitted1;
-    case 'mise_min_par_pari': return amount / minStake1;
+    case 'mise_totale':       return amount / cTotalCommitted;
+    case 'mise_min_par_pari': return amount / cMinStake;
     case 'profit_net_min': {
-      const diff = Math.abs(1 - totalCommitted1);
+      // Net P&L on a winning outcome, considering only constraint-set committed:
+      // when group k wins, principal-site net = X - cTotalCommitted (covers on
+      // other sites are not counted as our loss budget here).
+      const diff = Math.abs(1 - cTotalCommitted);
       return diff > 1e-9 ? amount / diff : amount;
     }
     case 'profit_brut':
@@ -796,6 +808,21 @@ function makeSimultResult(
     const principalIdxs = betsLegsArray.map((_, i) => i).filter(i => isObligGroup[i]);
     const coverIdxs = betsLegsArray.map((_, i) => i).filter(i => !isObligGroup[i]);
 
+    // coteMinParSelection applies only to principal-site multi-leg groups.
+    // (Covers on other sites are unconstrained.) For Lay groups it's irrelevant
+    // since Lay groups are single-leg.
+    if (opts.coteMinParSelection > 0) {
+      for (const i of principalIdxs) {
+        const legRefs = betsLegsArray[i];
+        if (legRefs.length <= 1 || groupInfos[i].isLay) continue;
+        for (const lr of legRefs) {
+          const val = data[lr.eventKey]?.markets?.[lr.marketName]?.[lr.outcomeName]?.[sitePerGroup[i]];
+          const o = getBackOdds(val);
+          if (!o || o < opts.coteMinParSelection) return null;
+        }
+      }
+    }
+
     const obj = opts.cashObjective;
     const useGagnerPerdre = (obj === 'gagner' || obj === 'perdre');
 
@@ -843,7 +870,10 @@ function makeSimultResult(
         info.isLay && info.layInfo ? (info.layInfo.lGross - info.layInfo.c) : info.effOdds
       );
       const laysGross = groupInfos.map(info => info.isLay && info.layInfo ? info.layInfo.lGross : null);
-      const X = computeXForGagnerPerdre(returnRates, laysGross, opts.amountMode, opts.amount);
+      // amountMode constraints apply only to principal-site groups (= principalIdxs).
+      // Fallback to all groups when no group is on an obligatory site.
+      const constraintIdxs = principalIdxs.length > 0 ? principalIdxs : returnRates.map((_, i) => i);
+      const X = computeXForGagnerPerdre(returnRates, laysGross, opts.amountMode, opts.amount, constraintIdxs);
       if (!isFinite(X) || X <= 0) return null;
       stakes = returnRates.map((r, i) => {
         const stakeDisplayed = X / r;
@@ -1213,12 +1243,15 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 totalCashCommitted = principalCashCommitted + (liabilityCover ?? stakeCover);
               } else {
                 // gagner / perdre: stake_i = X / return_rate_i, with X derived from amountMode.
+                // constraintIdxs: amountMode constraints apply only to principal-site bets
+                // (= [0] always, plus [1] if the cover is on the same site as principal).
                 const returnRates = [leg.b, coverReturnRate];
                 const laysGross = [
                   leg.betType === 'Lay' && leg.layInfo ? leg.layInfo.lGross : null,
                   cover.type === 'lay' ? cover.lGross : null,
                 ];
-                const X = computeXForGagnerPerdre(returnRates, laysGross, opts.amountMode, opts.amount);
+                const constraintIdxs = cover.site === site ? [0, 1] : [0];
+                const X = computeXForGagnerPerdre(returnRates, laysGross, opts.amountMode, opts.amount, constraintIdxs);
                 principalStake = X / leg.b;
                 principalCashCommitted = leg.betType === 'Lay' && leg.layInfo
                   ? principalStake * (leg.layInfo.lGross - 1)
@@ -1361,17 +1394,25 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 committed1.push(cashUnit);
                 kPrev1 *= leg.b;
               }
-              const totalCommitted1 = committed1.reduce((a, b) => a + b, 0);
-              const minStake1 = Math.min(...stakes1);
+              // Constraint set: principal-site bets only (= principal at idx 0, plus any
+              // cover whose site matches the principal site).
+              const cIdxs: number[] = [0];
+              for (let i = 0; i < legList.length; i++) {
+                if (legList[i].bestCover.site === site) cIdxs.push(i + 1);
+              }
+              const cTotalCommitted = cIdxs.reduce((s, i) => s + committed1[i], 0);
+              const cMinStake = Math.min(...cIdxs.map(i => stakes1[i]));
 
               let S_p: number;
               switch (opts.amountMode) {
-                case 'mise_totale':       S_p = opts.amount / totalCommitted1; break;
-                case 'mise_min_par_pari': S_p = opts.amount / minStake1; break;
+                case 'mise_totale':       S_p = opts.amount / cTotalCommitted; break;
+                case 'mise_min_par_pari': S_p = opts.amount / cMinStake; break;
                 case 'profit_brut':       S_p = opts.amount / B; break;
                 case 'profit_net_min': {
-                  const lossUnit = Math.abs(totalCommitted1 - B);
-                  S_p = lossUnit > 1e-9 ? opts.amount / lossUnit : opts.amount;
+                  // Net P&L on all-win considering only principal-site committed:
+                  // gain = S_p × B − S_p × cTotalCommitted = S_p × (B − cTotalCommitted)
+                  const factor = Math.abs(B - cTotalCommitted);
+                  S_p = factor > 1e-9 ? opts.amount / factor : opts.amount;
                   break;
                 }
                 default: S_p = opts.amount;
