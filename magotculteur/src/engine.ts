@@ -1187,22 +1187,43 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 profit, rate, totalCash: liability != null ? liability : stake, satisfiedMissions,
               });
             } else {
-              // Cash. Math: T = opts.amount × leg.b / cover.k where leg.b = back odds (Back)
-              // or (lGross - c) (Lay). Profit invariant: T - principal_cash_committed.
+              // Cash. The rate is the same for all objectives; only the stake
+              // distribution and profit semantics differ:
+              //  - 'miser': principal stake = opts.amount, dutch-invariant profit.
+              //  - 'gagner'/'perdre': every winning outcome returns gross = opts.amount
+              //    (stake_i = opts.amount / return_rate_i); profit = amount − totalCommitted.
               const rate = leg.b / cover.k;
-              const T = opts.amount * rate;
-              const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
-              const stakeCover = T / gain;
-              const liabilityCover = cover.type === 'lay' ? stakeCover * (cover.lGross! - 1) : null;
+              const coverReturnRate = cover.type === 'lay' ? (cover.lGross! - cover.c!) : cover.odds;
+              let principalStake: number, principalCashCommitted: number;
+              let stakeCover: number, liabilityCover: number | null;
+              let profit: number, totalCashCommitted: number;
 
-              const principalCashCommitted = leg.betType === 'Lay' && leg.layInfo
-                ? opts.amount * (leg.layInfo.lGross - 1)
-                : opts.amount;
-              const profit = T - principalCashCommitted;
+              if (opts.cashObjective === 'miser') {
+                const T = opts.amount * rate;
+                const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
+                stakeCover = T / gain;
+                liabilityCover = cover.type === 'lay' ? stakeCover * (cover.lGross! - 1) : null;
+                principalStake = opts.amount;
+                principalCashCommitted = leg.betType === 'Lay' && leg.layInfo
+                  ? opts.amount * (leg.layInfo.lGross - 1)
+                  : opts.amount;
+                profit = T - principalCashCommitted;
+                totalCashCommitted = principalCashCommitted + (liabilityCover ?? stakeCover);
+              } else {
+                // gagner / perdre: stake_i = opts.amount / return_rate_i
+                principalStake = opts.amount / leg.b;
+                principalCashCommitted = leg.betType === 'Lay' && leg.layInfo
+                  ? principalStake * (leg.layInfo.lGross - 1)
+                  : principalStake;
+                stakeCover = opts.amount / coverReturnRate;
+                liabilityCover = cover.type === 'lay' ? stakeCover * (cover.lGross! - 1) : null;
+                totalCashCommitted = principalCashCommitted + (liabilityCover ?? stakeCover);
+                profit = opts.amount - totalCashCommitted;
+              }
 
               const principalBet: BetDetail = leg.betType === 'Lay' && leg.layInfo
-                ? { legs: [principalLegRef], site, odds: leg.layInfo.lGross, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0, liability: principalCashCommitted }
-                : { legs: [principalLegRef], site, odds: leg.bGross, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0 };
+                ? { legs: [principalLegRef], site, odds: leg.layInfo.lGross, stake: principalStake, betType: 'cash', role: 'principal', seqStep: 0, liability: principalCashCommitted }
+                : { legs: [principalLegRef], site, odds: leg.bGross, stake: principalStake, betType: 'cash', role: 'principal', seqStep: 0 };
 
               const bets: BetDetail[] = [
                 principalBet,
@@ -1214,7 +1235,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               results.push({
                 timing: 'seq', placement: cover.site === site ? 'uni' : 'multi', symmetry: 'sym',
                 bets, eventKeys: [leg.eventKey], nMatches: 1,
-                profit, rate, totalCash: principalCashCommitted + (liabilityCover ?? stakeCover), satisfiedMissions,
+                profit, rate, totalCash: totalCashCommitted, satisfiedMissions,
               });
             }
           }
@@ -1275,36 +1296,51 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               satisfiedMissions,
             });
           } else {
+            // Cash multi-leg seq. Same objective dispatch as n=1:
+            //  - 'miser': principal stake = opts.amount, dutch.
+            //  - 'gagner'/'perdre': each winning outcome returns gross = opts.amount.
             const rate = B / K;
-            const T = opts.amount * rate;
+            const isMiser = opts.cashObjective === 'miser';
+            const principalStake = isMiser ? opts.amount : opts.amount / B;
+            const T = isMiser ? opts.amount * rate : 0;
+
             let kPrev = 1;
             const bets: BetDetail[] = [
               {
                 legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
-                site, odds: BGross, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0,
+                site, odds: BGross, stake: principalStake, betType: 'cash', role: 'principal', seqStep: 0,
               },
             ];
             for (let i = 0; i < legList.length; i++) {
               const leg = legList[i];
               const cover = leg.bestCover;
-              const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
-              const stake = T * kPrev / gain;
+              let stake: number;
+              if (isMiser) {
+                const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
+                stake = T * kPrev / gain;
+                kPrev *= leg.bestK;
+              } else {
+                const coverReturnRate = cover.type === 'lay' ? (cover.lGross! - cover.c!) : cover.odds;
+                stake = opts.amount / coverReturnRate;
+              }
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
               bets.push({
                 legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
                 site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
                 ...(liability != null ? { liability } : {}),
               });
-              kPrev *= leg.bestK;
             }
 
             const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
             if (!obligatoryOk) return;
             const uniqueSites = new Set(bets.map(b => b.site));
+            const coversTotal = bets.filter(b => b.role === 'cover').reduce((s, b) => s + (b.liability ?? b.stake), 0);
+            const totalCash = principalStake + coversTotal;
+            const profit = isMiser ? T - opts.amount : opts.amount - totalCash;
             results.push({
               timing: 'seq', placement: uniqueSites.size === 1 ? 'uni' : 'multi', symmetry,
               bets, eventKeys: [...new Set(legList.map(l => l.eventKey))], nMatches: legList.length,
-              profit: T - opts.amount, rate, totalCash: opts.amount + bets.filter(b => b.betType === 'cash').reduce((s, b) => s + (b.liability ?? b.stake), 0),
+              profit, rate, totalCash,
               satisfiedMissions,
             });
           }
