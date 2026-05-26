@@ -1305,62 +1305,109 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
             });
           } else {
             // Cash multi-leg seq.
-            //  - 'miser': principal stake = opts.amount, dutch with compounded covers.
-            //  - 'gagner'/'perdre': stake_i = X / return_rate_i, X scaled per amountMode.
+            //  - 'miser': principal stake = opts.amount, dutch with compounded covers via leg.bestK.
+            //  - 'gagner'/'perdre': covers compound to cover the at-stake notional before
+            //    each leg. stake_cover_i = S_p × Π_{j<i} b_j / coverReturnRate_i.
+            //    Principal stake S_p scaled per amountMode.
             const rate = B / K;
             const isMiser = opts.cashObjective === 'miser';
 
-            const coverReturnRates = legList.map(l =>
-              l.bestCover.type === 'lay' ? (l.bestCover.lGross! - l.bestCover.c!) : l.bestCover.odds);
-            let X = 0, principalStake: number;
-            if (isMiser) {
-              principalStake = opts.amount;
-            } else {
-              const returnRates = [B, ...coverReturnRates];
-              const laysGross = [null as number | null, ...legList.map(l => l.bestCover.type === 'lay' ? l.bestCover.lGross : null)];
-              X = computeXForGagnerPerdre(returnRates, laysGross, opts.amountMode, opts.amount);
-              principalStake = X / B;
-            }
+            const bets: BetDetail[] = [];
 
-            let kPrev = 1;
-            const T = isMiser ? opts.amount * rate : 0;
-            const bets: BetDetail[] = [
-              {
-                legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
-                site, odds: BGross, stake: principalStake, betType: 'cash', role: 'principal', seqStep: 0,
-              },
-            ];
-            for (let i = 0; i < legList.length; i++) {
-              const leg = legList[i];
-              const cover = leg.bestCover;
-              let stake: number;
-              if (isMiser) {
-                const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
-                stake = T * kPrev / gain;
-                kPrev *= leg.bestK;
-              } else {
-                stake = X / coverReturnRates[i];
-              }
-              const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
+            if (isMiser) {
+              const T = opts.amount * rate;
+              let kPrev = 1;
               bets.push({
-                legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
-                site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
-                ...(liability != null ? { liability } : {}),
+                legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
+                site, odds: BGross, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0,
+              });
+              for (let i = 0; i < legList.length; i++) {
+                const leg = legList[i];
+                const cover = leg.bestCover;
+                const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
+                const stake = T * kPrev / gain;
+                kPrev *= leg.bestK;
+                const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
+                bets.push({
+                  legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
+                  site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
+                  ...(liability != null ? { liability } : {}),
+                });
+              }
+
+              const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
+              if (!obligatoryOk) return;
+              const uniqueSites = new Set(bets.map(b => b.site));
+              const coversTotal = bets.filter(b => b.role === 'cover').reduce((s, b) => s + (b.liability ?? b.stake), 0);
+              results.push({
+                timing: 'seq', placement: uniqueSites.size === 1 ? 'uni' : 'multi', symmetry,
+                bets, eventKeys: [...new Set(legList.map(l => l.eventKey))], nMatches: legList.length,
+                profit: T - opts.amount, rate, totalCash: opts.amount + coversTotal,
+                satisfiedMissions,
+              });
+            } else {
+              // gagner / perdre with compounding covers.
+              // Compute per-unit stakes (with S_p = 1), then scale via amountMode.
+              const stakes1: number[] = [1]; // [0] = principal stake per unit S_p
+              const committed1: number[] = [1];
+              let kPrev1 = 1;
+              for (let i = 0; i < legList.length; i++) {
+                const leg = legList[i];
+                const cover = leg.bestCover;
+                const coverRate = cover.type === 'lay' ? (cover.lGross! - cover.c!) : cover.odds;
+                const stakeUnit = kPrev1 / coverRate;
+                const cashUnit = cover.type === 'lay' ? stakeUnit * (cover.lGross! - 1) : stakeUnit;
+                stakes1.push(stakeUnit);
+                committed1.push(cashUnit);
+                kPrev1 *= leg.b;
+              }
+              const totalCommitted1 = committed1.reduce((a, b) => a + b, 0);
+              const minStake1 = Math.min(...stakes1);
+
+              let S_p: number;
+              switch (opts.amountMode) {
+                case 'mise_totale':       S_p = opts.amount / totalCommitted1; break;
+                case 'mise_min_par_pari': S_p = opts.amount / minStake1; break;
+                case 'profit_brut':       S_p = opts.amount / B; break;
+                case 'profit_net_min': {
+                  const lossUnit = Math.abs(totalCommitted1 - B);
+                  S_p = lossUnit > 1e-9 ? opts.amount / lossUnit : opts.amount;
+                  break;
+                }
+                default: S_p = opts.amount;
+              }
+              if (!isFinite(S_p) || S_p <= 0) return;
+
+              bets.push({
+                legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
+                site, odds: BGross, stake: stakes1[0] * S_p, betType: 'cash', role: 'principal', seqStep: 0,
+              });
+              for (let i = 0; i < legList.length; i++) {
+                const leg = legList[i];
+                const cover = leg.bestCover;
+                const stake = stakes1[i + 1] * S_p;
+                const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : undefined;
+                bets.push({
+                  legs: [{ eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' }],
+                  site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: i + 1,
+                  ...(liability != null ? { liability } : {}),
+                });
+              }
+
+              const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
+              if (!obligatoryOk) return;
+              const uniqueSites = new Set(bets.map(b => b.site));
+              const coversTotal = bets.filter(b => b.role === 'cover').reduce((s, b) => s + (b.liability ?? b.stake), 0);
+              const totalCash = S_p + coversTotal;
+              // profit reported = gain on "all-win" outcome (principal wins, covers forfeited)
+              const profit = S_p * B - totalCash;
+              results.push({
+                timing: 'seq', placement: uniqueSites.size === 1 ? 'uni' : 'multi', symmetry,
+                bets, eventKeys: [...new Set(legList.map(l => l.eventKey))], nMatches: legList.length,
+                profit, rate, totalCash,
+                satisfiedMissions,
               });
             }
-
-            const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
-            if (!obligatoryOk) return;
-            const uniqueSites = new Set(bets.map(b => b.site));
-            const coversTotal = bets.filter(b => b.role === 'cover').reduce((s, b) => s + (b.liability ?? b.stake), 0);
-            const totalCash = principalStake + coversTotal;
-            const profit = isMiser ? T - opts.amount : X - totalCash;
-            results.push({
-              timing: 'seq', placement: uniqueSites.size === 1 ? 'uni' : 'multi', symmetry,
-              bets, eventKeys: [...new Set(legList.map(l => l.eventKey))], nMatches: legList.length,
-              profit, rate, totalCash,
-              satisfiedMissions,
-            });
           }
         };
 
