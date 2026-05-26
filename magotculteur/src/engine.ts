@@ -50,6 +50,11 @@ export function getLayInfo(val: any): LayInfo | null {
 
 function kFromBk(odds: number) { return odds / (odds - 1); }
 
+// Bookmakers arrondissent la cote finale d'un combiné à 2 décimales avant
+// d'appliquer les gains. Le moteur fait pareil pour que les calculs (rate,
+// stakes, profits) reflètent le vrai retour reçu par l'utilisateur.
+function roundCombo(x: number): number { return Math.round(x * 100) / 100; }
+
 export function norm(s: string) { return s.toLowerCase().trim().replace(/[:.;,!?]+$/, ''); }
 
 export function collectSites(data: any): string[] {
@@ -531,6 +536,10 @@ function legGroupInfo(data: any, legRefs: LegRef[], site: string, coteMinPerSel:
     combined *= o;
     combinedGross *= oGross;
   }
+  if (legRefs.length > 1) {
+    combined = roundCombo(combined);
+    combinedGross = roundCombo(combinedGross);
+  }
   // Silence unused-param warnings for callers that still pass coteMinPerSel.
   void coteMinPerSel;
   return { effOdds: combined, displayOdds: combinedGross, isLay: false, layInfo: null };
@@ -824,65 +833,76 @@ function makeSimultResult(
     }
 
     const obj = opts.cashObjective;
-    const useGagnerPerdre = (obj === 'gagner' || obj === 'perdre');
-
-    let stakes: number[];
-    if (!useGagnerPerdre) {
-      // 'miser' (Dutch standard) : stake_i = totalStake × rate / effOdds_i ; gain commun = totalStake × rate.
-      // baseStakes (par unité totalStake = 1) : rate / effOdds_i.
-      const baseStakes = oddsPerGroup.map(o => rate / o);
-      const constraintIdxs = principalIdxs.length > 0 ? principalIdxs : oddsPerGroup.map((_, i) => i);
-      const constraintBase = constraintIdxs.map(i => baseStakes[i]);
-      let scale = 1;
-      if (opts.amountMode === 'mise_totale') {
-        const sumP = constraintBase.reduce((s, v) => s + v, 0);
-        if (sumP <= 0) return null;
-        scale = opts.amount / sumP;
-      } else if (opts.amountMode === 'mise_min_par_pari') {
-        const minP = Math.min(...constraintBase);
-        if (!isFinite(minP) || minP <= 0) return null;
-        scale = opts.amount / minP;
-      } else if (opts.amountMode === 'profit_brut') {
-        scale = opts.amount / rate;
-      } else if (opts.amountMode === 'profit_net_min') {
-        const lossFactor = 1 - rate;
-        if (lossFactor <= 0) {
-          const gainFactor = rate - 1;
-          if (gainFactor <= 0) return null;
-          scale = opts.amount / gainFactor;
-        } else {
-          scale = opts.amount / lossFactor;
-        }
-      }
-      if (!isFinite(scale) || scale <= 0) return null;
-      stakes = baseStakes.map(s => s * scale);
-      profit = (rate - 1) * scale;
-      totalCash = stakes.reduce((s, v) => s + v, 0);
-    } else {
-      // 'gagner' / 'perdre' : chaque outcome gagnant rend gross = X (uniform).
-      // stake_i = X / return_rate_i, où return_rate_i est la cote effective par stake
-      // (Back combiné = combined back; Lay = lGross - c). cash_committed_i = stake_i
-      // (Back) ou stake_i × (lGross - 1) (Lay). X est dérivé de opts.amount via
-      // computeXForGagnerPerdre pour respecter amountMode (cohérent avec computeSeq).
-      // NB: gagner et perdre sont numériquement identiques ici (comme dans la version
-      // précédente du simult), seule la sémantique d'intention diffère.
-      const returnRates = groupInfos.map(info =>
-        info.isLay && info.layInfo ? (info.layInfo.lGross - info.layInfo.c) : info.effOdds
-      );
-      const laysGross = groupInfos.map(info => info.isLay && info.layInfo ? info.layInfo.lGross : null);
-      // amountMode constraints apply only to principal-site groups (= principalIdxs).
-      // Fallback to all groups when no group is on an obligatory site.
-      const constraintIdxs = principalIdxs.length > 0 ? principalIdxs : returnRates.map((_, i) => i);
-      const X = computeXForGagnerPerdre(returnRates, laysGross, opts.amountMode, opts.amount, constraintIdxs);
-      if (!isFinite(X) || X <= 0) return null;
-      stakes = returnRates.map((r, i) => {
-        const stakeDisplayed = X / r;
-        const layGross = laysGross[i];
-        return layGross != null ? stakeDisplayed * (layGross - 1) : stakeDisplayed;
-      });
-      totalCash = stakes.reduce((s, v) => s + v, 0);
-      profit = X - totalCash;
+    // Asymmetric gagner / perdre in simult:
+    //   - 'gagner': covers are "fixed" (stake = T/o so cover-win gross return = T,
+    //     net = 0 break-even). Principal stakes are dutched to fill remaining budget.
+    //     → loss on principal-win (= T × (dutchK − 1), negative for covering sets).
+    //   - 'perdre': principals are "fixed" (principal-win gross return = T, net = 0).
+    //     Covers are dutched. → loss on cover-win.
+    //   - 'miser' (or uni-side: only principal OR only cover): standard Dutch on all
+    //     groups, profit invariant across outcomes.
+    let fixedIdxs: number[] | null = null;
+    let dutchIdxs: number[] = [];
+    if (principalIdxs.length > 0 && coverIdxs.length > 0 && (obj === 'perdre' || obj === 'gagner')) {
+      fixedIdxs = obj === 'perdre' ? principalIdxs : coverIdxs;
+      dutchIdxs = obj === 'perdre' ? coverIdxs : principalIdxs;
     }
+
+    // Per-unit stakes (with totalStake = 1).
+    let baseStakes: number[];
+    let dutchK: number; // gain per unit totalStake when a dutched group wins
+    if (fixedIdxs === null) {
+      baseStakes = oddsPerGroup.map(o => rate / o);
+      dutchK = rate;
+    } else {
+      const sumFixedInv = fixedIdxs.reduce((s, i) => s + 1 / oddsPerGroup[i], 0);
+      if (sumFixedInv >= 1) return null; // covers (or principals) saturate the budget
+      const sumDutchInv = dutchIdxs.reduce((s, i) => s + 1 / oddsPerGroup[i], 0);
+      if (sumDutchInv <= 0) return null;
+      const rateDutch = 1 / sumDutchInv;
+      const dutchFraction = 1 - sumFixedInv;
+      dutchK = dutchFraction * rateDutch;
+      baseStakes = oddsPerGroup.map((o, i) => fixedIdxs!.includes(i) ? 1 / o : dutchK / o);
+    }
+
+    // amountMode applied only to principal-site bets.
+    const constraintIdxs = principalIdxs.length > 0 ? principalIdxs : oddsPerGroup.map((_, i) => i);
+    const constraintBase = constraintIdxs.map(i => baseStakes[i]);
+    let scale = 1;
+    if (opts.amountMode === 'mise_totale') {
+      const sumP = constraintBase.reduce((s, v) => s + v, 0);
+      if (sumP <= 0) return null;
+      scale = opts.amount / sumP;
+    } else if (opts.amountMode === 'mise_min_par_pari') {
+      const minP = Math.min(...constraintBase);
+      if (!isFinite(minP) || minP <= 0) return null;
+      scale = opts.amount / minP;
+    } else if (opts.amountMode === 'profit_brut') {
+      // Gross gain quand le groupe "dutch" (= principal pour gagner, cover pour perdre,
+      // tous pour miser) gagne, par unité totalStake.
+      let factor: number;
+      if (fixedIdxs === null) factor = rate;
+      else if (obj === 'perdre') factor = 1;
+      else factor = dutchK;
+      if (factor <= 0) return null;
+      scale = opts.amount / factor;
+    } else if (opts.amountMode === 'profit_net_min') {
+      let lossFactor: number;
+      if (fixedIdxs === null) lossFactor = 1 - rate;
+      else lossFactor = 1 - dutchK;
+      if (lossFactor <= 0) {
+        const gainFactor = fixedIdxs === null ? rate - 1 : (obj === 'perdre' ? 0 : dutchK - 1);
+        if (gainFactor <= 0) return null;
+        scale = opts.amount / gainFactor;
+      } else {
+        scale = opts.amount / lossFactor;
+      }
+    }
+    if (!isFinite(scale) || scale <= 0) return null;
+
+    const stakes = baseStakes.map(s => s * scale);
+    profit = (dutchK - 1) * scale; // loss sur l'outcome où un groupe dutched gagne
+    totalCash = stakes.reduce((s, v) => s + v, 0);
 
     for (let i = 0; i < n; i++) {
       bets.push({
@@ -1242,24 +1262,75 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 profit = T - principalCashCommitted;
                 totalCashCommitted = principalCashCommitted + (liabilityCover ?? stakeCover);
               } else {
-                // gagner / perdre: stake_i = X / return_rate_i, with X derived from amountMode.
-                // constraintIdxs: amountMode constraints apply only to principal-site bets
-                // (= [0] always, plus [1] if the cover is on the same site as principal).
-                const returnRates = [leg.b, coverReturnRate];
-                const laysGross = [
-                  leg.betType === 'Lay' && leg.layInfo ? leg.layInfo.lGross : null,
-                  cover.type === 'lay' ? cover.lGross : null,
-                ];
-                const constraintIdxs = cover.site === site ? [0, 1] : [0];
-                const X = computeXForGagnerPerdre(returnRates, laysGross, opts.amountMode, opts.amount, constraintIdxs);
-                principalStake = X / leg.b;
-                principalCashCommitted = leg.betType === 'Lay' && leg.layInfo
-                  ? principalStake * (leg.layInfo.lGross - 1)
-                  : principalStake;
-                stakeCover = X / coverReturnRate;
+                // gagner / perdre with different cover sizing per objective:
+                //   - 'gagner' : cover refunds principal cash committed (cover-win net = 0).
+                //     cover_committed = principal_cash_committed / gainFactor_cover × layAdjust
+                //     stake_cover (= back stake or lay stake) = principal_cash_committed / gainFactor_cover
+                //   - 'perdre' : cover sized so that principal-win break-even all-upfront.
+                //     cover_committed = principal_gain_on_principal_win
+                //     i.e. (Back cover) stake_cover = principalGain_p ; (Lay cover) liability = principalGain_p.
+                const isGagner = opts.cashObjective === 'gagner';
+                const principalGain = leg.betType === 'Lay' && leg.layInfo ? (1 - leg.layInfo.c) : (leg.b - 1);
+                const coverGain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
+                const principalCashPerUnitSp = leg.betType === 'Lay' && leg.layInfo ? (leg.layInfo.lGross - 1) : 1;
+
+                // Cover cash committed per unit S_p:
+                //   - gagner : principalCashPerUnitSp / coverGain
+                //   - perdre : principalGain
+                const coverCashPerUnitSp = isGagner
+                  ? principalCashPerUnitSp / coverGain
+                  : principalGain;
+                // Displayed stake per unit S_p (back stake or lay stake):
+                const coverStakePerUnitSp = cover.type === 'lay'
+                  ? coverCashPerUnitSp / (cover.lGross! - 1)
+                  : coverCashPerUnitSp;
+
+                // Apply amountMode on principal-site bets only.
+                const coverOnPrincipalSite = cover.site === site;
+                let S_p: number;
+                switch (opts.amountMode) {
+                  case 'mise_totale': {
+                    const denom = principalCashPerUnitSp + (coverOnPrincipalSite ? coverCashPerUnitSp : 0);
+                    S_p = opts.amount / denom;
+                    break;
+                  }
+                  case 'mise_min_par_pari': {
+                    // min displayed stake on principal-site bets
+                    const candidates = [1];
+                    if (coverOnPrincipalSite) candidates.push(coverStakePerUnitSp);
+                    S_p = opts.amount / Math.min(...candidates);
+                    break;
+                  }
+                  case 'profit_brut': {
+                    // Gross return on principal-win = S_p × principalReturnFactor.
+                    const factor = leg.betType === 'Lay' && leg.layInfo
+                      ? (leg.layInfo.lGross - leg.layInfo.c)
+                      : leg.b;
+                    S_p = opts.amount / factor;
+                    break;
+                  }
+                  case 'profit_net_min': {
+                    S_p = principalGain > 1e-9 ? opts.amount / principalGain : opts.amount;
+                    break;
+                  }
+                  default: S_p = opts.amount;
+                }
+                if (!isFinite(S_p) || S_p <= 0) continue;
+
+                principalStake = S_p;
+                principalCashCommitted = S_p * principalCashPerUnitSp;
+                stakeCover = S_p * coverStakePerUnitSp;
                 liabilityCover = cover.type === 'lay' ? stakeCover * (cover.lGross! - 1) : null;
                 totalCashCommitted = principalCashCommitted + (liabilityCover ?? stakeCover);
-                profit = X - totalCashCommitted;
+                // Profit reported:
+                //   - gagner : net all-upfront on principal-win = principal_gain − cover_committed (typically loss)
+                //   - perdre : net all-upfront on cover-win = cover_gain − principal_committed
+                if (isGagner) {
+                  profit = S_p * principalGain - (liabilityCover ?? stakeCover);
+                } else {
+                  const coverNetGain = cover.type === 'lay' ? stakeCover * (1 - cover.c!) : stakeCover * (cover.odds - 1);
+                  profit = coverNetGain - principalCashCommitted;
+                }
               }
 
               const principalBet: BetDetail = leg.betType === 'Lay' && leg.layInfo
@@ -1299,8 +1370,10 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
           if (symmetry === 'sym' && !opts.allowSym) return;
           if (symmetry === 'asym' && !opts.allowAsym) return;
 
-          const B = legList.reduce((p, l) => p * l.b, 1);
-          const BGross = legList.reduce((p, l) => p * l.bGross, 1);
+          // Cotes combinées arrondies à 2 décimales avant tout calcul (convention
+          // bookmaker : la cote affichée sur le ticket est la base des gains réels).
+          const B = roundCombo(legList.reduce((p, l) => p * l.b, 1));
+          const BGross = roundCombo(legList.reduce((p, l) => p * l.bGross, 1));
           const K = legList.reduce((p, l) => p * l.bestK, 1);
 
           if (opts.betType === 'fb') {
@@ -1379,17 +1452,34 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
                 satisfiedMissions,
               });
             } else {
-              // gagner / perdre with compounding covers.
-              // Compute per-unit stakes (with S_p = 1), then scale via amountMode.
+              // gagner / perdre with compounding covers. The two modes differ in
+              // *which outcome carries the loss*:
+              //   - 'gagner' : on cover-win the net is 0 (covers refund the previous
+              //     at-risk amount). On principal-win all-upfront we accept a loss
+              //     (cover stakes are forfeited).
+              //     committed_i = (S_p × kPrev_i) / gainFactor_i  (Back) × (lGross-1) (Lay)
+              //   - 'perdre' : on principal-win all-upfront the net is 0 (the
+              //     principal's gross gain S_p×(B−1) exactly offsets the sum of
+              //     covers committed). On any cover-win we accept a loss.
+              //     committed_i = S_p × kPrev_i × (b_i − 1)
+              // In both cases committed_i represents the cash committed by the cover
+              // (= stake for Back, = liability for Lay).
+              const isGagner = opts.cashObjective === 'gagner';
               const stakes1: number[] = [1]; // [0] = principal stake per unit S_p
               const committed1: number[] = [1];
               let kPrev1 = 1;
               for (let i = 0; i < legList.length; i++) {
                 const leg = legList[i];
                 const cover = leg.bestCover;
-                const coverRate = cover.type === 'lay' ? (cover.lGross! - cover.c!) : cover.odds;
-                const stakeUnit = kPrev1 / coverRate;
-                const cashUnit = cover.type === 'lay' ? stakeUnit * (cover.lGross! - 1) : stakeUnit;
+                let cashUnit: number;
+                if (isGagner) {
+                  const gainFactor = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
+                  const stakeUnit_Back = kPrev1 / gainFactor; // stake (Back) or lay stake (Lay)
+                  cashUnit = cover.type === 'lay' ? stakeUnit_Back * (cover.lGross! - 1) : stakeUnit_Back;
+                } else {
+                  cashUnit = kPrev1 * (leg.b - 1); // = principal gain from leg i (per S_p)
+                }
+                const stakeUnit = cover.type === 'lay' ? cashUnit / (cover.lGross! - 1) : cashUnit;
                 stakes1.push(stakeUnit);
                 committed1.push(cashUnit);
                 kPrev1 *= leg.b;
@@ -1440,8 +1530,30 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
               const uniqueSites = new Set(bets.map(b => b.site));
               const coversTotal = bets.filter(b => b.role === 'cover').reduce((s, b) => s + (b.liability ?? b.stake), 0);
               const totalCash = S_p + coversTotal;
-              // profit reported = gain on "all-win" outcome (principal wins, covers forfeited)
-              const profit = S_p * B - totalCash;
+              // Profit reported = net all-upfront sur l'outcome qui porte la perte selon l'objectif :
+              //   - gagner : perte sur principal-win = S_p×(B−1) − Σ committed (typically < 0)
+              //   - perdre : break-even sur principal-win par construction = 0 ;
+              //     la perte est sur cover-win (varie selon quelle cover). On reporte
+              //     ici la perte sur le cover qui produit la plus grande perte (pire cas).
+              let profit: number;
+              if (isGagner) {
+                profit = S_p * (B - 1) - coversTotal;
+              } else {
+                // For each cover_i-win (all upfront, single cover wins, others forfeited
+                // + principal forfeited): net = cover_i_gain − S_p − Σ_{j≠i} committed_j.
+                let worst = Infinity;
+                const coverBets = bets.filter(b => b.role === 'cover');
+                for (let i = 0; i < coverBets.length; i++) {
+                  const cb = coverBets[i];
+                  const leg = legList[i];
+                  const cover = leg.bestCover;
+                  const gain = cover.type === 'lay' ? cb.stake * (1 - cover.c!) : cb.stake * (cover.odds - 1);
+                  const othersCommitted = coversTotal - (cb.liability ?? cb.stake);
+                  const net = gain - S_p - othersCommitted;
+                  if (net < worst) worst = net;
+                }
+                profit = isFinite(worst) ? worst : 0;
+              }
               results.push({
                 timing: 'seq', placement: uniqueSites.size === 1 ? 'uni' : 'multi', symmetry,
                 bets, eventKeys: [...new Set(legList.map(l => l.eventKey))], nMatches: legList.length,
