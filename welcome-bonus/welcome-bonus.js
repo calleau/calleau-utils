@@ -1,26 +1,60 @@
 const ACCENT_COLORS = ['#5C899D', '#C07850', '#7BA18A', '#9B7EC4', '#C4A255'];
 
-const SITE_LIST = [
-	'Betclic', 'Betsson', 'bwin', 'Daznbet', 'Feelingbet',
-	'Olybet', 'Parions Sports', 'PMU', 'Pokerstars',
-	'Unibet', 'VBET', 'Winamax',
-];
+let SITE_LIST = [];
+let SITE_PRESETS = { '-Autre-': { bonus: 'no_bonus', min: 100, maxBonus: 100, convRate: 65 } };
+let _sitesInfo = null;
 
-const SITE_PRESETS = {
-	'Betclic':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
-	'Betsson':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
-	'bwin':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
-	'Daznbet':        { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
-	'Feelingbet':     { bonus: 'freebet_lose',   min: 50,  maxBonus: 50,  convRate: 65 },
-	'Olybet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
-	'Parions Sports': { bonus: 'freebet_always', min: 100, maxBonus: 100, convRate: 85 },
-	'PMU':            { bonus: 'cash_lose',      min: 100, maxBonus: 100, convRate: 65 },
-	'Pokerstars':     { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
-	'Unibet':         { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
-	'VBET':           { bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 65 },
-	'Winamax':        { bonus: 'cash_lose',      min: 100, maxBonus: 100, convRate: 80 },
-	'-Autre-':        { bonus: 'no_bonus',      min: 100, maxBonus: 100, convRate: 65 }
-};
+async function loadSitesInfo() {
+	if (_sitesInfo) return _sitesInfo;
+	try {
+		const res = await fetch('../assets/sites-informations.json');
+		if (!res.ok) throw new Error('HTTP ' + res.status);
+		_sitesInfo = await res.json();
+	} catch (e) {
+		console.warn('Impossible de charger sites-informations.json :', e);
+		_sitesInfo = { default: {} };
+	}
+	return _sitesInfo;
+}
+
+function siteWelcomeBonusConfig(siteName) {
+	const def = (_sitesInfo && _sitesInfo.default) || {};
+	const specific = (_sitesInfo && _sitesInfo[siteName]) || {};
+	const merged = { ...def, ...specific };
+	let wb;
+	if (Object.prototype.hasOwnProperty.call(specific, 'default_welcomebonus') && specific.default_welcomebonus === null) {
+		wb = null;
+	} else {
+		wb = { ...(def.default_welcomebonus || {}), ...(specific.default_welcomebonus || {}) };
+		if (Object.keys(wb).length === 0) wb = null;
+	}
+	const tauxFb = typeof merged.taux_fb === 'number' ? merged.taux_fb : 0.8;
+	const convRate = Math.round(tauxFb * 100);
+	if (!wb) {
+		return { bonus: 'no_bonus', min: 100, maxBonus: 100, convRate };
+	}
+	let bonus;
+	if (wb.type === 'cash') {
+		bonus = wb.mission === 'mise' ? 'cash_always' : 'cash_lose';
+	} else {
+		bonus = wb.mission === 'mise' ? 'freebet_always' : 'freebet_lose';
+	}
+	const max = typeof wb.max_bonus === 'number' ? wb.max_bonus : 100;
+	return { bonus, min: max, maxBonus: max, convRate };
+}
+
+function buildSitePresets() {
+	SITE_LIST = [];
+	const presets = { '-Autre-': { bonus: 'no_bonus', min: 100, maxBonus: 100, convRate: 65 } };
+	for (const [key, val] of Object.entries(_sitesInfo)) {
+		if (key === 'default') continue;
+		const merged = { ...(_sitesInfo.default || {}), ...val };
+		if (merged.type && merged.type !== 'Bookmaker') continue;
+		SITE_LIST.push(key);
+		presets[key] = siteWelcomeBonusConfig(key);
+	}
+	SITE_PRESETS = presets;
+}
 
 const OUTCOMES = ['1', 'N', '2'];
 
@@ -40,20 +74,24 @@ let _nameRefreshTimer = null;
 // ---- Initialisation ----
 
 function makeBookie(i) {
-	const defaults = [
-		{ site: 'Betclic', name: 'Betclic', bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
-		{ site: 'Winamax', name: 'Winamax', bonus: 'freebet_always', min: 100, maxBonus: 100, convRate: 80 },
-		{ site: 'Unibet',  name: 'Unibet',  bonus: 'freebet_lose',   min: 100, maxBonus: 100, convRate: 85 },
-	];
+	const preferred = ['Betclic', 'Winamax', 'Unibet'];
+	const pick = preferred[i] && SITE_PRESETS[preferred[i]] ? preferred[i] : null;
+	if (pick) {
+		const p = SITE_PRESETS[pick];
+		return { site: pick, name: pick, bonus: p.bonus, min: p.min, maxBonus: p.maxBonus, convRate: p.convRate };
+	}
 	const p = SITE_PRESETS['-Autre-'];
-	return defaults[i] || { site: '-Autre-', name: `Site ${i + 1}`, bonus: p.bonus, min: p.min, maxBonus: p.maxBonus, convRate: p.convRate };
+	return { site: '-Autre-', name: `Site ${i + 1}`, bonus: p.bonus, min: p.min, maxBonus: p.maxBonus, convRate: p.convRate };
 }
 
 function makeOddsForSite() {
 	return matches.map(() => new Array(3).fill(null));
 }
 
-function init() {
+async function init() {
+	renderAll();
+	await loadSitesInfo();
+	buildSitePresets();
 	renderAll();
 }
 
