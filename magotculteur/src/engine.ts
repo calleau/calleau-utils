@@ -1356,6 +1356,11 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
         // n = 2 or 3: multi-leg sequential — Lay can't be combined, so principal must be Back.
         const pool = [...legs]
           .filter(l => l.dateTime !== null && l.betType === 'Back')
+          // Filter coteMinParSelection BEFORE slicing to TOP_SEQ. Otherwise the top-50
+          // is ranked by b/bestK (coverage efficiency), which often favors moderate-odds
+          // legs over high-odds ones — leaving few or no combos where all legs satisfy
+          // the per-selection minimum.
+          .filter(l => opts.coteMinParSelection <= 0 || l.b >= opts.coteMinParSelection)
           .sort((a, b) => (opts.betType === 'fb'
             ? (b.b - 1) / b.bestK - (a.b - 1) / a.bestK
             : b.b / b.bestK - a.b / a.bestK
