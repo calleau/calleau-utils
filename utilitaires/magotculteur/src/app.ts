@@ -1,7 +1,7 @@
 import EngineWorker from './worker.ts?worker';
 import { collectSites, eventDisplayName, formatDate, getBackOddsGross } from './engine';
-import bugOffUrl from '../../assets/icons/bug-off.svg?url';
-import bugUrl from '../../assets/icons/bug.svg?url';
+import bugOffUrl from '../../../assets/icons/bug-off.svg?url';
+import bugUrl from '../../../assets/icons/bug.svg?url';
 import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission } from './types';
 
 // ===== STATE =====
@@ -1370,8 +1370,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load coverage rules and sites info in parallel
   try {
     const [rulesRes, sitesRes] = await Promise.all([
-      fetch('../assets/coverage-rules.json'),
-      fetch('../assets/sites-informations.json'),
+      fetch('../../assets/coverage-rules.json'),
+      fetch('../../assets/sites-informations.json'),
     ]);
     if (!rulesRes.ok) throw new Error(`coverage-rules.json HTTP ${rulesRes.status}`);
     _coverageRules = await rulesRes.json();

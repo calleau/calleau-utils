@@ -3,8 +3,8 @@ import { createReadStream, existsSync } from 'node:fs'
 import { resolve, extname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const dir       = fileURLToPath(new URL('.', import.meta.url))  // magotculteur/
-const parentDir = resolve(dir, '..')                             // calleau-utils/
+const dir       = fileURLToPath(new URL('.', import.meta.url))  // utilitaires/magotculteur/
+const parentDir = resolve(dir, '..', '..')                       // calleau-utils/
 
 const MIME: Record<string, string> = {
   '.css':  'text/css',

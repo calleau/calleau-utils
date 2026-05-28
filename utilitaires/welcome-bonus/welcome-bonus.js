@@ -7,7 +7,7 @@ let _sitesInfo = null;
 async function loadSitesInfo() {
 	if (_sitesInfo) return _sitesInfo;
 	try {
-		const res = await fetch('../assets/sites-informations.json');
+		const res = await fetch('../../assets/sites-informations.json');
 		if (!res.ok) throw new Error('HTTP ' + res.status);
 		_sitesInfo = await res.json();
 	} catch (e) {
