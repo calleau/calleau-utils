@@ -108,8 +108,8 @@ function renderDetailSingle(r,F,b,c){
     </div>
     ${wH}
     <div class="steps">
-      <div class="step"><span class="step-ico ico-back">B</span><div class="step-name">Freebet bookmaker<small>BACK @ ${b}</small></div><span class="step-stake" style="color:var(--text)">${fmt(F)} €</span><span class="step-noliab">freebet</span></div>
-      <div class="step"><span class="step-ico ${hedgeIco}">${r.type==='lay'?'L':'B'}</span><div class="step-name">${hedgeLabel}</div><span class="step-stake" style="color:var(--text)">${fmt(r.S)} €</span>${liabHtml}</div>
+      <div class="step"><span class="step-ico ico-back">B</span><div class="step-name">Freebet bookmaker<small>BACK @ ${b}</small></div><span class="step-stake">${fmt(F)} €</span><span class="step-noliab">freebet</span></div>
+      <div class="step"><span class="step-ico ${hedgeIco}">${r.type==='lay'?'L':'B'}</span><div class="step-name">${hedgeLabel}</div><span class="step-stake">${fmt(r.S)} €</span>${liabHtml}</div>
     </div>
     <div class="formula">${r.type==='lay'?formulaLay:formulaBO}</div>
   </div>`;
@@ -137,7 +137,7 @@ function renderDetailCombo(r,F,b1,b2,c){
       :(r.h2.type==='lay'?`M1≠sél., M2≠sél. → Lay 2 rattrape`:`M1≠sél., M2≠sél. → Back opp. 2 rattrape`),
     `Les deux = sél. → Combiné gagne, lays perdent`
   ];
-  const dotC=['var(--purple)','var(--orange)','var(--accent)'];
+  const dotC=['var(--c-primary)','var(--c-tertiary)','var(--color-pos)'];
   const scHtml=r.sc.map((n,i)=>`<div class="sc"><span class="dot" style="background:${dotC[i]}"></span>${scDesc[i]}<span class="sc-net">+${fmt(n)} €</span></div>`).join('');
 
   // formula
@@ -160,8 +160,8 @@ function renderDetailCombo(r,F,b1,b2,c){
     </div>
     ${wH}
     <div class="steps">
-      <div class="step"><span class="step-ico ${m1ico}">${r.h1.type==='lay'?'L':'B'}</span><div class="step-name">${m1lbl}<small>${m1sub}</small></div><span class="step-stake" style="color:var(--text)">${fmt(r.S1)} €</span>${m1liab}</div>
-      <div class="step"><span class="step-ico ${m2ico}">${r.h2.type==='lay'?'L':'B'}</span><div class="step-name">${m2lbl}<small>Avant 21:00 · seulement ${cond2}</small></div><span class="step-stake" style="color:var(--text)">${fmt(r.S2)} €</span>${m2liab}</div>
+      <div class="step"><span class="step-ico ${m1ico}">${r.h1.type==='lay'?'L':'B'}</span><div class="step-name">${m1lbl}<small>${m1sub}</small></div><span class="step-stake">${fmt(r.S1)} €</span>${m1liab}</div>
+      <div class="step"><span class="step-ico ${m2ico}">${r.h2.type==='lay'?'L':'B'}</span><div class="step-name">${m2lbl}<small>Avant 21:00 · seulement ${cond2}</small></div><span class="step-stake">${fmt(r.S2)} €</span>${m2liab}</div>
     </div>
     <div class="divider"></div>
     <div class="sc-title">3 SCÉNARIOS</div>
@@ -253,7 +253,7 @@ function calcRecup(){
       <div class="step">
         <span class="step-ico ico-m2">${r.type==='lay'?'L':'B'}</span>
         <div class="step-name">${hedgeTag}<small>À placer maintenant · seulement ce pari restant</small></div>
-        <span class="step-stake" style="color:var(--text)">${fmt(r.S2)} €</span>
+        <span class="step-stake">${fmt(r.S2)} €</span>
         ${liabHtml}
       </div>
     </div>
@@ -262,12 +262,12 @@ function calcRecup(){
     <div class="sc-remain">2 SCÉNARIOS RESTANTS</div>
     <div class="scenarios">
       <div class="sc">
-        <span class="dot" style="background:var(--orange)"></span>
+        <span class="dot" style="background:var(--c-tertiary)"></span>
         M2 ≠ sél. → ${r.type==='lay'?'Lay 2 gagne':'Back opp. 2 gagne'}
         <span class="sc-net ${profitClass(r.scWin)}">${r.scWin>=0?'+':''}${fmt(r.scWin)} €</span>
       </div>
       <div class="sc">
-        <span class="dot" style="background:var(--accent)"></span>
+        <span class="dot" style="background:var(--color-pos)"></span>
         M2 = sél. → Combiné gagne, ${r.type==='lay'?'lay 2 perd':'back opp. 2 perd'}
         <span class="sc-net ${profitClass(r.scLose)}">${r.scLose>=0?'+':''}${fmt(r.scLose)} €</span>
       </div>
@@ -329,7 +329,7 @@ function calc(){
     html+=`</div>`;
     combos.forEach((r,i)=>{
       html+=`<div id="det${i}" style="${i>0?'margin-top:10px':''}">`;
-      if(i>0)html+=`<div style="font-family:'Unbounded',sans-serif;font-size:9px;color:var(--muted);letter-spacing:.15em;padding:10px 0 6px">OPTION #${i+1}</div>`;
+      if(i>0)html+=`<div class="option-sep">OPTION #${i+1}</div>`;
       html+=renderDetailCombo(r,F,b1,b2,c);
       html+=`</div>`;
     });
