@@ -1,5 +1,35 @@
+/* ──────────────────────────────────────────────────────────
+   URL state sync — partage par lien + persistance miroir
+   ────────────────────────────────────────────────────────── */
+// 1) Au chargement : si l'URL porte un état, on prime localStorage avant les loaders.
+(function primeStorageFromURL(){
+  try {
+    const m = location.hash.match(/[#&]s=([^&]+)/);
+    if(!m) return;
+    const s = JSON.parse(decodeURIComponent(m[1]));
+    if(!s || s.v !== 1) return;
+    if(Array.isArray(s.b))  localStorage.setItem('couvseq_bets',    JSON.stringify(s.b));
+    if(Array.isArray(s.c))  localStorage.setItem('couvseq_covers',  JSON.stringify(s.c));
+    if(typeof s.n === 'number' && s.n >= 2 && s.n <= 8) localStorage.setItem('couvseq_ncovers', String(s.n));
+  } catch(e){}
+})();
+
+// 2) Push : on attend la fin du boot pour ne pas écraser pendant l'init.
+let __urlSyncReady = false;
+function pushStateToURL(){
+  if(!__urlSyncReady) return;
+  try {
+    const s = { v:1, b:placedBets, c:covers, n:nCovers };
+    const enc = '#s=' + encodeURIComponent(JSON.stringify(s));
+    if(location.hash !== enc){
+      history.replaceState(null, '', location.pathname + location.search + enc);
+    }
+  } catch(e){}
+}
+
 let mode='single';
 function switchMode(m){
+  if(!document.getElementById('panel-single')) return; // ancien UI retiré
   mode=m;
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',
     (i===0&&m==='single')||(i===1&&m==='combo')||(i===2&&m==='recup')));
@@ -176,10 +206,10 @@ function renderDetailCombo(r,F,b1,b2,c){
 // For back-opp: S2 = G/(bp2-c*(bp2-1)), P = G*(bp2-1)*(1-c)/(bp2-c*(bp2-1)) - loss1
 
 function calcRecup(){
+  const el=document.getElementById('result'); if(!el) return; // ancien UI retiré
   const F=gv('freebet'), c=(gv('comm')||0)/100;
   const loss=gv('r_loss')||0, b1=gv('r_b1'), b2=gv('r_b2');
   const l2=gv('r_l2'), bp2=gv('r_bp2');
-  const el=document.getElementById('result');
 
   if(!b1||!b2){el.innerHTML='<div class="na">Renseigner les cotes back des 2 matchs.</div>';return}
   if(!l2&&!bp2){el.innerHTML='<div class="na">Renseigner au moins une cote Piwi pour le Match 2.</div>';return}
@@ -284,8 +314,8 @@ function calcRecup(){
 
 /* ── MAIN ── */
 function calc(){
+  const el=document.getElementById('result'); if(!el) return; // ancien UI retiré
   const F=gv('freebet'),c=(gv('comm')||0)/100,cash=document.getElementById('bonusType').value==='cash';
-  const el=document.getElementById('result');
   if(!F){el.innerHTML='';return}
 
   if(mode==='single'){
@@ -339,7 +369,7 @@ function calc(){
 calc();
 
 /* ── PERSISTANCE ── */
-const FIELDS=['freebet','comm','bonusType',
+const FIELDS=['freebet','bonusType',
   's_back','s_lay','s_bp',
   'b1','l1','bp1','b2','l2','bp2',
   'r_loss','r_b1','r_b2','r_l2','r_bp2'];
@@ -375,6 +405,549 @@ FIELDS.forEach(id=>{
 });
 
 loadState();
+
+/* ──────────────────────────────────────────────────────────
+   PARIS PLACÉS — portefeuille de paris à équilibrer
+   ────────────────────────────────────────────────────────── */
+const PLACED_BETS_KEY = 'couvseq_bets';
+let placedBets = [];
+
+const SVG_X = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+const SVG_TRASH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+function newBetId(){ return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+
+function createBet(){
+  return { id:newBetId(), type:'freebet', amount:50, oddsMode:'individual', totalOdd:null, odds:[null,null] };
+}
+
+function loadPlacedBets(){
+  try { const raw = localStorage.getItem(PLACED_BETS_KEY); if(raw) placedBets = JSON.parse(raw) || []; } catch(e){}
+}
+function savePlacedBets(){
+  try { localStorage.setItem(PLACED_BETS_KEY, JSON.stringify(placedBets)); } catch(e){}
+  pushStateToURL();
+  if(typeof recompute === 'function') recompute();
+}
+
+function computeTotalOdd(bet){
+  if(bet.oddsMode === 'total') return (bet.totalOdd > 1) ? bet.totalOdd : 0;
+  let prod = 1, count = 0;
+  for(const o of bet.odds){
+    if(o && o > 1){ prod *= o; count++; }
+  }
+  return count > 0 ? prod : 0;
+}
+
+function addPlacedBet(){
+  placedBets.push(createBet());
+  savePlacedBets();
+  renderPlacedBets();
+}
+function removePlacedBet(id){
+  placedBets = placedBets.filter(b => b.id !== id);
+  savePlacedBets();
+  renderPlacedBets();
+}
+function setBetType(id, type){
+  const b = placedBets.find(b => b.id === id); if(!b) return;
+  b.type = type; savePlacedBets(); renderPlacedBets();
+}
+function setOddsMode(id, mode){
+  const b = placedBets.find(b => b.id === id); if(!b) return;
+  b.oddsMode = mode; savePlacedBets(); renderPlacedBets();
+}
+function onBetAmount(id, value){
+  const b = placedBets.find(b => b.id === id); if(!b) return;
+  b.amount = parseFloat(value) || 0; savePlacedBets();
+}
+function onBetTotalOdd(id, value){
+  const b = placedBets.find(b => b.id === id); if(!b) return;
+  b.totalOdd = parseFloat(value) || null; savePlacedBets();
+}
+function onOddInput(id, index, value){
+  const b = placedBets.find(b => b.id === id); if(!b) return;
+  b.odds[index] = parseFloat(value) || null;
+  savePlacedBets();
+  // mise à jour locale de l'affichage du total uniquement
+  const card = document.querySelector('.placed-bet[data-id="'+id+'"]');
+  if(card){
+    const v = card.querySelector('.total-odd-display .value');
+    if(v){ const t = computeTotalOdd(b); v.textContent = t ? t.toFixed(2) : '—'; }
+  }
+}
+function addOdd(id){
+  const b = placedBets.find(b => b.id === id); if(!b) return;
+  b.odds.push(null); savePlacedBets(); renderPlacedBets();
+}
+function removeOdd(id, index){
+  const b = placedBets.find(b => b.id === id); if(!b || b.odds.length <= 1) return;
+  b.odds.splice(index, 1); savePlacedBets(); renderPlacedBets();
+}
+
+function renderBetCard(bet, idx){
+  const oddsHtml = bet.oddsMode === 'total'
+    ? '<div class="field"><label>Cote totale du combiné</label>'
+      + '<input type="number" step="0.01" min="1" placeholder="—" value="' + (bet.totalOdd ?? '') + '" '
+      + 'oninput="onBetTotalOdd(\''+bet.id+'\',this.value)"></div>'
+    : renderIndividualOdds(bet);
+
+  return ''
+    + '<div class="placed-bet" data-id="' + bet.id + '">'
+    +   '<div class="placed-bet-head">'
+    +     '<span class="placed-bet-title">Pari #' + (idx+1) + '</span>'
+    +     '<button class="bet-remove-btn" title="Retirer ce pari" onclick="removePlacedBet(\''+bet.id+'\')">' + SVG_TRASH + '</button>'
+    +   '</div>'
+    +   '<div class="bet-row">'
+    +     '<div class="bet-row-item">'
+    +       '<div class="bet-section-label">Type de mise</div>'
+    +       '<div class="bet-toggle">'
+    +         '<button class="bet-toggle-btn bet-toggle-btn--fb '   + (bet.type==='freebet'?'active':'') + '" onclick="setBetType(\''+bet.id+'\',\'freebet\')">Freebet</button>'
+    +         '<button class="bet-toggle-btn bet-toggle-btn--cash ' + (bet.type==='cash'   ?'active':'') + '" onclick="setBetType(\''+bet.id+'\',\'cash\')">Cash</button>'
+    +       '</div>'
+    +     '</div>'
+    +     '<div class="bet-row-item">'
+    +       '<div class="bet-section-label">Mise placée (€)</div>'
+    +       '<input type="number" step="1" min="0" value="' + (bet.amount ?? '') + '" '
+    +       'oninput="onBetAmount(\''+bet.id+'\',this.value)">'
+    +     '</div>'
+    +   '</div>'
+    +   '<div>'
+    +     '<div class="bet-section-label">Cotes</div>'
+    +     '<div class="bet-toggle">'
+    +       '<button class="bet-toggle-btn bet-toggle-btn--total ' + (bet.oddsMode==='total'     ?'active':'') + '" onclick="setOddsMode(\''+bet.id+'\',\'total\')">Cote totale</button>'
+    +       '<button class="bet-toggle-btn bet-toggle-btn--ind '   + (bet.oddsMode==='individual'?'active':'') + '" onclick="setOddsMode(\''+bet.id+'\',\'individual\')">Individuelles</button>'
+    +     '</div>'
+    +   '</div>'
+    +   oddsHtml
+    + '</div>';
+}
+
+function renderIndividualOdds(bet){
+  const rows = bet.odds.map((o, i) =>
+    '<div class="odd-row">'
+    + '<span class="odd-row-label">Cote ' + (i+1) + '</span>'
+    + '<input type="number" step="0.01" min="1" placeholder="—" value="' + (o ?? '') + '" '
+    +   'oninput="onOddInput(\''+bet.id+'\','+i+',this.value)">'
+    + '<button class="odd-trash" title="Retirer cette cote" onclick="removeOdd(\''+bet.id+'\','+i+')" '
+    +   (bet.odds.length <= 1 ? 'disabled' : '') + '>' + SVG_TRASH + '</button>'
+    + '</div>'
+  ).join('');
+  const total = computeTotalOdd(bet);
+  return ''
+    + '<div class="odds-list">'
+    +   rows
+    +   '<button class="add-odd-btn" onclick="addOdd(\''+bet.id+'\')">+ Ajouter une cote</button>'
+    +   '<div class="total-odd-display">'
+    +     '<span class="label">Cote totale</span>'
+    +     '<span class="value">' + (total ? total.toFixed(2) : '—') + '</span>'
+    +   '</div>'
+    + '</div>';
+}
+
+function renderPlacedBets(){
+  const container = document.getElementById('placed-bets');
+  if(!container) return;
+  if(placedBets.length === 0){
+    container.innerHTML = '<p class="placed-bets-empty">Aucun pari placé pour le moment.</p>';
+    return;
+  }
+  container.innerHTML = placedBets.map(renderBetCard).join('');
+}
+
+loadPlacedBets();
+renderPlacedBets();
+
+/* ── Nombre de couvertures (2 à 8) ── */
+const NCOVERS_KEY = 'couvseq_ncovers';
+let nCovers = 2;
+try { const v = parseInt(localStorage.getItem(NCOVERS_KEY), 10); if(v >= 2 && v <= 8) nCovers = v; } catch(e){}
+
+function setNCovers(n){
+  nCovers = n;
+  try { localStorage.setItem(NCOVERS_KEY, String(n)); } catch(e){}
+  pushStateToURL();
+  renderNCovers();
+  renderCovers();
+}
+function renderNCovers(){
+  const el = document.getElementById('ncovers-toggle');
+  if(!el) return;
+  let html = '';
+  for(let n = 2; n <= 8; n++){
+    html += '<button class="bet-toggle-btn bet-toggle-btn--n ' + (n === nCovers ? 'active' : '') + '" '
+         + 'onclick="setNCovers(' + n + ')">' + n + '</button>';
+  }
+  el.innerHTML = html;
+}
+renderNCovers();
+
+/* ──────────────────────────────────────────────────────────
+   COUVERTURES SÉQUENTIELLES — cartes de la zone centrale
+   ────────────────────────────────────────────────────────── */
+const COVERS_KEY = 'couvseq_covers';
+let covers = [];
+
+function defaultCover(){
+  return { status:'pending', backOdd:null, layOdd:null, commission:3, loss:null };
+}
+function loadCovers(){
+  try { const raw = localStorage.getItem(COVERS_KEY); if(raw) covers = JSON.parse(raw) || []; } catch(e){}
+}
+function saveCovers(){
+  try { localStorage.setItem(COVERS_KEY, JSON.stringify(covers)); } catch(e){}
+  pushStateToURL();
+  if(typeof recompute === 'function') recompute();
+}
+function ensureCoversLength(){
+  while(covers.length < nCovers) covers.push(defaultCover());
+  if(covers.length > nCovers) covers.length = nCovers;
+  // Verrou : toute couverture après une non-réalisée doit rester 'pending'
+  let lock = false;
+  for(let i = 0; i < covers.length; i++){
+    if(lock) covers[i].status = 'pending';
+    if(covers[i].status !== 'realized') lock = true;
+  }
+}
+function previousAllRealized(idx){
+  for(let i = 0; i < idx; i++) if(covers[i].status !== 'realized') return false;
+  return true;
+}
+
+function setCoverStatus(idx, status){
+  if(!covers[idx] || !previousAllRealized(idx)) return;
+  covers[idx].status = status;
+  if(status === 'pending'){
+    for(let i = idx + 1; i < covers.length; i++) covers[i].status = 'pending';
+  }
+  saveCovers();
+  renderCovers();
+}
+function setCoverField(idx, field, value){
+  if(!covers[idx]) return;
+  const numeric = new Set(['backOdd','layOdd','commission','loss']);
+  covers[idx][field] = numeric.has(field) ? (parseFloat(value) || null) : value;
+  saveCovers();
+}
+
+function renderCoverCard(c, idx){
+  const showSelector = previousAllRealized(idx);
+  const isRealized = c.status === 'realized';
+
+  const selectorHtml = showSelector
+    ? '<div class="bet-toggle cover-status-toggle">'
+      + '<button class="bet-toggle-btn bet-toggle-btn--pending ' + (c.status==='pending'?'active':'') + '" onclick="setCoverStatus('+idx+',\'pending\')">À venir</button>'
+      + '<button class="bet-toggle-btn bet-toggle-btn--done '    + (c.status==='realized'?'active':'') + '" onclick="setCoverStatus('+idx+',\'realized\')">Réalisé</button>'
+      + '</div>'
+    : '<span class="cover-lock-badge">À venir</span>';
+
+  const bodyHtml = isRealized
+    ? '<div class="field"><label>Perte Couverture ' + (idx+1) + ' (€)</label>'
+      + '<input type="number" step="1" min="0" placeholder="—" value="' + (c.loss ?? '') + '" '
+      + 'oninput="setCoverField('+idx+',\'loss\',this.value)"></div>'
+    : '<div class="row-wrap">'
+      +   '<div class="field"><label>Cote Back opposé</label>'
+      +     '<input type="number" step="0.01" min="1" placeholder="—" value="' + (c.backOdd ?? '') + '" '
+      +     'oninput="setCoverField('+idx+',\'backOdd\',this.value)"></div>'
+      +   '<div class="field"><label>Cote Lay</label>'
+      +     '<input type="number" step="0.01" min="1" placeholder="—" value="' + (c.layOdd ?? '') + '" '
+      +     'oninput="setCoverField('+idx+',\'layOdd\',this.value)"></div>'
+      +   '<div class="field"><label>Commission (%)</label>'
+      +     '<input type="number" step="0.5" min="0" value="' + (c.commission ?? 3) + '" '
+      +     'oninput="setCoverField('+idx+',\'commission\',this.value)"></div>'
+      + '</div>';
+
+  return ''
+    + '<div class="cover-card cover-card--' + c.status + '" data-idx="' + idx + '">'
+    +   '<div class="cover-card-head">'
+    +     '<span class="cover-card-title">Couverture ' + (idx+1) + '</span>'
+    +     selectorHtml
+    +   '</div>'
+    +   bodyHtml
+    +   '<div class="cover-result"></div>'
+    + '</div>';
+}
+
+function renderCovers(){
+  ensureCoversLength();
+  saveCovers();
+  const el = document.getElementById('covers-container');
+  if(!el) return;
+  el.innerHTML = covers.map(renderCoverCard).join('');
+  recompute();
+}
+
+/* ──────────────────────────────────────────────────────────
+   MOTEUR DE CALCUL — couverture séquentielle équilibrée
+   ────────────────────────────────────────────────────────── */
+// Options de couverture (Lay et/ou Back opp.) en fonction des cotes saisies.
+function getCoverFactorsOptions(cov){
+  const comm = (cov.commission || 0) / 100;
+  const opts = [];
+  if(cov.layOdd && cov.layOdd > 1){
+    opts.push({ mode:'lay', odd:cov.layOdd, comm, gain:1-comm, loss:cov.layOdd-1 });
+  }
+  if(cov.backOdd && cov.backOdd > 1){
+    opts.push({ mode:'back', odd:cov.backOdd, comm, gain:(cov.backOdd-1)*(1-comm), loss:1 });
+  }
+  return opts;
+}
+
+// Évalue une combinaison de facteurs : renvoie { M, P, Qarr, Rarr }.
+function evaluateCombination(combo, W, cashRisk, L){
+  const K = combo.length;
+  const Qarr = new Array(K), Rarr = new Array(K);
+  let denom = 1, Q = 1, R = 1;
+  for(let k = 0; k < K; k++){
+    if(k > 0) Q *= (combo[k-1].gain + combo[k-1].loss);
+    R *= combo[k].gain;
+    Qarr[k] = Q;
+    Rarr[k] = R;
+    denom += Q * combo[k].loss / R;
+  }
+  const M = (W + cashRisk) / denom;
+  const P = M - L - cashRisk;
+  return { M, P, Qarr, Rarr };
+}
+
+function computeSequential(){
+  // Agrégation des paris placés
+  let W = 0, cashRisk = 0, validBets = 0;
+  for(const bet of placedBets){
+    const o = computeTotalOdd(bet);
+    if(!o || o <= 1 || !bet.amount || bet.amount <= 0) continue;
+    W += bet.amount * (o - 1);
+    if(bet.type === 'cash') cashRisk += bet.amount;
+    validBets++;
+  }
+
+  // Pertes déjà réalisées
+  let L = 0;
+  for(const c of covers){
+    if(c.status === 'realized') L += (c.loss || 0);
+  }
+
+  // Couvertures à venir
+  const pendingIdx = [];
+  for(let i = 0; i < covers.length; i++){
+    if(covers[i].status === 'pending') pendingIdx.push(i);
+  }
+
+  if(validBets === 0) return { W, L, cashRisk, status:'no-bets' };
+  if(pendingIdx.length === 0) return { W, L, cashRisk, status:'no-pending' };
+
+  // Options par couverture (Lay et/ou Back opp.)
+  const options = pendingIdx.map(i => getCoverFactorsOptions(covers[i]));
+  const firstMissing = options.findIndex(o => o.length === 0);
+  if(firstMissing !== -1){
+    return { W, L, cashRisk, status:'missing-odds', firstMissingIdx: pendingIdx[firstMissing] };
+  }
+
+  // Brute-force sur le produit cartésien des options (max 2^K, K ≤ 8 ⇒ ≤ 256)
+  const K = options.length;
+  let best = null;
+  const combo = new Array(K);
+  function explore(k){
+    if(k === K){
+      const e = evaluateCombination(combo, W, cashRisk, L);
+      if(!best || e.P > best.P) best = { combo: combo.slice(), M:e.M, P:e.P, Qarr:e.Qarr, Rarr:e.Rarr };
+      return;
+    }
+    for(const opt of options[k]){
+      combo[k] = opt;
+      explore(k + 1);
+    }
+  }
+  explore(0);
+
+  const stakes = [];
+  for(let k = 0; k < K; k++){
+    const S = best.M * best.Qarr[k] / best.Rarr[k];
+    const f = best.combo[k];
+    stakes.push({
+      idx: pendingIdx[k],
+      mode: f.mode,
+      odd: f.odd,
+      stake: S,
+      liability: f.mode === 'lay' ? S * (f.odd - 1) : null,
+      winProfit: best.P,
+    });
+  }
+
+  return { W, L, cashRisk, P: best.P, stakes, status:'ok' };
+}
+
+function fmt2(n){ return (Math.round(n * 100) / 100).toFixed(2); }
+
+function updateCoverResultsDom(r){
+  for(let i = 0; i < covers.length; i++){
+    const card = document.querySelector('.cover-card[data-idx="'+i+'"]');
+    if(!card) continue;
+    const resultEl = card.querySelector('.cover-result');
+    if(!resultEl) continue;
+
+    if(covers[i].status === 'realized'){
+      resultEl.innerHTML = '';
+      continue;
+    }
+
+    const stake = r.stakes && r.stakes.find(s => s.idx === i);
+    if(!stake){
+      let msg = '';
+      if(r.status === 'no-bets') msg = 'Ajoutez un pari placé pour calculer.';
+      else if(r.status === 'missing-odds' && r.firstMissingIdx === i) msg = 'Renseignez Lay ou Back opposé pour calculer cette couverture et les suivantes.';
+      else if(r.status === 'missing-odds') msg = 'En attente de la couverture ' + (r.firstMissingIdx+1) + '.';
+      resultEl.innerHTML = msg ? '<div class="cover-result-empty">' + msg + '</div>' : '';
+      continue;
+    }
+
+    const modeLabel = stake.mode === 'lay' ? 'Lay @ ' + stake.odd : 'Back opp. @ ' + stake.odd;
+    const liabHtml = stake.liability != null
+      ? '<span class="cover-result-liab">Liability ' + fmt2(stake.liability) + ' €</span>'
+      : '<span class="cover-result-liab cover-result-liab--none">sans liability</span>';
+    resultEl.innerHTML = ''
+      + '<div class="cover-result-row">'
+      +   '<span class="cover-result-mode">' + modeLabel + '</span>'
+      +   '<span class="cover-result-stake-label">Mise à placer</span>'
+      +   '<span class="cover-result-stake">' + fmt2(stake.stake) + ' €</span>'
+      +   liabHtml
+      + '</div>';
+  }
+}
+
+function updateGlobalSummary(r){
+  const el = document.getElementById('results-summary');
+  if(!el) return;
+
+  if(r.status === 'no-bets'){
+    el.innerHTML = '<div class="summary-empty">Ajoutez au moins un pari placé pour démarrer le calcul.</div>';
+    return;
+  }
+  if(r.status === 'no-pending'){
+    const net = -r.L;
+    const cls = net > 0.01 ? 'profit-pos' : net < -0.01 ? 'profit-neg' : 'profit-zero';
+    el.innerHTML = ''
+      + '<div class="summary-card">'
+      +   '<div class="summary-row"><span class="summary-label">Toutes les couvertures sont réalisées</span>'
+      +   '<span class="summary-value ' + cls + '">' + (net >= 0 ? '+' : '') + fmt2(net) + ' €</span></div>'
+      +   '<div class="summary-row-sub"><span>Pertes cumulées : <strong>−' + fmt2(r.L) + ' €</strong></span></div>'
+      + '</div>';
+    return;
+  }
+  if(r.status === 'missing-odds'){
+    el.innerHTML = '<div class="summary-empty">Renseignez les cotes (Lay ou Back opposé) des couvertures à venir pour obtenir le profit équilibré.</div>';
+    return;
+  }
+
+  const cls = r.P > 0.01 ? 'profit-pos' : r.P < -0.01 ? 'profit-neg' : 'profit-zero';
+  const sub = [];
+  sub.push('<span>Gain placés si tout gagne : <strong>+' + fmt2(r.W) + ' €</strong></span>');
+  if(r.L > 0)        sub.push('<span>Pertes réalisées : <strong>−' + fmt2(r.L) + ' €</strong></span>');
+  if(r.cashRisk > 0) sub.push('<span>Cash engagé : <strong>' + fmt2(r.cashRisk) + ' €</strong></span>');
+
+  el.innerHTML = ''
+    + '<div class="summary-card">'
+    +   '<div class="summary-row">'
+    +     '<span class="summary-label">Profit net équilibré</span>'
+    +     '<span class="summary-value ' + cls + '">' + (r.P >= 0 ? '+' : '') + fmt2(r.P) + ' €</span>'
+    +   '</div>'
+    +   '<div class="summary-row-sub">' + sub.join('') + '</div>'
+    + '</div>';
+}
+
+function recompute(){
+  const r = computeSequential();
+  updateCoverResultsDom(r);
+  updateGlobalSummary(r);
+}
+
+loadCovers();
+renderCovers();
+
+/* ──────────────────────────────────────────────────────────
+   CONFIGURATIONS ENREGISTRÉES — snapshots locaux nommés
+   ────────────────────────────────────────────────────────── */
+const SAVES_KEY = 'couvseq_saves';
+let savedConfigs = [];
+
+function loadSavedConfigs(){
+  try { const raw = localStorage.getItem(SAVES_KEY); if(raw) savedConfigs = JSON.parse(raw) || []; } catch(e){}
+}
+function persistSavedConfigs(){
+  try { localStorage.setItem(SAVES_KEY, JSON.stringify(savedConfigs)); } catch(e){}
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+
+function saveCurrentConfig(){
+  const now = new Date();
+  const defaultName = 'Config ' + now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+  const name = prompt('Nom de la configuration :', defaultName);
+  if(name === null) return; // annulé
+  const trimmed = name.trim() || defaultName;
+  savedConfigs.unshift({
+    id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+    name: trimmed,
+    createdAt: Date.now(),
+    state: deepClone({ v:1, b:placedBets, c:covers, n:nCovers })
+  });
+  persistSavedConfigs();
+  renderSavedConfigs();
+}
+
+function loadSavedConfig(id){
+  const conf = savedConfigs.find(x => x.id === id);
+  if(!conf || !conf.state) return;
+  const s = deepClone(conf.state);
+  if(Array.isArray(s.b)) placedBets = s.b;
+  if(Array.isArray(s.c)) covers = s.c;
+  if(typeof s.n === 'number' && s.n >= 2 && s.n <= 8) nCovers = s.n;
+  // écritures directes (savePlacedBets/saveCovers déclencheraient recompute avant que tout soit aligné)
+  try { localStorage.setItem(PLACED_BETS_KEY, JSON.stringify(placedBets)); } catch(e){}
+  try { localStorage.setItem(COVERS_KEY,      JSON.stringify(covers));     } catch(e){}
+  try { localStorage.setItem(NCOVERS_KEY,     String(nCovers));            } catch(e){}
+  pushStateToURL();
+  renderNCovers();
+  renderPlacedBets();
+  renderCovers(); // déclenche recompute
+}
+
+function deleteSavedConfig(id){
+  const conf = savedConfigs.find(x => x.id === id);
+  if(!conf) return;
+  if(!confirm('Supprimer la configuration « ' + conf.name + ' » ?')) return;
+  savedConfigs = savedConfigs.filter(x => x.id !== id);
+  persistSavedConfigs();
+  renderSavedConfigs();
+}
+
+function renderSavedConfigs(){
+  const el = document.getElementById('saved-configs');
+  if(!el) return;
+  if(savedConfigs.length === 0){
+    el.innerHTML = '<p class="saved-configs-empty">Aucune configuration enregistrée.</p>';
+    return;
+  }
+  el.innerHTML = savedConfigs.map(c =>
+    '<div class="saved-config-item" data-id="' + c.id + '">'
+    +   '<div class="saved-config-info">'
+    +     '<span class="saved-config-name" title="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) + '</span>'
+    +     '<span class="saved-config-date">' + new Date(c.createdAt).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) + '</span>'
+    +   '</div>'
+    +   '<button class="saved-config-load" onclick="loadSavedConfig(\'' + c.id + '\')" title="Charger cette configuration">Charger</button>'
+    +   '<button class="saved-config-delete" onclick="deleteSavedConfig(\'' + c.id + '\')" title="Supprimer">' + SVG_TRASH + '</button>'
+    + '</div>'
+  ).join('');
+}
+
+loadSavedConfigs();
+renderSavedConfigs();
+
+// Boot terminé : on autorise les écritures URL et on aligne l'URL avec l'état actuel.
+__urlSyncReady = true;
+pushStateToURL();
 
 /* ── VERSIONS ── */
 document.getElementById('footer-version').textContent =

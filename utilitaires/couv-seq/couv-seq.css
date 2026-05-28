@@ -52,7 +52,7 @@
    ========================================================= */
 .layout {
 	display: grid;
-	grid-template-columns: minmax(280px, 320px) 1fr;
+	grid-template-columns: 1fr 2fr;
 	gap: 1.25rem;
 	align-items: start;
 }
@@ -75,6 +75,477 @@
 	gap: 0.75rem;
 }
 .row-wrap .field { flex: 1 1 140px; min-width: 0; }
+
+/* =========================================================
+   Paris placés (sidebar)
+   ========================================================= */
+.placed-bets-card { display: flex; flex-direction: column; gap: 0.75rem; }
+.placed-bets { display: flex; flex-direction: column; gap: 0.75rem; }
+.placed-bets-empty {
+	font-size: 0.82rem;
+	color: var(--color-muted);
+	text-align: center;
+	padding: 0.7rem 0.5rem;
+	background: var(--color-surface-2);
+	border: 1px dashed var(--color-divider);
+	border-radius: 8px;
+	margin: 0;
+}
+
+.placed-bet {
+	background: var(--color-surface-2);
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	padding: 0.8rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+}
+.placed-bet-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+.placed-bet-title {
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+}
+.bet-remove-btn {
+	background: transparent;
+	border: 1px solid var(--color-divider);
+	border-radius: 6px;
+	width: 26px;
+	height: 26px;
+	display: grid;
+	place-items: center;
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.bet-remove-btn:hover {
+	background: var(--color-danger-bg);
+	color: var(--color-neg);
+	border-color: var(--color-danger-border);
+}
+
+.bet-section-label {
+	font-size: 0.68rem;
+	font-weight: 600;
+	color: var(--color-muted);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	margin-bottom: 0.3rem;
+}
+
+/* Ligne 'Type + Mise' côte à côte (wrap si trop étroit) */
+.bet-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+}
+.bet-row-item {
+	flex: 1 1 130px;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+.bet-row-item input { width: 100%; font-family: 'DM Mono', monospace; }
+
+/* Bet type / odds mode toggle (button-radio group) */
+.bet-toggle { display: flex; gap: 4px; }
+.bet-toggle-btn {
+	flex: 1;
+	padding: 6px 10px;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.78rem;
+	font-weight: 600;
+	border: 1px solid var(--color-divider);
+	border-radius: 7px;
+	background: var(--color-surface);
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.bet-toggle-btn:hover { border-color: var(--c-primary); color: var(--c-primary); }
+.bet-toggle-btn.active { color: #fff; }
+.bet-toggle-btn--fb.active { background: var(--color-pos); border-color: var(--color-pos); }
+.bet-toggle-btn--cash.active { background: #a07000; border-color: #a07000; }
+.bet-toggle-btn--total.active,
+.bet-toggle-btn--ind.active,
+.bet-toggle-btn--n.active {
+	background: var(--c-primary);
+	border-color: var(--c-primary);
+}
+
+/* Compact toggle pour le sélecteur Nb couvertures (chiffres seuls) */
+.bet-toggle--n { flex-wrap: wrap; gap: 4px; }
+.bet-toggle--n .bet-toggle-btn--n {
+	flex: 0 0 auto;
+	min-width: 36px;
+	padding: 6px 10px;
+	font-family: 'DM Mono', monospace;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Odds list (individual mode) — chips qui wrappent */
+.odds-list { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: flex-start; }
+.odd-row {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	padding: 0.2rem 0.2rem 0.2rem 0.55rem;
+}
+.odd-row-label {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.72rem;
+	color: var(--color-muted);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.odd-row input {
+	font-family: 'DM Mono', monospace;
+	width: 4.5rem;
+	padding: 4px 8px;
+	border-radius: 6px;
+}
+.odd-trash {
+	background: transparent;
+	border: none;
+	border-radius: 5px;
+	width: 26px;
+	height: 26px;
+	display: grid;
+	place-items: center;
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+.odd-trash:hover:not(:disabled) {
+	background: var(--color-danger-bg);
+	color: var(--color-neg);
+	border-color: var(--color-danger-border);
+}
+.odd-trash:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.add-odd-btn {
+	background: transparent;
+	border: 1px dashed var(--color-divider);
+	border-radius: 8px;
+	padding: 0.3rem 0.7rem;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--c-primary);
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+	white-space: nowrap;
+}
+.add-odd-btn:hover { background: var(--color-surface); border-color: var(--c-primary); }
+
+.total-odd-display {
+	flex-basis: 100%;
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	padding: 0.45rem 0.75rem;
+	background: transparent;
+	border: 1px dashed var(--color-divider);
+	border-radius: 6px;
+	margin-top: 0.25rem;
+}
+.total-odd-display .label {
+	font-size: 0.68rem;
+	font-weight: 600;
+	color: var(--color-muted);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+.total-odd-display .value {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1.35rem;
+	color: var(--c-primary);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+}
+
+.btn-add-bet {
+	background: var(--c-primary);
+	color: #fff;
+	border: none;
+	border-radius: 8px;
+	padding: 0.7rem 1rem;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: filter 0.15s;
+}
+.btn-add-bet:hover { filter: brightness(1.08); }
+
+/* =========================================================
+   Configurations enregistrées
+   ========================================================= */
+.btn-save-config {
+	background: var(--c-primary-dark);
+	color: #fff;
+	border: none;
+	border-radius: 8px;
+	padding: 0.7rem 1rem;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: filter 0.15s;
+}
+.btn-save-config:hover { filter: brightness(1.12); }
+
+.saved-configs { display: flex; flex-direction: column; gap: 0.4rem; }
+.saved-configs-empty {
+	font-size: 0.82rem;
+	color: var(--color-muted);
+	text-align: center;
+	padding: 0.7rem 0.5rem;
+	background: var(--color-surface-2);
+	border: 1px dashed var(--color-divider);
+	border-radius: 8px;
+	margin: 0;
+}
+.saved-config-item {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.55rem 0.7rem;
+	background: var(--color-surface-2);
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+}
+.saved-config-info {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	flex: 1;
+	min-width: 0;
+}
+.saved-config-name {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.saved-config-date {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.68rem;
+	color: var(--color-muted);
+}
+.saved-config-load {
+	background: transparent;
+	border: 1px solid var(--color-divider);
+	border-radius: 6px;
+	padding: 0.3rem 0.65rem;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--c-primary);
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+}
+.saved-config-load:hover {
+	background: var(--color-surface);
+	border-color: var(--c-primary);
+}
+.saved-config-delete {
+	background: transparent;
+	border: none;
+	border-radius: 5px;
+	width: 28px;
+	height: 28px;
+	display: grid;
+	place-items: center;
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+.saved-config-delete:hover {
+	background: var(--color-danger-bg);
+	color: var(--color-neg);
+}
+
+/* =========================================================
+   Cartes de couverture (zone centrale)
+   ========================================================= */
+.covers-container { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.cover-card {
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	padding: 1rem 1.1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.85rem;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+.cover-card--pending { border-top: 3px solid var(--c-primary); }
+.cover-card--realized {
+	border-top: 3px solid var(--color-pos);
+	background: var(--color-accent-50);
+}
+
+.cover-card-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+.cover-card-title {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1.5rem;
+	letter-spacing: 0.04em;
+	color: var(--color-text);
+	line-height: 1;
+}
+.cover-card--realized .cover-card-title { color: var(--color-pos); }
+
+/* Toggle de statut dans l'en-tête : taille auto (pas flex:1) */
+.cover-status-toggle .bet-toggle-btn { flex: 0 0 auto; padding: 6px 14px; }
+.bet-toggle-btn--pending.active { background: var(--c-primary); border-color: var(--c-primary); }
+.bet-toggle-btn--done.active { background: var(--color-pos); border-color: var(--color-pos); }
+
+.cover-lock-badge {
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	padding: 0.4rem 0.75rem;
+	background: var(--color-surface-2);
+	border: 1px dashed var(--color-divider);
+	border-radius: 6px;
+}
+
+/* Résultat par couverture (affiché dans la carte) */
+.cover-result:empty { display: none; }
+.cover-result-empty {
+	font-size: 0.78rem;
+	color: var(--color-muted);
+	font-style: italic;
+	padding: 0.5rem 0.7rem;
+	background: var(--color-surface-2);
+	border-radius: 6px;
+	border-left: 3px solid var(--color-divider);
+}
+.cover-result-row {
+	display: grid;
+	grid-template-columns: auto auto 1fr auto;
+	gap: 0.4rem 0.8rem;
+	align-items: baseline;
+	padding: 0.6rem 0.8rem;
+	background: var(--color-surface-2);
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+}
+.cover-result-mode {
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--c-primary);
+	padding: 3px 8px;
+	border: 1px solid rgba(92, 137, 157, 0.3);
+	background: rgba(92, 137, 157, 0.08);
+	border-radius: 4px;
+	grid-column: 1 / 2;
+}
+.cover-result-stake-label {
+	font-size: 0.7rem;
+	font-weight: 600;
+	color: var(--color-muted);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.cover-result-stake {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1.5rem;
+	color: var(--color-text);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+}
+.cover-result-liab {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.78rem;
+	color: var(--color-neg);
+	white-space: nowrap;
+}
+.cover-result-liab--none { color: var(--color-muted); }
+
+/* Résumé global (sous les couvertures) */
+.results-summary { margin-top: 0.5rem; }
+.results-summary:empty { display: none; }
+.summary-empty {
+	font-size: 0.85rem;
+	color: var(--color-muted);
+	padding: 0.9rem 1rem;
+	background: var(--color-surface-2);
+	border-radius: 10px;
+	border: 1px dashed var(--color-divider);
+	text-align: center;
+}
+.summary-card {
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-top: 3px solid var(--c-primary);
+	border-radius: 12px;
+	padding: 1rem 1.2rem;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+.summary-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+.summary-label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+}
+.summary-value {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: clamp(1.8rem, 3.5vw, 2.4rem);
+	letter-spacing: 0.02em;
+	color: var(--color-pos);
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+}
+.summary-row-sub {
+	margin-top: 0.7rem;
+	padding-top: 0.7rem;
+	border-top: 1px solid var(--color-divider);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1.2rem;
+	font-size: 0.82rem;
+	color: var(--color-muted);
+}
+.summary-row-sub strong {
+	color: var(--color-text);
+	font-family: 'DM Mono', monospace;
+	font-weight: 700;
+}
 
 /* =========================================================
    Tabs (mode)
