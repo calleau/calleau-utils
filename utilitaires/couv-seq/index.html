@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Couverture séquentielle</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Unbounded:wght@300;400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="couv-seq.css">
+<script src="versions.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="badge">Matched Betting</div>
+  <h1>COUVERTURE <em>SÉQUENTIELLE</em></h1>
+  <p class="sub">Lay · Back opposé · Combiné 2 matchs · Piwi Exchange</p>
+</header>
+
+<div class="card settings">
+  <div class="card-label">⚙ Paramètres</div>
+  <div class="row g3">
+    <div class="field"><label>Freebet (€)</label><input type="number" id="freebet" value="50" step="1" min="1" oninput="calc()"></div>
+    <div class="field"><label>Commission Piwi (%)</label><input type="number" id="comm" value="3" step="0.5" min="0" oninput="calc()"></div>
+    <div class="field"><label>Type de bonus</label>
+      <select id="bonusType" onchange="calc()">
+        <option value="freebet">Freebet (mise non rendue)</option>
+        <option value="cash">Cash bonus</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchMode('single')">SIMPLE</button>
+  <button class="tab" onclick="switchMode('combo')">COMBINÉ ×2</button>
+  <button class="tab" onclick="switchMode('recup')" style="color:var(--danger)">RÉCUPÉRATION</button>
+</div>
+
+<!-- SINGLE -->
+<div id="panel-single" class="on">
+  <div class="card back">
+    <div class="card-label">Back bookmaker</div>
+    <div class="row g2">
+      <div class="field"><label>Cote back</label><input type="number" id="s_back" value="3.70" step="0.05" oninput="calc()"></div>
+    </div>
+  </div>
+  <div class="card settings">
+    <div class="card-label">Couverture Piwi</div>
+    <div class="hedge-inner">
+      <div class="field"><label>🔵 Lay @ Piwi</label><input type="number" id="s_lay" value="4.10" step="0.05" placeholder="—" oninput="calc()"></div>
+      <div class="or-sep">ou</div>
+      <div class="field"><label>⚡ Back opposé @ Piwi</label><input type="number" id="s_bp" value="" step="0.05" placeholder="—" oninput="calc()"></div>
+    </div>
+    <div class="hint">Ex : si back sur «&nbsp;1&nbsp;», renseigner la cote DC «&nbsp;X2&nbsp;» ou «&nbsp;N2&nbsp;» disponible sur Piwi. Entrer l'une ou les deux pour comparer.</div>
+  </div>
+</div>
+
+<!-- COMBO -->
+<div id="panel-combo">
+  <div class="card m1">
+    <div class="card-label"><span class="num">1</span>Match 1 — 18:45</div>
+    <div class="field"><label>Cote back (bookmaker)</label><input type="number" id="b1" value="3.70" step="0.05" oninput="calc()"></div>
+    <div class="hedge-block">
+      <div class="hedge-title">Couverture Piwi — Match 1</div>
+      <div class="hedge-inner">
+        <div class="field"><label>🔵 Lay @ Piwi</label><input type="number" id="l1" value="4.10" step="0.05" placeholder="—" oninput="calc()"></div>
+        <div class="or-sep">ou</div>
+        <div class="field"><label>⚡ Back opposé @ Piwi</label><input type="number" id="bp1" value="" step="0.05" placeholder="—" oninput="calc()"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card m2">
+    <div class="card-label"><span class="num">2</span>Match 2 — 21:00</div>
+    <div class="field"><label>Cote back (bookmaker)</label><input type="number" id="b2" value="3.40" step="0.05" oninput="calc()"></div>
+    <div class="hedge-block">
+      <div class="hedge-title">Couverture Piwi — Match 2</div>
+      <div class="hedge-inner">
+        <div class="field"><label>🔵 Lay @ Piwi</label><input type="number" id="l2" value="3.60" step="0.05" placeholder="—" oninput="calc()"></div>
+        <div class="or-sep">ou</div>
+        <div class="field"><label>⚡ Back opposé @ Piwi</label><input type="number" id="bp2" value="" step="0.05" placeholder="—" oninput="calc()"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RÉCUPÉRATION -->
+<div id="panel-recup">
+  <div class="card danger">
+    <div class="card-label">💸 Situation — Lay 1 perdu</div>
+    <div class="row g3">
+      <div class="field"><label>Perte lay 1 (€)</label><input type="number" id="r_loss" value="120" step="1" min="0" oninput="calcRecup()"></div>
+      <div class="field"><label>Cote back M1 (bookie)</label><input type="number" id="r_b1" value="3.70" step="0.05" oninput="calcRecup()"></div>
+      <div class="field"><label>Cote back M2 (bookie)</label><input type="number" id="r_b2" value="3.40" step="0.05" oninput="calcRecup()"></div>
+    </div>
+  </div>
+
+  <div class="card recup">
+    <div class="card-label">🎯 Couverture Match 2</div>
+    <div class="hedge-inner">
+      <div class="field"><label>🔵 Lay M2 @ Piwi</label><input type="number" id="r_l2" value="3.60" step="0.05" placeholder="—" oninput="calcRecup()"></div>
+      <div class="or-sep">ou</div>
+      <div class="field"><label>⚡ Back opposé M2 @ Piwi</label><input type="number" id="r_bp2" value="" step="0.05" placeholder="—" oninput="calcRecup()"></div>
+    </div>
+    <div class="hint">La sélection M1 est passée → le combiné est toujours vivant. Calcule le stake optimal pour récupérer au maximum.</div>
+  </div>
+</div>
+
+<div id="result"></div>
+
+<footer class="page-footer">
+  <span class="footer-version" id="footer-version"></span>
+</footer>
+</div>
+
+<div id="floating-actions">
+  <div id="versions-widget">
+    <button id="versions-btn" class="btn-versions-toggle" aria-label="Versions précédentes" title="Versions précédentes">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>
+      </svg>
+    </button>
+    <div id="versions-dropdown" class="versions-dropdown" hidden>
+      <p class="versions-msg">Chargement…</p>
+    </div>
+  </div>
+</div>
+
+<script src="couv-seq.js"></script>
+</body>
+</html>
