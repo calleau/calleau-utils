@@ -592,14 +592,22 @@ function searchPartitions(allCandidates, totalAccounts) {
 		if (!byBase.has(c.baseId)) byBase.set(c.baseId, []);
 		byBase.get(c.baseId).push(c);
 	}
-	const baseIds = [...byBase.keys()];
-
 	// Pour chaque base, déjà triée par avgGain desc
 	const totalBudget = Object.values(totalAccounts).reduce((a, b) => a + b, 0);
 
 	// Best upper bound per base : max avgGain disponible
 	const bestPerBase = new Map();
-	for (const id of baseIds) bestPerBase.set(id, byBase.get(id)[0]?.avgGain ?? 0);
+	for (const id of byBase.keys()) bestPerBase.set(id, byBase.get(id)[0]?.avgGain ?? 0);
+
+	// Ordonner les bases par meilleur avgGain décroissant : trouve vite les bonnes partitions
+	// et permet à l'élagage par borne supérieure de couper agressivement.
+	const baseIds = [...byBase.keys()].sort((a, b) => (bestPerBase.get(b) ?? 0) - (bestPerBase.get(a) ?? 0));
+
+	// suffixMax[i] = max bestPerBase parmi baseIds[i..]
+	const suffixMax = new Array(baseIds.length + 1).fill(0);
+	for (let i = baseIds.length - 1; i >= 0; i--) {
+		suffixMax[i] = Math.max(suffixMax[i + 1], bestPerBase.get(baseIds[i]) ?? 0);
+	}
 
 	const partitions = [];
 	let worstTopGain = -Infinity;
@@ -640,10 +648,13 @@ function searchPartitions(allCandidates, totalAccounts) {
 		const remain = remaining(remainingAccounts);
 		if (remain === 0) { pushPartition(parts, gainSoFar); return; }
 		if (parts.length >= MAX_PARTITION_SETS) return;
+		if (baseStartIdx >= baseIds.length) return;
 
-		// Borne sup : gainSoFar + sum_{remaining bases} best * (remain / 1)
-		// Approximation : on ne dépassera pas si on prend les meilleurs candidats.
-		// Élague si <  worstTopGain - SCORE_EPS
+		// Borne sup : il reste au plus min(remain, MAX_PARTITION_SETS - parts.length)
+		// candidats à placer, chacun contribuant au plus suffixMax[baseStartIdx].
+		const slotsLeft = Math.min(remain, MAX_PARTITION_SETS - parts.length);
+		const upperBound = gainSoFar + slotsLeft * suffixMax[baseStartIdx];
+		if (partitions.length >= MAX_PARTITIONS && upperBound <= worstTopGain + SCORE_EPS) return;
 
 		for (let bi = baseStartIdx; bi < baseIds.length; bi++) {
 			const id = baseIds[bi];
