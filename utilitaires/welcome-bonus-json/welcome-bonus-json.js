@@ -1,6 +1,5 @@
 const ACCENT_COLORS = ['#5C899D', '#C07850', '#7BA18A', '#9B7EC4', '#C4A255'];
 const OUTCOMES = ['1', 'N', '2'];
-const MAX_MATCHES = 5;
 const MAX_BOOKIES = 15;
 
 const SLOTS_P2 = [];
@@ -185,8 +184,8 @@ async function onJsonChange() {
 		errEl.textContent = 'Aucun événement avec un marché 1X2 (issues 1, X, 2) trouvé.';
 		errEl.hidden = false;
 	}
-	// Pré-sélectionner les 2 premiers
-	_selectedEventKeys = _parsedEvents.slice(0, 2).map(e => e.eventKey);
+	// Pré-sélectionner tous les matchs détectés
+	_selectedEventKeys = _parsedEvents.map(e => e.eventKey);
 	renderEvents();
 	rebuildFromSelection();
 }
@@ -206,7 +205,6 @@ function toggleEventByIdx(parsedIdx) {
 	if (idx >= 0) {
 		_selectedEventKeys.splice(idx, 1);
 	} else {
-		if (_selectedEventKeys.length >= MAX_MATCHES) return;
 		_selectedEventKeys.push(ev.eventKey);
 	}
 	renderEvents();
@@ -235,7 +233,7 @@ function rebuildFromSelection() {
 		const prev = prevBySite.get(site);
 		if (prev) return prev;
 		const cfg = siteWelcomeBonusConfig(site);
-		return { site, name: site, bonus: cfg.bonus, min: cfg.min, maxBonus: cfg.maxBonus, convRate: cfg.convRate };
+		return { site, name: site, bonus: cfg.bonus, min: cfg.min, maxBonus: cfg.maxBonus, convRate: cfg.convRate, maxOpti: 1 };
 	});
 
 	// Reconstruire oddsGrid
@@ -285,21 +283,19 @@ function renderEvents() {
 		return;
 	}
 	container.hidden = false;
-	const limitReached = _selectedEventKeys.length >= MAX_MATCHES;
 	container.innerHTML = `
 		<div class="wbj-events-card">
 			<div class="wbj-events-header">
 				<span class="wbj-events-title">Événements détectés (1X2)</span>
-				<span class="wbj-events-count">${_selectedEventKeys.length} / ${MAX_MATCHES} sélectionné${_selectedEventKeys.length > 1 ? 's' : ''}</span>
+				<span class="wbj-events-count">${_selectedEventKeys.length} / ${_parsedEvents.length} sélectionné${_selectedEventKeys.length > 1 ? 's' : ''}</span>
 			</div>
 			<div class="wbj-events-list">
 				${_parsedEvents.map((e, idx) => {
 					const checked = _selectedEventKeys.includes(e.eventKey);
-					const disabled = !checked && limitReached;
 					const nbSites = Object.keys(e.oddsBySite).length;
 					return `
-						<label class="wbj-event-row ${disabled ? 'disabled' : ''}">
-							<input type="checkbox" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}
+						<label class="wbj-event-row">
+							<input type="checkbox" ${checked ? 'checked' : ''}
 								onchange="toggleEventByIdx(${idx})" />
 							<span class="wbj-event-name">${escHtml(e.displayName)}</span>
 							<span class="wbj-event-meta">${escHtml(e.dateLabel)} · ${nbSites} site${nbSites > 1 ? 's' : ''}</span>
@@ -328,13 +324,14 @@ function renderBookies() {
 	container.hidden = false;
 	const TRASH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
 	container.innerHTML = `
-		<div class="bookies-grid" style="grid-template-columns: 50px minmax(130px,auto) minmax(180px,auto) auto auto auto 40px">
+		<div class="bookies-grid" style="grid-template-columns: 50px minmax(130px,auto) minmax(180px,auto) auto auto auto auto 40px">
 			<div class="bg-th">#</div>
 			<div class="bg-th">Site</div>
 			<div class="bg-th">Type de bonus</div>
 			<div class="bg-th">Mise min</div>
 			<div class="bg-th">Bonus max</div>
 			<div class="bg-th">Taux FB</div>
+			<div class="bg-th">Nb opti</div>
 			<div class="bg-th"></div>
 
 			${bookies.map((b, i) => `
@@ -392,6 +389,17 @@ function renderBookies() {
 							</div>
 						</div>
 					</div>
+					<div class="bg-cell">
+						<div class="numinput">
+							<input type="number" id="opti-${i}" value="${b.maxOpti}" min="1" max="9" step="1"
+								oninput="bookies[${i}].maxOpti=Math.min(9,Math.max(1,parseInt(this.value)||1))"
+								onclick="this.select()" />
+							<div class="nbtn-wrap">
+								<button class="nbtn" onclick="stepNum('opti',${i},1)" type="button">▲</button>
+								<button class="nbtn" onclick="stepNum('opti',${i},-1)" type="button">▼</button>
+							</div>
+						</div>
+					</div>
 					<div class="bg-cell bg-cell-delete">
 						<button class="btn-delete-bookie" onclick="deleteBookie(${i})" title="Retirer ce site">${TRASH}</button>
 					</div>
@@ -407,11 +415,13 @@ function stepNum(kind, i, delta) {
 	const cur = parseFloat(input.value) || 0;
 	let next = cur + delta;
 	if (kind === 'conv') next = Math.min(100, Math.max(1, next));
+	else if (kind === 'opti') next = Math.min(9, Math.max(1, next));
 	else next = Math.max(0, next);
 	input.value = next;
 	if (kind === 'min') bookies[i].min = next;
 	else if (kind === 'max') bookies[i].maxBonus = next;
 	else if (kind === 'conv') bookies[i].convRate = next;
+	else if (kind === 'opti') bookies[i].maxOpti = next;
 }
 
 function updateBonusDot(index, bonusType) {
@@ -515,17 +525,17 @@ function generateCombinationsP1() {
 		if (top.length === MAX_STORED && ps >= top[top.length - 1].score) return;
 		if (slotIdx === 3) { insertTop(top, { matchIndices: [m], combo: [...current], score: ps }); return; }
 		for (let s = 0; s < N; s++) {
-			if (used[s]) continue;
+			if (used[s] >= (bookies[s].maxOpti || 1)) continue;
 			const odds = oddsGrid[s][m][slotIdx];
 			if (!odds || odds < 1.01) continue;
 			const ns = ps + slotScore(s, odds);
 			if (top.length === MAX_STORED && ns >= top[top.length - 1].score) continue;
-			used[s] = true; current.push(s);
+			used[s]++; current.push(s);
 			recurse(m, slotIdx + 1, current, used, ns);
-			current.pop(); used[s] = false;
+			current.pop(); used[s]--;
 		}
 	}
-	for (let m = 0; m < matches.length; m++) recurse(m, 0, [], new Array(N).fill(false), 0);
+	for (let m = 0; m < matches.length; m++) recurse(m, 0, [], new Array(N).fill(0), 0);
 	return top;
 }
 
@@ -538,19 +548,19 @@ function generateCombinationsP2() {
 		if (slotIdx === 9) { insertTop(top, { matchIndices: [m1, m2], combo: [...current], score: ps }); return; }
 		const [i, j] = SLOTS_P2[slotIdx];
 		for (let s = 0; s < N; s++) {
-			if (used[s]) continue;
+			if (used[s] >= (bookies[s].maxOpti || 1)) continue;
 			const o1 = oddsGrid[s][m1][i], o2 = oddsGrid[s][m2][j];
 			if (!o1 || o1 < 1.01 || !o2 || o2 < 1.01) continue;
 			const ns = ps + slotScore(s, o1 * o2);
 			if (top.length === MAX_STORED && ns >= top[top.length - 1].score) continue;
-			used[s] = true; current.push(s);
+			used[s]++; current.push(s);
 			recurse(m1, m2, slotIdx + 1, current, used, ns);
-			current.pop(); used[s] = false;
+			current.pop(); used[s]--;
 		}
 	}
 	for (let m1 = 0; m1 < M - 1; m1++)
 		for (let m2 = m1 + 1; m2 < M; m2++)
-			recurse(m1, m2, 0, [], new Array(N).fill(false), 0);
+			recurse(m1, m2, 0, [], new Array(N).fill(0), 0);
 	return top;
 }
 
@@ -941,4 +951,41 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusA
 
 loadSitesInfo().then(() => {
 	updateCalcBtn();
+});
+
+/* ── VERSIONS ── */
+document.getElementById('footer-version').textContent =
+	'Bonus de bienvenue (JSON) — ' + (window.CURRENT_VERSION || 'version actuelle');
+
+const versionsWidget   = document.getElementById('versions-widget');
+const versionsBtn      = document.getElementById('versions-btn');
+const versionsDropdown = document.getElementById('versions-dropdown');
+let versionsLoaded = false;
+
+versionsBtn.addEventListener('click', () => {
+	const isOpen = !versionsDropdown.hidden;
+	versionsDropdown.hidden = isOpen;
+	if (isOpen || versionsLoaded) return;
+
+	versionsLoaded = true;
+	const versions = window.AVAILABLE_VERSIONS || [];
+
+	if (versions.length === 0) {
+		versionsDropdown.innerHTML = '<p class="versions-msg">Aucune version disponible</p>';
+	} else {
+		versionsDropdown.innerHTML =
+			'<p class="versions-header">Versions précédentes</p>' +
+			versions.map(v =>
+				`<a href="${v}/index.html" class="version-link">
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+						<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+					</svg>
+					${v}
+				</a>`
+			).join('');
+	}
+});
+
+document.addEventListener('click', (e) => {
+	if (!versionsWidget.contains(e.target)) versionsDropdown.hidden = true;
 });
