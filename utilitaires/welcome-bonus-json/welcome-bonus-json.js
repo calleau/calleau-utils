@@ -544,18 +544,22 @@ function genCandidatesForBase(setBase) {
 		}
 		// Brancher sur chaque option de ce slot
 		for (const opt of slotOptions[slotIdx]) {
-			if (usedSitesInSet.has(opt.site)) continue;
+			const prevCount = usedSitesInSet.get(opt.site) || 0;
 			if (opt.isBonus) {
-				const used = signature[opt.site] || 0;
 				const cfg = bonusBySite.get(opt.site);
-				if (used >= cfg.accounts) continue;
-				signature[opt.site] = used + 1;
+				// un site bonus peut occuper plusieurs slots, capé par le nb de comptes
+				if (prevCount >= cfg.accounts) continue;
+				signature[opt.site] = (signature[opt.site] || 0) + 1;
+			} else {
+				// site de couverture = 1 compte unique → 1 slot max par setBase
+				if (prevCount > 0) continue;
 			}
-			usedSitesInSet.add(opt.site);
+			usedSitesInSet.set(opt.site, prevCount + 1);
 			chosen.push(opt);
 			backtrack(slotIdx + 1, chosen, usedSitesInSet, signature);
 			chosen.pop();
-			usedSitesInSet.delete(opt.site);
+			if (prevCount === 0) usedSitesInSet.delete(opt.site);
+			else usedSitesInSet.set(opt.site, prevCount);
 			if (opt.isBonus) {
 				signature[opt.site]--;
 				if (signature[opt.site] === 0) delete signature[opt.site];
@@ -563,7 +567,7 @@ function genCandidatesForBase(setBase) {
 		}
 	}
 
-	backtrack(0, [], new Set(), {});
+	backtrack(0, [], new Map(), {});
 
 	// Tri + top-K par signature de bonus
 	candidates.sort((a, b) => b.avgGain - a.avgGain);
