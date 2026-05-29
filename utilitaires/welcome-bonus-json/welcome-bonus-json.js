@@ -648,7 +648,7 @@ function searchPartitions(allCandidates, totalAccounts) {
 		}
 	}
 
-	function backtrack(baseStartIdx, remainingAccounts, parts, gainSoFar) {
+	function backtrack(baseStartIdx, candStartIdx, remainingAccounts, parts, gainSoFar) {
 		const remain = remaining(remainingAccounts);
 		if (remain === 0) { pushPartition(parts, gainSoFar); return; }
 		if (parts.length >= MAX_PARTITION_SETS) return;
@@ -660,25 +660,29 @@ function searchPartitions(allCandidates, totalAccounts) {
 		const upperBound = gainSoFar + slotsLeft * suffixMax[baseStartIdx];
 		if (partitions.length >= MAX_PARTITIONS && upperBound <= worstTopGain + SCORE_EPS) return;
 
+		// Un setBase peut être ré-utilisé plusieurs fois dans une partition (= placer
+		// le même set de paris sur plusieurs comptes du même site). On enforce un ordre
+		// lexicographique (baseIdx, candIdx) non-décroissant pour éviter de compter
+		// plusieurs fois la même partition dans des ordres différents.
 		for (let bi = baseStartIdx; bi < baseIds.length; bi++) {
-			const id = baseIds[bi];
-			const cands = byBase.get(id);
-			for (const cand of cands) {
+			const cands = byBase.get(baseIds[bi]);
+			const startC = (bi === baseStartIdx) ? candStartIdx : 0;
+			for (let ci = startC; ci < cands.length; ci++) {
+				const cand = cands[ci];
 				const sigSize = Object.values(cand.signature).reduce((a, b) => a + b, 0);
 				if (sigSize === 0) continue; // un set sans aucun bonus n'avance pas
 				if (!canAccommodate(cand, remainingAccounts)) continue;
 				applySig(remainingAccounts, cand.signature, -1);
 				parts.push(cand);
-				backtrack(bi + 1, remainingAccounts, parts, gainSoFar + cand.avgGain);
+				backtrack(bi, ci, remainingAccounts, parts, gainSoFar + cand.avgGain);
 				parts.pop();
 				applySig(remainingAccounts, cand.signature, +1);
 			}
-			// On autorise aussi à ne PAS prendre de candidate sur cette base (passer au suivant)
 		}
 	}
 
 	const initRemaining = { ...totalAccounts };
-	backtrack(0, initRemaining, [], 0);
+	backtrack(0, 0, initRemaining, [], 0);
 	return partitions;
 }
 
@@ -800,6 +804,120 @@ function renderSetCard(set, idx) {
 				<div class="set-card-gain ${set.avgGain >= 0 ? 'pos' : 'neg'}">${fmt(set.avgGain)} €</div>
 			</div>
 			<div class="stakes-grid">${slotsHTML}</div>
+			${renderSetBreakdown(set)}
+		</div>`;
+}
+
+/* ── Breakdown détaillé d'un set (cash / bonus par issue × par slot) ─────── */
+function renderSetBreakdown(set) {
+	const slots = set.slots;
+	const stakes = set.stakes;
+	const n = slots.length;
+	if (!n || !stakes) return '';
+
+	const isCashBonus = b => b === 'cash_lose' || b === 'cash_always';
+	const isAlwaysBonus = b => b === 'freebet_always' || b === 'cash_always';
+	const isLoseBonus = b => b === 'freebet_lose' || b === 'cash_lose';
+
+	// Détail (cash, fbRaw, fbConv, cashBonus) pour slot j quand l'issue k se produit.
+	function cellDetail(j, k) {
+		const sl = slots[j];
+		const s = stakes[j];
+		const isBack = sl.betType !== 'Lay';
+		const comm = sl.commission || 0;
+		const effConv = !isBack ? 0 : (sl.bonus === 'no_bonus' || !sl.bonus ? 0 : (isCashBonus(sl.bonus) ? 1 : (sl.convRate || 80) / 100));
+		const cap = sl.maxBonus > 0 ? sl.maxBonus : s;
+		const bonusBase = Math.min(s, cap); // freebet brut applicable
+		const wins = (j === k);
+		let cash = 0, fbRaw = 0, fbConv = 0, cashBonus = 0;
+		if (isBack) {
+			if (wins) {
+				cash = (sl.odds - 1) * s;
+				if (isAlwaysBonus(sl.bonus)) {
+					if (isCashBonus(sl.bonus)) cashBonus = bonusBase;
+					else { fbRaw = bonusBase; fbConv = effConv * bonusBase; }
+				}
+			} else {
+				cash = -s;
+				if (isAlwaysBonus(sl.bonus) || isLoseBonus(sl.bonus)) {
+					if (isCashBonus(sl.bonus)) cashBonus = bonusBase;
+					else { fbRaw = bonusBase; fbConv = effConv * bonusBase; }
+				}
+			}
+		} else {
+			// Lay : convention du solveur — wins quand j === k
+			if (wins) cash = s * (1 - comm);
+			else cash = -(sl.odds - 1) * s;
+		}
+		return { cash, fbRaw, fbConv, cashBonus, isCash: isCashBonus(sl.bonus), hasBonus: sl.bonus && sl.bonus !== 'no_bonus' && isBack, convRate: sl.convRate || 0 };
+	}
+
+	const headRow = slots.map((sl, k) => `
+		<th>
+			<div class="th-outcome-title">${escHtml(sl.issue)}</div>
+			<div class="th-outcome-sub">${escHtml(sl.market)}</div>
+		</th>`).join('');
+
+	const bodyRows = slots.map((sl, j) => {
+		const s = stakes[j];
+		const cap = set.capped && set.capped[j] ? ' ⚠' : '';
+		const cells = slots.map((_, k) => {
+			const d = cellDetail(j, k);
+			const wins = (j === k);
+			const total = d.cash + d.fbConv + d.cashBonus;
+			let lines = `<div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val ${d.cash >= 0 ? 'pos' : 'neg'}">${fmt(d.cash)} €</span></div>`;
+			if (d.hasBonus && d.isCash) {
+				lines += `<div class="detail-line"><span class="detail-lbl">Bonus cash</span><span class="detail-val ${d.cashBonus > 0 ? 'neut' : 'text-muted'}">+${fmt(d.cashBonus)} €</span></div>`;
+			} else if (d.hasBonus) {
+				lines += `<div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${d.fbRaw > 0 ? 'neut' : 'text-muted'}">+${fmt(d.fbRaw)} €</span></div>`;
+				lines += `<div class="detail-line"><span class="detail-lbl">Freebet @${d.convRate}%</span><span class="detail-val ${d.fbConv > 0 ? 'neut' : 'text-muted'}">+${fmt(d.fbConv)} €</span></div>`;
+			}
+			lines += `<div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val ${total >= 0 ? 'pos' : 'neg'} strong">${fmt(total)} €</span></div>`;
+			return `<td class="td-outcome ${wins ? 'win' : 'lose'}">${lines}</td>`;
+		}).join('');
+		const tag = sl.isBonus ? ' <span class="tag tag-bonus">BONUS</span>' : '';
+		return `
+			<tr>
+				<td>
+					<div class="site-name">${escHtml(sl.site)}${tag}</div>
+					<div class="site-meta">${escHtml(sl.issue)} (${escHtml(sl.betType)}) @ ${fmt(sl.odds)}</div>
+					<div class="site-meta">Mise : ${fmt(s)} €${cap}</div>
+				</td>
+				${cells}
+			</tr>`;
+	}).join('');
+
+	const totalRow = (() => {
+		const cells = slots.map((_, k) => {
+			let totalCash = 0, totalFbRaw = 0, totalFbConv = 0, totalCashBonus = 0;
+			let hasFb = false, hasCash = false;
+			for (let j = 0; j < n; j++) {
+				const d = cellDetail(j, k);
+				totalCash += d.cash; totalFbRaw += d.fbRaw; totalFbConv += d.fbConv; totalCashBonus += d.cashBonus;
+				if (d.hasBonus && d.isCash) hasCash = true;
+				else if (d.hasBonus) hasFb = true;
+			}
+			const total = totalCash + totalFbConv + totalCashBonus;
+			let lines = `<div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val ${totalCash >= 0 ? 'pos' : 'neg'} strong">${fmt(totalCash)} €</span></div>`;
+			if (hasFb) {
+				lines += `<div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${totalFbRaw > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalFbRaw)} €</span></div>`;
+				lines += `<div class="detail-line"><span class="detail-lbl">Freebet converti</span><span class="detail-val ${totalFbConv > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalFbConv)} €</span></div>`;
+			}
+			if (hasCash) {
+				lines += `<div class="detail-line"><span class="detail-lbl">Cash bonus</span><span class="detail-val ${totalCashBonus > 0 ? 'neut' : 'text-muted'} strong">+${fmt(totalCashBonus)} €</span></div>`;
+			}
+			lines += `<div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val ${total >= 0 ? 'pos' : 'neg'} strong">${fmt(total)} €</span></div>`;
+			return `<td class="td-outcome">${lines}</td>`;
+		}).join('');
+		return `<tr class="total-row"><td><div class="total-label"><div class="site-name">Total</div></div></td>${cells}</tr>`;
+	})();
+
+	return `
+		<div class="breakdown">
+			<table class="breakdown-table">
+				<thead><tr><th>Site / Pari</th>${headRow}</tr></thead>
+				<tbody>${bodyRows}${totalRow}</tbody>
+			</table>
 		</div>`;
 }
 

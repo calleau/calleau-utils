@@ -256,3 +256,103 @@
 .og-cell-readonly.empty {
 	color: var(--color-text-muted, #aaa);
 }
+
+/* ─── Breakdown table par set (gain/perte × issue) ─── */
+.set-card .breakdown {
+	margin-top: 14px;
+	overflow-x: auto;
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+}
+.breakdown-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12.5px;
+}
+.breakdown-table thead {
+	background: var(--color-surface-2);
+}
+.breakdown-table th {
+	padding: 10px 12px;
+	text-align: left;
+	font-weight: 600;
+	border-bottom: 2px solid var(--color-divider);
+}
+.breakdown-table th:first-child {
+	font-size: 10px;
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+	min-width: 160px;
+}
+.breakdown-table .th-outcome-title {
+	font-size: 13px;
+	font-weight: 600;
+	margin-bottom: 2px;
+}
+.breakdown-table .th-outcome-sub {
+	font-size: 10.5px;
+	color: var(--color-text-muted);
+	font-weight: 400;
+}
+.breakdown-table tbody tr {
+	border-bottom: 1px solid var(--color-divider);
+}
+.breakdown-table tbody tr:last-child { border-bottom: none; }
+.breakdown-table td:first-child {
+	padding: 10px 12px;
+	border-right: 1px solid var(--color-divider);
+	min-width: 160px;
+}
+.breakdown-table .site-name {
+	font-weight: 600;
+	font-size: 13px;
+	margin-bottom: 2px;
+}
+.breakdown-table .site-meta {
+	font-size: 10.5px;
+	color: var(--color-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+.breakdown-table .td-outcome {
+	padding: 8px 12px;
+	text-align: left;
+	vertical-align: top;
+	min-width: 180px;
+}
+.breakdown-table .td-outcome.win  { background: color-mix(in srgb, var(--color-pos) 8%, transparent); }
+.breakdown-table .td-outcome.lose { background: color-mix(in srgb, var(--color-neg) 4%, transparent); }
+.detail-line {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 10px;
+	padding: 2px 0;
+}
+.detail-line.total-line {
+	margin-top: 4px;
+	padding-top: 5px;
+	border-top: 1px solid var(--color-divider);
+}
+.detail-lbl {
+	font-size: 10px;
+	color: var(--color-text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+.detail-val {
+	font-variant-numeric: tabular-nums;
+	font-size: 12.5px;
+	font-weight: 500;
+	white-space: nowrap;
+}
+.detail-val.strong { font-size: 13px; font-weight: 600; }
+.breakdown-table .total-row {
+	background: var(--color-surface-2);
+	font-weight: 600;
+}
+.breakdown-table .total-label .site-name {
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
+	font-size: 13px;
+}
