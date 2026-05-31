@@ -44,10 +44,29 @@ function getBack(val) {
 	if (typeof val.odds === 'number') return val.odds >= 1.01 ? val.odds : null;
 	return null;
 }
+function getBackBrut(val) {
+	if (val == null) return null;
+	if (typeof val === 'number') return val >= 1.01 ? val : null;
+	if (typeof val !== 'object') return null;
+	if (val.Back && typeof val.Back === 'object') {
+		const o = val.Back.odds ?? val.Back.odds_net;
+		return (o != null && o >= 1.01) ? o : null;
+	}
+	if (typeof val.odds === 'number') return val.odds >= 1.01 ? val.odds : null;
+	return null;
+}
 function getLay(val) {
 	if (val == null || typeof val !== 'object') return null;
 	if (val.Lay && typeof val.Lay === 'object') {
 		const o = val.Lay.odds_net ?? val.Lay.odds;
+		return (o != null && o >= 1.01) ? o : null;
+	}
+	return null;
+}
+function getLayBrut(val) {
+	if (val == null || typeof val !== 'object') return null;
+	if (val.Lay && typeof val.Lay === 'object') {
+		const o = val.Lay.odds ?? val.Lay.odds_net;
 		return (o != null && o >= 1.01) ? o : null;
 	}
 	return null;
@@ -247,7 +266,11 @@ function parseEvents(data) {
 					const back = getBack(val);
 					const lay  = getLay(val);
 					if (back == null && lay == null) continue;
-					sites[siteName] = { back, lay };
+					sites[siteName] = {
+						back, lay,
+						backBrut: getBackBrut(val),
+						layBrut: getLayBrut(val),
+					};
 				}
 				if (Object.keys(sites).length > 0) issues[issueName] = sites;
 			}
@@ -285,7 +308,8 @@ function tryBuildSetBase(event, ruleIdx, concrete, ruleLabel) {
 			const sitesOdds = {};
 			for (const [site, vals] of Object.entries(issueOdds)) {
 				const o = alt.betType === 'Lay' ? vals.lay : vals.back;
-				if (o != null && o >= 1.01) sitesOdds[site] = o;
+				const oBrut = alt.betType === 'Lay' ? vals.layBrut : vals.backBrut;
+				if (o != null && o >= 1.01) sitesOdds[site] = { net: o, brut: oBrut ?? o };
 			}
 			if (Object.keys(sitesOdds).length === 0) continue;
 			slot.push({ market: alt.market, issue: alt.issue, betType: alt.betType, sitesOdds });
@@ -488,10 +512,14 @@ function genCandidatesForBase(setBase) {
 		const opts = [];
 		for (let altIdx = 0; altIdx < altList.length; altIdx++) {
 			const alt = altList[altIdx];
-			for (const [site, odds] of Object.entries(alt.sitesOdds)) {
+			for (const [site, oddsObj] of Object.entries(alt.sitesOdds)) {
 				const isBonus = bonusSiteNames.has(site);
 				if (isBonus && alt.betType !== 'Back') continue; // bonus = Back uniquement
-				opts.push({ altIdx, site, betType: alt.betType, odds, isBonus, market: alt.market, issue: alt.issue });
+				opts.push({
+					altIdx, site, betType: alt.betType,
+					odds: oddsObj.net, oddsBrut: oddsObj.brut,
+					isBonus, market: alt.market, issue: alt.issue,
+				});
 			}
 		}
 		return opts;
@@ -508,7 +536,7 @@ function genCandidatesForBase(setBase) {
 			const slotSpecs = chosen.map((c, j) => {
 				const cfg = c.isBonus ? bonusBySite.get(c.site) : null;
 				return {
-					site: c.site, betType: c.betType, odds: c.odds,
+					site: c.site, betType: c.betType, odds: c.odds, oddsBrut: c.oddsBrut ?? c.odds,
 					bonus: cfg ? cfg.bonus : 'no_bonus',
 					min: cfg ? cfg.min : 1,
 					maxBonus: cfg ? cfg.maxBonus : 0,
@@ -786,12 +814,20 @@ function renderSetCard(set, idx) {
 		const stake = set.stakes[j];
 		const tag = sl.isBonus ? '<span class="tag tag-bonus">BONUS</span>' : (sl.betType === 'Lay' ? '<span class="tag tag-lay">LAY</span>' : '<span class="tag tag-back">BACK</span>');
 		const cap = set.capped && set.capped[j] ? ' ⚠' : '';
+		const hasComm = sl.oddsBrut != null && Math.abs(sl.oddsBrut - sl.odds) > 0.001;
+		const oddsLine = hasComm
+			? `@ cote brut ${fmt(sl.oddsBrut)} <span class="stake-odds-net">(net ${fmt(sl.odds)})</span>`
+			: `@ cote ${fmt(sl.odds)}`;
+		const liabLine = sl.betType === 'Lay'
+			? `<div class="stake-liab">Liability : ${fmt(stake * ((sl.oddsBrut ?? sl.odds) - 1))} €</div>`
+			: '';
 		return `
 			<div class="stake-card" style="border-left-color:${ACCENT_COLORS[j % ACCENT_COLORS.length]}">
 				<div class="stake-bookie">${escHtml(sl.site)} ${tag}</div>
 				<div class="stake-name">${escHtml(sl.market)} — ${escHtml(sl.issue)}</div>
 				<div class="stake-amount">${fmt(stake)} €${cap}</div>
-				<div class="stake-outcome">@ cote ${fmt(sl.odds)}</div>
+				<div class="stake-outcome">${oddsLine}</div>
+				${liabLine}
 			</div>`;
 	}).join('');
 	return `
@@ -876,12 +912,20 @@ function renderSetBreakdown(set) {
 			return `<td class="td-outcome ${wins ? 'win' : 'lose'}">${lines}</td>`;
 		}).join('');
 		const tag = sl.isBonus ? ' <span class="tag tag-bonus">BONUS</span>' : '';
+		const hasComm = sl.oddsBrut != null && Math.abs(sl.oddsBrut - sl.odds) > 0.001;
+		const oddsTxt = hasComm
+			? `@ ${fmt(sl.oddsBrut)} <span class="text-muted">(net ${fmt(sl.odds)})</span>`
+			: `@ ${fmt(sl.odds)}`;
+		const liabTxt = sl.betType === 'Lay'
+			? `<div class="site-meta">Liability : ${fmt(s * ((sl.oddsBrut ?? sl.odds) - 1))} €</div>`
+			: '';
 		return `
 			<tr>
 				<td>
 					<div class="site-name">${escHtml(sl.site)}${tag}</div>
-					<div class="site-meta">${escHtml(sl.issue)} (${escHtml(sl.betType)}) @ ${fmt(sl.odds)}</div>
+					<div class="site-meta">${escHtml(sl.issue)} (${escHtml(sl.betType)}) ${oddsTxt}</div>
 					<div class="site-meta">Mise : ${fmt(s)} €${cap}</div>
+					${liabTxt}
 				</td>
 				${cells}
 			</tr>`;
