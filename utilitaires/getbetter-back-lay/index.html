@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Getbetter — Back vs Lay</title>
+	<link rel="stylesheet" href="../../theme.css" />
+	<link rel="stylesheet" href="getbetter-back-lay.css" />
+	<script src="../../theme-toggle.js"></script>
+</head>
+
+<body>
+	<div class="wrap">
+
+		<header class="toolbar">
+			<a href="../../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Getbetter — Back vs Lay</h1>
+			<p class="subtitle">Comparer une cote Back et la cote Lay opposée</p>
+		</header>
+
+		<section class="card pbl-config">
+			<div class="pbl-field">
+				<label class="pbl-label" for="pbl-back">Cote Back</label>
+				<div class="numinput">
+					<input type="number" id="pbl-back" step="0.01" min="1.01" placeholder="2.10"
+						oninput="render()" onclick="this.select()" />
+				</div>
+			</div>
+
+			<div class="pbl-field">
+				<label class="pbl-label" for="pbl-lay">Cote Lay</label>
+				<div class="numinput">
+					<input type="number" id="pbl-lay" step="0.01" min="1.01" placeholder="2.05"
+						oninput="render()" onclick="this.select()" />
+				</div>
+			</div>
+
+			<div class="pbl-field">
+				<label class="pbl-label" for="pbl-com">Commission</label>
+				<div class="numinput">
+					<input type="number" id="pbl-com" step="0.1" min="0" max="100" value="3"
+						oninput="render()" onclick="this.select()" />
+					<span class="unit">%</span>
+				</div>
+			</div>
+		</section>
+
+		<section id="pbl-result" hidden>
+			<div class="pbl-table-wrap">
+				<table class="pbl-table">
+					<thead>
+						<tr>
+							<th class="pbl-h pbl-h-bk-brut">Back brut</th>
+							<th class="pbl-h pbl-h-bk-net">Back net</th>
+							<th class="pbl-h pbl-h-ly-net">Lay net</th>
+							<th class="pbl-h pbl-h-ly-brut">Lay brut</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="pbl-c pbl-c-bk-brut">
+								<span class="pbl-main" id="pbl-back-brut">—</span>
+							</td>
+							<td class="pbl-c pbl-c-bk-net">
+								<span class="pbl-main" id="pbl-back-net">—</span>
+							</td>
+							<td class="pbl-c pbl-c-ly-net">
+								<span class="pbl-main" id="pbl-lay-net">—</span>
+								<span class="pbl-sub" id="pbl-lay-net-eq">—</span>
+							</td>
+							<td class="pbl-c pbl-c-ly-brut">
+								<span class="pbl-main" id="pbl-lay-brut">—</span>
+								<span class="pbl-sub" id="pbl-lay-brut-eq">—</span>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p class="pbl-verdict" id="pbl-verdict"></p>
+		</section>
+
+	</div>
+
+	<div id="floating-actions"></div>
+	<script src="getbetter-back-lay.js"></script>
+</body>
+
+</html>
