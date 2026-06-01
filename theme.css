@@ -38,6 +38,10 @@
     --site-piwix-text: #539afb;
     --site-piwix-lay: #fbcc04;
     --site-piwix-bg: #172530;
+	--site-piwix-back-500: #89b8fa;
+	--site-piwix-back-200: #c3d7fb;
+	--site-piwix-lay-500: #fada4b;
+	--site-piwix-lay-200: #fdf3c3;
 
     --site-pmu-text: #ffdc82;
     --site-pmu-bg: #005049;
@@ -187,6 +191,22 @@ a:hover {
 	letter-spacing: 0.05em;
 	line-height: 1;
 }
+
+.back-link {
+	display: inline-block;
+	font-size: 2.8rem;
+	font-weight: 800;
+	line-height: 0.95;
+	letter-spacing: -0.04em;
+	color: var(--color-text);
+	text-decoration: none;
+	transition: color 0.2s;
+	width: fit-content;
+}
+
+.back-link em { font-style: normal; color: var(--c-primary); }
+.back-link:hover { color: var(--c-primary); text-decoration: none; }
+.back-link:hover em { color: var(--c-primary-dark); }
 
 .card {
 	background: var(--color-surface);
