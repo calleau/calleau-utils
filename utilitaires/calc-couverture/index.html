@@ -66,6 +66,20 @@
 			</div>
 		</section>
 
+		<section class="global-settings">
+			<label class="global-setting-toggle">
+				<input type="checkbox" id="commission-enabled">
+				<span>Activer commission</span>
+			</label>
+			<div class="global-setting-detail" id="commission-detail" hidden>
+				<label for="commission-default">Commission Lay par défaut</label>
+				<div class="num">
+					<input type="text" id="commission-default" inputmode="decimal" value="3,00" autocomplete="off" spellcheck="false">
+					<span class="num-suffix">%</span>
+				</div>
+			</div>
+		</section>
+
 		<footer class="page-footer">
 			<span class="footer-version" id="footer-version"></span>
 		</footer>

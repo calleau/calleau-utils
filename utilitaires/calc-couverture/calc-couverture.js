@@ -61,6 +61,31 @@ function nextColId() {
 /**
  * Construit un champ numérique avec steppers, valeur par défaut et minimum.
  */
+/**
+ * Construit une cellule de cote ([data-odds]) avec l'input cote et l'input commission
+ * empilés verticalement. La commission est cachée tant que le paramètre global n'est pas
+ * activé (via la classe .with-commission sur la grille).
+ */
+function getDefaultCommission() {
+	return ($("#commission-default").val() || "3,00").trim() || "3,00";
+}
+
+function buildOddsCell(colId, issueId, defaultOdds = "", isLay = false) {
+	// Back → commission vide (= 0). Lay → commission par défaut globale.
+	const defaultComm = isLay ? getDefaultCommission() : "";
+	const $cell = $(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}"></div>`);
+	const $stack = $("<div class='odds-input-stack'></div>");
+	$stack.append(buildNumberField("", defaultOdds, null));
+	const $commWrap = $("<div class='cell-commission'></div>");
+	$commWrap.append("<span class='cell-commission-label'>Com.</span>");
+	const $commField = buildNumberField("", defaultComm, null, "%");
+	$commField.find("input").addClass("commission-input");
+	$commWrap.append($commField);
+	$stack.append($commWrap);
+	$cell.append($stack);
+	return $cell;
+}
+
 function buildNumberField(ph = "", defaultValue = "", min = null, suffix = "") {
 	const suffixHtml = suffix ? `<span class="num-suffix">${suffix}</span>` : "";
 	const $el = $(`
@@ -105,6 +130,13 @@ function buildNumberField(ph = "", defaultValue = "", min = null, suffix = "") {
 	});
 	$input.on("focus", function () {
 		this.select();
+	});
+	// Cliquer n'importe où dans le wrapper .num focus + sélectionne l'input
+	// (sauf clic sur les steppers + / − qui gardent leur action propre)
+	$el.on("click", function (e) {
+		if ($(e.target).closest(".step").length) return;
+		if (e.target === $input[0]) return;
+		$input[0].focus();
 	});
 	$el.on("click", ".plus", function () {
 		let base = Number(($input.val() || "0").replace(",", "."));
@@ -190,8 +222,9 @@ function addOddsColumn() {
 		const $issueLabel = $(this);
 		const issueId = $issueLabel.attr("data-issueid");
 		const $coteTotale = $issueLabel.nextAll("[data-odds-total]").first();
-		const $newOddsCell = $(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}"></div>`)
-			.append(buildNumberField("","", null));
+		const $stakeCell = $issueLabel.nextAll("[data-stake]").first();
+		const isLay = $stakeCell.hasClass("lay-mode");
+		const $newOddsCell = buildOddsCell(colId, issueId, "", isLay);
 		if ($coteTotale.length) {
 			$coteTotale.before($newOddsCell);
 		}
@@ -278,8 +311,7 @@ function addIssue() {
 	// Pour chaque colonne existante, ajoute une cellule de cote avec ID unique
 	for (let i = 0; i < colIds.length; i++) {
 		const colId = colIds[i];
-		frag.append($(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}"></div>`)
-			.append(buildNumberField("",i === 0 && nextIndex <= 2 ? "2,00" : "", null)));
+		frag.append(buildOddsCell(colId, issueId, i === 0 && nextIndex <= 2 ? "2,00" : ""));
 	}
 	frag.append(`<div class="cell" data-odds-total>—</div>`);
 	// Cellule Mises : deux groupes (Mise + Engagement) — Engagement masqué tant que la ligne n'est pas en mode Lay
@@ -397,16 +429,22 @@ function recomputeAll(redistribute = true) {
 	const $grid = $("#surebet-grid");
 
 	// Collecte des issues
+	const commissionEnabled = $grid.hasClass("with-commission");
 	const issues = [];
 	$grid.find("[data-issuelabel]").each(function () {
 		const p = getRowParts($(this));
 		let hasValue = false;
-		let oddsTotal = 1;
+		let oddsTotal = 1;      // produit des cotes brutes
+		let oddsTotalNet = 1;   // produit des cotes nettes (cote − 1) × (1 − commission) + 1
 		for (const $c of p.$oddsCells) {
-			const v = $c.find("input").val();
+			// Premier input de la cellule = cote (la commission est dans .cell-commission après)
+			const v = $c.find("input").not(".commission-input").first().val();
 			if (v && String(v).trim() !== "") hasValue = true;
-			const n = Number(String(v).replace(",", "."));
-			oddsTotal *= Number.isNaN(n) ? 1 : n;
+			const o = Number(String(v).replace(",", "."));
+			const oVal = Number.isNaN(o) ? 1 : o;
+			oddsTotal *= oVal;
+			const c = commissionEnabled ? (readNum($c.find(".commission-input").first()) / 100) : 0;
+			oddsTotalNet *= 1 + (oVal - 1) * (1 - c);
 		}
 		const $stakeInput = p.$stake && p.$stake.find(".back-stake input").first();
 		const $liabInput = p.$stake && p.$stake.find(".liability input").first();
@@ -416,6 +454,7 @@ function recomputeAll(redistribute = true) {
 			parts: p,
 			hasValue,
 			oddsTotal,
+			oddsTotalNet,
 			stake: stakeVal,
 			engagement: engagementVal,
 			isFixed: !!(p.$fixe && p.$fixe.is(":checked")),
@@ -425,26 +464,68 @@ function recomputeAll(redistribute = true) {
 	});
 
 	// Affichage des cotes totales par issue
-	// Back : valeur unique. Lay : deux lignes ("Lay : O" + "Back : O/(O−1)").
+	// On masque dynamiquement la colonne Net (si pas de commission effective sur la ligne),
+	// la ligne Lay (si la ligne est Back), et les labels/headers s'il ne reste qu'une seule
+	// colonne ou ligne.
+	const fmtBrut = (v) => (v !== null && isFinite(v)) ? v.toFixed(2).replace(".", ",") : "—";
+	const fmtNet  = (v) => (v !== null && isFinite(v)) ? v.toFixed(3).replace(".", ",") : "—";
 	for (const it of issues) {
 		if (!it.parts.$oddsTotal) continue;
 		if (!it.hasValue) {
 			it.parts.$oddsTotal.text("—");
 			continue;
 		}
-		if (it.isLay) {
-			const layText = it.oddsTotal.toFixed(DEC).replace(".", ",");
-			const backEq = it.oddsTotal > 1 ? it.oddsTotal / (it.oddsTotal - 1) : null;
-			const backText = backEq !== null && isFinite(backEq) ? backEq.toFixed(DEC).replace(".", ",") : "—";
-			it.parts.$oddsTotal.html(
-				`<span class="odds-stack">` +
-				`<span class="odds-lay-line">Lay : ${layText}</span>` +
-				`<span class="odds-back-line">Back : ${backText}</span>` +
-				`</span>`
-			);
-		} else {
+
+		// Commission effective sur la ligne : net ≠ brut
+		const hasComm = Math.abs(it.oddsTotal - it.oddsTotalNet) > 1e-9;
+		const showLayRow = it.isLay;
+		const showNetCol = hasComm;
+
+		// Cas trivial : pas de Lay et pas de commission → simple valeur brute
+		if (!showLayRow && !showNetCol) {
 			it.parts.$oddsTotal.text(it.oddsTotal.toFixed(DEC).replace(".", ","));
+			continue;
 		}
+
+		// Cotes brutes/nettes natives + conversion vers l'autre type
+		let backBrut, backNet, layBrut, layNet;
+		if (it.isLay) {
+			layBrut = it.oddsTotal;
+			layNet = it.oddsTotalNet;
+			backBrut = layBrut > 1 ? layBrut / (layBrut - 1) : null;
+			backNet = layNet > 1 ? layNet / (layNet - 1) : null;
+		} else {
+			backBrut = it.oddsTotal;
+			backNet = it.oddsTotalNet;
+		}
+
+		const showColHeaders = showNetCol;  // n'a de sens que s'il y a 2 colonnes
+		const showRowLabels = showLayRow;   // n'a de sens que s'il y a 2 lignes
+		const ncols = (showRowLabels ? 1 : 0) + (showNetCol ? 1 : 0) + 1;
+
+		let html = `<div class="odds-detail" style="grid-template-columns: repeat(${ncols}, auto)">`;
+
+		// En-têtes de colonnes (si Net affichée)
+		if (showColHeaders) {
+			if (showRowLabels) html += `<span></span>`;
+			html += `<span class="odds-detail-head">Net</span>`;
+			html += `<span class="odds-detail-head">Brut</span>`;
+		}
+
+		// Ligne Back
+		if (showRowLabels) html += `<span class="odds-detail-row-label odds-back-label">Back</span>`;
+		if (showNetCol) html += `<span class="odds-detail-value">${fmtNet(backNet)}</span>`;
+		html += `<span class="odds-detail-value">${fmtBrut(backBrut)}</span>`;
+
+		// Ligne Lay (seulement si la ligne est Lay)
+		if (showLayRow) {
+			if (showRowLabels) html += `<span class="odds-detail-row-label odds-lay-label">Lay</span>`;
+			if (showNetCol) html += `<span class="odds-detail-value">${fmtNet(layNet)}</span>`;
+			html += `<span class="odds-detail-value">${fmtBrut(layBrut)}</span>`;
+		}
+
+		html += `</div>`;
+		it.parts.$oddsTotal.html(html);
 	}
 
 	// Ligne Total
@@ -477,12 +558,12 @@ function recomputeAll(redistribute = true) {
 		else totalParts.$oddsTotal.text(trjText);
 	}
 
-	// Équilibrage avec distribution / non-distribution
-	// - Lignes distribuées : profit_total commun (= K - S)
-	// - Lignes non distribuées : profit_total = 0 (stake * odds = S)
-	const eligibles = issues.filter(it => it.hasValue && it.oddsTotal > 0);
-	const sigmaD = eligibles.filter(it => it.isDist).reduce((a, it) => a + 1 / it.oddsTotal, 0);
-	const sigmaN = eligibles.filter(it => !it.isDist).reduce((a, it) => a + 1 / it.oddsTotal, 0);
+	// Équilibrage avec distribution / non-distribution.
+	// Désormais on utilise la cote NETTE pour la redistribution des mises et le calcul
+	// de K/S. L'engagement Lay reste basé sur la cote BRUTE (réalité physique du Lay).
+	const eligibles = issues.filter(it => it.hasValue && it.oddsTotalNet > 0);
+	const sigmaD = eligibles.filter(it => it.isDist).reduce((a, it) => a + 1 / it.oddsTotalNet, 0);
+	const sigmaN = eligibles.filter(it => !it.isDist).reduce((a, it) => a + 1 / it.oddsTotalNet, 0);
 
 	const fixedIssue = issues.find(it => it.isFixed && it.hasValue && it.stake > 0);
 	let K = null, S = null;
@@ -490,12 +571,12 @@ function recomputeAll(redistribute = true) {
 
 	if (fixedIssue) {
 		if (fixedIssue.isDist) {
-			K = fixedIssue.stake * fixedIssue.oddsTotal;
+			K = fixedIssue.stake * fixedIssue.oddsTotalNet;
 			const denom = 1 - sigmaN;
 			if (denom > 0) S = K * sigmaD / denom;
 			else errorMsg = "Configuration impossible : trop de lignes non distribuées.";
 		} else {
-			S = fixedIssue.stake * fixedIssue.oddsTotal;
+			S = fixedIssue.stake * fixedIssue.oddsTotalNet;
 			if (sigmaD > 0) K = S * (1 - sigmaN) / sigmaD;
 			else errorMsg = "Aucune ligne en distribution — cochez au moins une ligne.";
 		}
@@ -505,15 +586,17 @@ function recomputeAll(redistribute = true) {
 		else if (eligibles.length > 0) errorMsg = "Aucune ligne en distribution — cochez au moins une ligne.";
 	}
 
-	// Application des mises (si redistribution autorisée)
+	// Application des mises (si redistribution autorisée) — basée sur la cote NETTE
 	if (redistribute && !errorMsg && K !== null && S !== null) {
 		for (const it of eligibles) {
 			if (it.isFixed) continue;
-			const target = it.isDist ? K / it.oddsTotal : S / it.oddsTotal;
+			const target = it.isDist ? K / it.oddsTotalNet : S / it.oddsTotalNet;
 			setStake(it.parts.$stake, target);
-			// Pour une ligne Lay : engagement = mise × (cote - 1)
+			// Engagement Lay basé sur la cote BRUTE (réalité du marché)
 			if (it.isLay && it.oddsTotal > 1) {
-				setLiability(it.parts.$stake, target * (it.oddsTotal - 1));
+				const newEng = target * (it.oddsTotal - 1);
+				setLiability(it.parts.$stake, newEng);
+				it.engagement = newEng;
 			}
 			it.stake = target;
 		}
@@ -536,25 +619,26 @@ function recomputeAll(redistribute = true) {
 		return a + it.stake;
 	}, 0);
 
-	// Affichage profits & profits totaux
+	// Affichage profits & profits totaux — utilisent la cote NETTE
 	for (const it of issues) {
 		if (it.parts.$profit) {
 			if (!it.hasValue || !it.stake) it.parts.$profit.text("—");
 			else {
-				// Back : profit = mise × cote (retour brut). Lay : profit = mise (gain net si l'issue ne se produit pas).
-				const profit = it.isLay ? it.stake : it.oddsTotal * it.stake;
+				// Back : profit = mise × cote nette (retour réel après commission).
+				// Lay  : profit = mise (gain conservé si l'issue ne se réalise pas).
+				const profit = it.isLay ? it.stake : it.oddsTotalNet * it.stake;
 				it.parts.$profit.text(profit.toFixed(DEC).replace(".", ",") + " €");
 			}
 		}
 		if (it.parts.$profitTotal) {
 			if (!it.hasValue || !it.stake) it.parts.$profitTotal.text("—");
 			else {
-				// "Retour quand le pari de cette ligne gagne" :
-				//   Back : stake × cote
-				//   Lay  : mise + engagement (collatéral récupéré + gain)
+				// "Retour quand le pari de cette ligne gagne" en valeurs nettes :
+				//   Back : stake × cote nette
+				//   Lay  : mise + engagement (le collatéral est récupéré sans commission)
 				const returnedOnWin = it.isLay
 					? it.stake + (it.engagement || it.stake * Math.max(0, it.oddsTotal - 1))
-					: it.stake * it.oddsTotal;
+					: it.stake * it.oddsTotalNet;
 				const profitTotal = returnedOnWin - sumInvested;
 				it.parts.$profitTotal.text(profitTotal.toFixed(DEC).replace(".", ",") + " €");
 			}
@@ -599,7 +683,14 @@ function recomputeAll(redistribute = true) {
 function bindOddsInputs() {
 	const $grid = $("#surebet-grid");
 	// Cotes → recalcul complet (avec redistribution des mises)
-	$grid.on("input cote:changed", "[data-odds] input", () => recomputeAll(true));
+	// Cotes → recalcul complet (redistribution). Commission → refresh affichage seulement.
+	$grid.on("input cote:changed", "[data-odds] input:not(.commission-input)", () => recomputeAll(true));
+	$grid.on("input cote:changed", ".commission-input", () => recomputeAll(true));
+	// Saisie 0 dans une commission → on vide l'input
+	$grid.on("blur", ".commission-input", function () {
+		const v = Number(String(this.value).replace(",", "."));
+		if (!Number.isNaN(v) && v === 0) this.value = "";
+	});
 	// Mises → redistribution uniquement si la ligne modifiée est la ligne fixée
 	$grid.on("input cote:changed", "[data-stake] input", function () {
 		const $cell = $(this).closest("[data-stake]");
@@ -663,7 +754,14 @@ $(function () {
 		const $typeCell = $btn.closest(".cell");
 		const $stakeCell = $typeCell.nextAll("[data-stake]").first();
 		const $oddsTotalCell = $typeCell.nextAll("[data-odds-total]").first();
+		const $label = $typeCell.prevAll("[data-issuelabel]").first();
+		const issueId = $label.attr("data-issueid");
 		if ($stakeCell.length) $stakeCell.toggleClass("lay-mode", newMode === "lay");
+
+		// Commission : remplir avec la valeur par défaut en Lay, vider en Back
+		const $commInputs = $("#surebet-grid").find(`[data-odds][data-issueid='${issueId}'] .commission-input`);
+		if (newMode === "lay") $commInputs.val(getDefaultCommission());
+		else $commInputs.val("");
 
 		// Conversion automatique Mise / Engagement à partir de la cote totale courante
 		const $mainInput = $stakeCell.find(".back-stake input").first();
@@ -692,5 +790,35 @@ $(function () {
 	if (window.lucide) {
 		lucide.createIcons();
 	}
+
+	// ===== Paramètres globaux : commission Lay (localStorage) =====
+	(function () {
+		const KEY_ON = "calcCouv.commissionEnabled";
+		const KEY_VAL = "calcCouv.commissionDefault";
+		const $enabled = $("#commission-enabled");
+		const $detail = $("#commission-detail");
+		const $val = $("#commission-default");
+
+		function applyCommissionVisibility() {
+			const on = $enabled.is(":checked");
+			$detail.prop("hidden", !on);
+			$("#surebet-grid").toggleClass("with-commission", on);
+		}
+
+		$enabled.prop("checked", localStorage.getItem(KEY_ON) === "true");
+		const stored = localStorage.getItem(KEY_VAL);
+		if (stored !== null) $val.val(stored);
+		applyCommissionVisibility();
+
+		$enabled.on("change", function () {
+			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
+			applyCommissionVisibility();
+			recomputeAll(true);
+		});
+		$val.on("input blur", function () {
+			localStorage.setItem(KEY_VAL, this.value);
+		});
+		$val.on("focus", function () { this.select(); });
+	})();
 });
 

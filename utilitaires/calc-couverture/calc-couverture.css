@@ -105,6 +105,44 @@
 	transform: translateY(-50%);
 }
 
+/* Empilage vertical de la cote + commission dans chaque cellule [data-odds] */
+.odds-input-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+/* Commission par cellule de cote : cachée tant que le paramètre global n'est pas activé */
+.cell-commission {
+	display: none;
+}
+.sb-grid.with-commission .cell-commission {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 6px;
+}
+.cell-commission-label {
+	font-size: 11px;
+	color: var(--color-muted);
+	font-weight: 500;
+}
+.cell-commission .num {
+	height: 28px;
+}
+.cell-commission .num input {
+	width: 3.5rem;
+	font-size: 13px;
+	padding: 0 6px;
+}
+.cell-commission .num-suffix {
+	font-size: 12px;
+	padding-right: 6px;
+}
+.cell-commission .steppers {
+	display: none;
+}
+
 /* Couleur du TRJ et des profits totaux selon le TRJ */
 .trj-tier-red { color: var(--color-neg); font-weight: 600; }
 .trj-tier-dark-orange { color: #C07850; font-weight: 600; }
@@ -126,24 +164,29 @@
 	text-align: right;
 }
 
-/* Double-ligne Lay/Back dans la cellule "Cote totale" pour les lignes Lay */
-.odds-stack {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	line-height: 1.2;
+/* Grille détaillée Net/Brut × Back/Lay dans la cellule "Cote totale" */
+.odds-detail {
+	display: grid;
+	grid-template-columns: auto auto auto;
+	gap: 2px 8px;
+	font-size: 12px;
+	align-items: center;
 }
-.odds-lay-line,
-.odds-back-line {
-	font-size: 13px;
+.odds-detail-head {
 	font-weight: 600;
+	color: var(--color-muted);
+	text-align: right;
 }
-.odds-lay-line {
-	color: #806b00;
+.odds-detail-row-label {
+	font-weight: 700;
+	text-align: left;
 }
-.odds-back-line {
-	color: var(--color-accent-700);
+.odds-detail-value {
+	font-family: 'DM Mono', monospace;
+	text-align: right;
 }
+.odds-back-label { color: var(--color-accent-700); }
+.odds-lay-label { color: #806b00; }
 
 /* Ligne TRJ : label positionné en absolu à gauche (n'empiète pas sur les autres colonnes),
    valeur alignée à droite (seule la valeur prend la couleur du tier) */
@@ -309,4 +352,37 @@
 .card,
 .sb-grid {
 	transition: width 0.4s ease;
+}
+
+/* ===== Paramètres globaux (bas de page) ===== */
+.global-settings {
+	margin-top: 1rem;
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 1.5rem;
+}
+
+.global-setting-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	cursor: pointer;
+	font-weight: 500;
+}
+
+.global-setting-detail {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.global-setting-detail[hidden] {
+	display: none;
+}
+
+.global-setting-detail label {
+	font-size: 13px;
+	color: var(--color-muted);
 }
