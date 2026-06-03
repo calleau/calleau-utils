@@ -1,0 +1,189 @@
+:root {
+	--nb-cotes: 2;
+}
+
+.card{
+	width: fit-content;
+}
+
+.sb-error {
+	padding: 0.75rem 1rem;
+	margin-top: 1rem;
+	background: var(--color-danger-bg);
+	color: var(--color-danger-text);
+	border: 1px solid var(--color-danger-border);
+	border-radius: 8px;
+	font-weight: 500;
+}
+
+.card-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 1rem;
+	margin-top: 1rem;
+	flex-wrap: wrap;
+}
+
+/* Grille principale (+ colonne Actions) */
+.sb-grid {
+	display: grid;
+	border-radius: var(--radius);
+	overflow: hidden;
+	grid-template-columns:
+		auto
+		/* N° / Total */
+		repeat(var(--nb-cotes), fit-content(180px))
+		/* Cotes A.. */
+		auto
+		/* Cote totale */
+		auto
+		/* Mises */
+		auto
+		/* Distribution */
+		auto
+		/* Fixe */
+		auto
+		/* Profit */
+		auto
+		/* Profit total */
+		auto;
+	/* Actions */
+	width: fit-content;
+	gap: .5em 2em;
+}
+
+.cell {
+	display: flex;
+	align-items: center;
+}
+
+.cell.head {
+	font-weight: 600;
+}
+
+/* Séparateur horizontal pleine largeur entre chaque ligne */
+.row-sep {
+	grid-column: 1 / -1;
+	height: 1px;
+	background: var(--color-divider);
+}
+
+/* Masque le séparateur juste avant le .divider (évite la double ligne avant le total) */
+.row-sep:has(+ .divider) {
+	display: none;
+}
+
+.rowhead {
+	color: var(--color-muted);
+	font-weight: 600;
+}
+
+.total-label {
+	color: var(--color-text);
+	font-weight: 700;
+}
+
+.divider {
+	grid-column: 1 / -1;
+	height: 2px;
+	background: var(--color-divider);
+}
+
+/* En-tête de colonne de cote : label centré, corbeille au survol */
+.colhead {
+	position: relative;
+	justify-content: center;
+}
+
+.colhead .js-del-col {
+	position: absolute;
+	top: 50%;
+	right: 4px;
+	transform: translateY(-50%);
+}
+
+/* Couleur du TRJ et des profits totaux selon le TRJ */
+.trj-tier-red { color: var(--color-neg); font-weight: 600; }
+.trj-tier-dark-orange { color: #C07850; font-weight: 600; }
+.trj-tier-light-orange { color: #D97706; font-weight: 600; }
+.trj-tier-green { color: var(--color-pos); font-weight: 600; }
+
+/* Centrage des cases à cocher Fixe / Distribution */
+.sb-grid [data-fixehead],
+.sb-grid [data-distributionhead],
+.sb-grid .cell:has(> .radio.fixe),
+.sb-grid .cell:has(> .check.dist) {
+	justify-content: center;
+}
+
+/* Cote totale alignée à droite */
+.sb-grid [data-oddstotalhead],
+.sb-grid [data-odds-total] {
+	justify-content: flex-end;
+	text-align: right;
+}
+
+/* Ligne TRJ : label positionné en absolu à gauche (n'empiète pas sur les autres colonnes),
+   valeur alignée à droite (seule la valeur prend la couleur du tier) */
+.sb-grid [data-last-odds-total] {
+	position: relative;
+	justify-content: flex-end;
+}
+.trj-label {
+	position: absolute;
+	left: 12px;
+	top: 50%;
+	transform: translateY(-50%);
+	font-weight: 600;
+	color: var(--color-muted);
+}
+.trj-value {
+	text-align: right;
+}
+
+/* Suffixe unité (€, %, ...) dans un champ .num */
+.num-suffix {
+	padding: 0 8px 0 0;
+	color: var(--color-muted);
+	font-family: 'DM Mono', monospace;
+	font-size: 15px;
+	user-select: none;
+}
+
+/* Focus sur le wrapper entier au lieu du seul input */
+.num input:focus {
+	box-shadow: none;
+	border-color: transparent;
+}
+
+.num:focus-within {
+	border-color: var(--c-primary);
+	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
+}
+
+/* Boutons de suppression discrets (cotes & issues) */
+.sb-grid .js-del-col,
+.sb-grid .js-del-issue {
+	background: transparent;
+	border: none;
+	border-radius: 5px;
+	width: 26px;
+	height: 26px;
+	display: grid;
+	place-items: center;
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+
+.sb-grid .js-del-col:hover,
+.sb-grid .js-del-issue:hover {
+	background: var(--color-danger-bg);
+	color: var(--color-neg);
+}
+
+.sb-grid .js-del-col .icon,
+.sb-grid .js-del-issue .icon {
+	width: 14px;
+	height: 14px;
+}

@@ -1,0 +1,893 @@
+/* Google Fonts — doit être en premier */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+/* =========================================================
+   Palette principale
+   ========================================================= */
+:root {
+	--c-primary: #5C899D;
+	--c-primary-dark: #2E6377;
+	--c-secondary: #FFFCEF;
+	--c-tertiary: #C07850;
+
+    /* ── Sites ──────────────────────────────────────────────────────── */
+	--site-bet365-text: #f9dd1c;
+    --site-bet365-bg: #0a7f5f;
+
+    --site-betclic-text: #ffffff;
+    --site-betclic-bg: #d2161e;
+
+    --site-betify-text: #101112;
+    --site-betify-bg: #1ed760;
+
+    --site-betsson-text: #ff6600;
+    --site-betsson-bg: #111576;
+
+    --site-bwin-text: #333;
+    --site-bwin-bg: #ffcc00;
+
+    --site-daznbet-text: #080808;
+    --site-daznbet-bg: #f5ff08;
+
+    --site-feelingbet-text: #fdd435;
+    --site-feelingbet-bg: #8f004f;
+
+    --site-olybet-text: #f73535;
+    --site-olybet-bg: #ffffff;
+
+    --site-piwix-text: #539afb;
+    --site-piwix-lay: #fbcc04;
+    --site-piwix-bg: #172530;
+	--site-piwix-back-500: #89b8fa;
+	--site-piwix-back-200: #c3d7fb;
+	--site-piwix-lay-500: #fada4b;
+	--site-piwix-lay-200: #fdf3c3;
+
+    --site-pmu-text: #ffdc82;
+    --site-pmu-bg: #005049;
+
+    --site-pokerstars-text: #000000;
+    --site-pokerstars-bg: #d70022;
+
+    --site-unibet-text: #ffffff;
+    --site-unibet-bg: #307f2d;
+
+    --site-vbet-text: #fff;
+    --site-vbet-bg: #d93093;
+
+    --site-winamax-text: #eb2222;
+    --site-winamax-bg: #000000;
+}
+
+/* =========================================================
+   Variables de thème
+   ========================================================= */
+
+:root[data-theme="light"] {
+	--color-bg: #FFFCEF;
+	--color-surface: #ffffff;
+	--color-surface-2: #f5f2e4;
+	--color-surface-3: #ede9d6;
+
+	--color-text: #131722;
+	--color-muted: #5a6475;
+	--color-divider: #ddd8c4;
+
+	--color-accent-50: #e8fbff;
+	--color-accent-100: #d2f6ff;
+	--color-accent-600: #4fc9dc;
+	--color-accent-700: #35aec2;
+
+	--color-pos: #2a9d6a;
+	--color-neg: #c43a30;
+	--color-neut: var(--c-primary);
+
+	--color-danger-bg: #ffe9eb;
+	--color-danger-border: #e05a5a;
+	--color-danger-text: #7c232d;
+}
+
+:root[data-theme="dark"] {
+	--color-bg: #17120e;
+	--color-surface: #201a14;
+	--color-surface-2: #28211a;
+	--color-surface-3: #302820;
+
+	--color-text: #ede8d4;
+	--color-muted: #756b60;
+	--color-divider: #3a3028;
+
+	--color-accent-50: #0b2d33;
+	--color-accent-100: #0f3d45;
+	--color-accent-600: #57cfe2;
+	--color-accent-700: #74d7e6;
+
+	--color-pos: #3ecf8e;
+	--color-neg: #f06b62;
+	--color-neut: #7BAFC2;
+
+	--color-danger-bg: #2b1114;
+	--color-danger-border: #7c232d;
+	--color-danger-text: #ffd9de;
+}
+
+/* =========================================================
+   Espacement
+   ========================================================= */
+:root {
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.25rem;
+	--space-6: 1.5rem;
+	--space-8: 2rem;
+}
+
+/* =========================================================
+   Reset / Base
+   ========================================================= */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+}
+
+body {
+	font-family: 'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif;
+	background: var(--color-bg);
+	color: var(--color-text);
+	line-height: 1.5;
+	font-size: 16px;
+	transition: background 0.25s, color 0.25s;
+}
+
+a {
+	color: var(--color-accent-600);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+/* =========================================================
+   Layout
+   ========================================================= */
+.wrap {
+	max-width: 80vw;
+	margin: 0 auto;
+	padding: 1.5rem 0 4rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.toolbar {
+	display: flex;
+	align-items: center;
+	gap: 3rem;
+	flex-wrap: wrap;
+}
+
+.actions {
+	display: flex;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.title {
+	margin: 0;
+	font-family: 'Bebas Neue', sans-serif;
+	font-weight: 400;
+	font-size: 4rem;
+	letter-spacing: 0.05em;
+	line-height: 1;
+}
+
+.back-link {
+	display: inline-block;
+	font-size: 2.8rem;
+	font-weight: 800;
+	line-height: 0.95;
+	letter-spacing: -0.04em;
+	color: var(--color-text);
+	text-decoration: none;
+	transition: color 0.2s;
+	width: fit-content;
+}
+
+.back-link em { font-style: normal; color: var(--c-primary); }
+.back-link:hover { color: var(--c-primary); text-decoration: none; }
+.back-link:hover em { color: var(--c-primary-dark); }
+
+.page-footer {
+	border-top: 1px solid var(--color-divider);
+	padding-top: 1rem;
+	text-align: center;
+	margin-top: 1rem;
+}
+
+.footer-version {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.72rem;
+	color: var(--color-muted);
+	letter-spacing: 0.05em;
+}
+
+.card {
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, .07);
+	padding: 1.25rem;
+}
+
+/* =========================================================
+   Typographie
+   ========================================================= */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	margin: 0 0 12px 0;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+p {
+	margin: 0 0 12px 0;
+}
+
+.text-muted  { color: var(--color-muted); }
+.pos         { color: var(--color-pos); }
+.neg         { color: var(--color-neg); }
+.neut        { color: var(--color-neut); }
+.strong      { font-weight: 700; }
+
+/* =========================================================
+   Boutons
+   ========================================================= */
+.btn {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 10px;
+	padding: 10px 16px;
+	font: 600 15px/1.1 'DM Sans', sans-serif;
+	cursor: pointer;
+	border: 1px solid transparent;
+	transition: filter .15s ease, transform .02s ease;
+	text-decoration: none;
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn-primary {
+	background: var(--c-primary);
+	color: #fff;
+	border-color: var(--c-primary);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+}
+
+.btn-primary:hover { filter: brightness(1.08); }
+
+.btn-secondary {
+	background: transparent;
+	color: var(--c-primary-dark);
+	border-color: var(--c-primary);
+}
+
+.btn-secondary:hover { filter: brightness(1.1); }
+
+.btn-danger {
+	background: var(--color-danger-bg);
+	color: var(--color-danger-text);
+	border: 2px solid var(--color-danger-border);
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.btn-danger:hover { filter: brightness(1.05); }
+
+.btn-ghost {
+	background: transparent;
+	border: 1px solid var(--color-divider);
+	color: var(--color-text);
+}
+
+.btn-ghost:hover { background: var(--color-surface-2); }
+
+.btn-icon {
+	width: 2.2rem;
+	height: 2.2rem;
+	border-radius: 8px;
+}
+
+/* =========================================================
+   Form Controls
+   ========================================================= */
+input,
+select,
+textarea {
+	font-family: 'DM Sans', sans-serif;
+	font-size: 14px;
+	border-radius: 8px;
+	border: 1px solid var(--color-divider);
+	padding: 8px 10px;
+	background: var(--color-surface);
+	color: var(--color-text);
+	transition: border-color 0.2s;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	outline: none;
+	border-color: var(--c-primary);
+	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
+}
+
+/* Suppression des spinners natifs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+.check,
+.radio {
+	width: 20px;
+	height: 20px;
+	accent-color: var(--c-primary);
+}
+
+/* =========================================================
+   Champ numérique compact (.num + .step) — utilisé dans surebet
+   ========================================================= */
+.num {
+	--h: 40px;
+	display: flex;
+	align-items: center;
+	height: var(--h);
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	overflow: hidden;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, .1);
+}
+
+.num input {
+	width: 5rem;
+	height: 100%;
+	padding: 0 10px;
+	border: 0;
+	outline: 0;
+	color: var(--color-text);
+	font-size: 15px;
+	font-family: 'DM Mono', monospace;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.num .steppers {
+	display: flex;
+	flex-direction: column;
+	width: 42px;
+	height: 100%;
+	border-left: 1px solid var(--color-divider);
+	background: var(--color-surface-2);
+}
+
+.step {
+	appearance: none;
+	border: 0;
+	height: 50%;
+	cursor: pointer;
+	font-weight: 800;
+	font-size: 16px;
+	color: var(--c-primary);
+	background: var(--color-surface-2);
+}
+
+.step:hover { background: var(--color-surface-3); }
+
+/* =========================================================
+   Champ numérique avec boutons +/- inline — tableau bookmakers
+   ========================================================= */
+.numinput[hidden] {
+	display: none;
+}
+
+.numinput {
+	display: flex;
+	align-items: center;
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	overflow: hidden;
+	height: 36px;
+	width: fit-content;
+	transition: border-color 0.2s;
+	background: var(--color-surface);
+}
+
+.numinput:focus-within {
+	border-color: var(--c-primary);
+	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
+}
+
+.numinput input {
+	border: none;
+	border-radius: 0;
+	height: 100%;
+	width: 5.5rem;
+	padding: 0 6px;
+	text-align: right;
+	font-family: 'DM Mono', monospace;
+	font-size: 14px;
+	font-variant-numeric: tabular-nums;
+	box-shadow: none;
+}
+
+.numinput input:focus { box-shadow: none; border: none; }
+
+.numinput .unit {
+	font-size: 0.78rem;
+	color: var(--color-text);
+	padding: 0 6px 0 0;
+	font-family: 'DM Mono', monospace;
+}
+
+.numinput .nbtn-wrap {
+	display: flex;
+	flex-direction: column;
+	border-left: 1px solid var(--color-divider);
+	height: 100%;
+}
+
+.nbtn {
+	appearance: none;
+	border: none;
+	background: var(--color-surface-3);
+	color: var(--color-muted);
+	cursor: pointer;
+	font-size: 0.5rem;
+	height: 50%;
+	width: 22px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background 0.15s, color 0.15s;
+	line-height: 1;
+}
+
+.nbtn:hover {
+	background: var(--c-primary);
+	color: #fff;
+}
+
+/* =========================================================
+   Boutons flottants — conteneur partagé
+   ========================================================= */
+#floating-actions {
+	position: fixed;
+	top: 1rem;
+	right: 1rem;
+	z-index: 100;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.8rem;
+}
+
+/* =========================================================
+   Widget « versions précédentes » — partagé
+   ========================================================= */
+#versions-widget { position: relative; }
+
+.btn-versions-toggle {
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: 50%;
+	border: 1px solid var(--color-divider);
+	background: var(--color-surface);
+	color: var(--color-text);
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	transition: background 0.2s, color 0.2s;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-versions-toggle:hover {
+	background: var(--color-surface-2);
+	color: var(--color-text);
+}
+
+.versions-dropdown {
+	position: absolute;
+	right: 0;
+	top: calc(100% + 0.5rem);
+	min-width: 170px;
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+	overflow: hidden;
+}
+
+.versions-header {
+	font-size: 0.65rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	padding: 0.7rem 1rem 0.5rem;
+	border-bottom: 1px solid var(--color-divider);
+	margin: 0;
+}
+
+.version-link {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.6rem 1rem;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.875rem;
+	color: var(--color-text);
+	text-decoration: none;
+	border-bottom: 1px solid var(--color-divider);
+	transition: background 0.15s, color 0.15s;
+}
+
+.version-link:last-child { border-bottom: none; }
+
+.version-link:hover {
+	background: var(--color-surface-2);
+	color: var(--c-primary);
+	text-decoration: none;
+}
+
+.versions-msg {
+	padding: 0.7rem 1rem;
+	font-size: 0.85rem;
+	color: var(--color-muted);
+	margin: 0;
+}
+
+/* =========================================================
+   Bouton de bascule light / dark
+   ========================================================= */
+.btn-theme-toggle {
+	position: static;
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: 50%;
+	border: 1px solid var(--color-divider, rgba(0, 0, 0, 0.15));
+	background: var(--color-surface, rgba(255, 255, 255, 0.85));
+	color: var(--color-text, #1c1c1c);
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	transition: background 0.2s, border-color 0.2s;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-theme-toggle:hover { background: var(--color-surface-2, rgba(0, 0, 0, 0.06)); }
+
+.btn-theme-toggle.hp {
+	border-color: rgba(46, 99, 119, 0.25);
+	background: rgba(255, 252, 239, 0.9);
+	color: #1c1c1c;
+}
+
+:root[data-theme="dark"] .btn-theme-toggle.hp {
+	background: rgba(24, 19, 15, 0.9);
+	border-color: rgba(123, 175, 194, 0.25);
+	color: #ede8d4;
+}
+
+/* =========================================================
+   Cartes de métriques
+   ========================================================= */
+.metrics-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	gap: 1rem;
+}
+
+.metric-card {
+	background: var(--color-surface);
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	padding: 1.1rem 1.25rem;
+}
+
+.metric-label {
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	margin-bottom: 0.4rem;
+}
+
+.metric-value {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 2.4rem;
+	letter-spacing: 0.02em;
+	line-height: 1;
+	color: var(--color-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.metric-value.pos { color: var(--color-pos); }
+.metric-value.neg { color: var(--color-neg); }
+
+/* =========================================================
+   Tableau bookmakers
+   ========================================================= */
+.bookies-table-container {
+	overflow-x: auto;
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	overflow: hidden;
+}
+
+.bookies-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+}
+
+.bookies-table thead {
+	background: var(--color-surface-2);
+	border-bottom: 1px solid var(--color-divider);
+}
+
+.bookies-table th {
+	padding: 12px 14px;
+	text-align: left;
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-text);
+	border-bottom: 2px solid var(--color-divider);
+	white-space: nowrap;
+}
+
+.bookies-table td {
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--color-divider);
+	vertical-align: middle;
+}
+
+.bookies-table tbody tr:last-child td { border-bottom: none; }
+
+.bookies-table tbody tr:hover { background: rgba(92, 137, 157, 0.03); }
+
+.bookies-table input[type="text"] {
+	width: 100%;
+	min-width: 100px;
+}
+
+.bookie-num-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.78rem;
+	font-weight: 500;
+	color: var(--color-text);
+	white-space: nowrap;
+}
+
+/* Dot du type de bonus */
+.bonus-dot {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	transition: background 0.2s;
+}
+
+.bonus-select-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.bonus-dot[data-bonus="freebet_always"] { background: var(--c-primary); }
+.bonus-dot[data-bonus="freebet_lose"]   { background: var(--c-tertiary); }
+.bonus-dot[data-bonus="cash_always"]    { background: var(--color-pos); }
+.bonus-dot[data-bonus="cash_lose"]      { background: #7BA18A; }
+.bonus-dot[data-bonus="no_bonus"]       { background: var(--color-muted); }
+
+/* =========================================================
+   Tableau de résultats (breakdown)
+   ========================================================= */
+.breakdown {
+	overflow: hidden;
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+}
+
+.breakdown-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.875rem;
+}
+
+.breakdown-table thead {
+	background: var(--color-surface-2);
+}
+
+.breakdown-table th {
+	padding: 12px 16px;
+	text-align: left;
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--color-text);
+	border-bottom: 2px solid var(--color-divider);
+	white-space: nowrap;
+}
+
+.th-outcome-title {
+	color: var(--color-text);
+	font-size: 0.85rem;
+	font-weight: 600;
+	text-transform: none;
+	letter-spacing: 0;
+	margin-bottom: 2px;
+}
+
+.th-outcome-sub {
+	font-size: 0.72rem;
+	font-weight: 400;
+	color: var(--color-text);
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.breakdown-table td {
+	padding: 10px 16px;
+	border-bottom: 1px solid var(--color-divider);
+	vertical-align: top;
+}
+
+.breakdown-table tbody tr:last-child td { border-bottom: none; }
+
+.td-outcome.win  { background: rgba(42, 157, 106, 0.04); }
+.td-outcome.lose { background: rgba(196, 67, 48, 0.03); }
+
+.total-row td {
+	background: var(--color-surface-2);
+	border-top: 2px solid var(--color-divider);
+}
+
+.total-label .site-name {
+	font-family: 'Bebas Neue', sans-serif;
+	font-size: 1rem;
+	letter-spacing: 0.12em;
+	color: var(--c-primary);
+}
+
+.site-name {
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+.site-meta {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.75rem;
+	color: var(--color-text);
+	margin-top: 2px;
+}
+
+.detail-line {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.75rem;
+	padding: 3px 0;
+}
+
+.total-line {
+	margin-top: 5px;
+	padding-top: 6px;
+	border-top: 1px solid var(--color-divider);
+}
+
+.detail-lbl {
+	font-size: 0.72rem;
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+.detail-val {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.8rem;
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.detail-val.strong { font-size: 0.85rem; font-weight: 700; }
+
+/* =========================================================
+   Messages d'erreur / tip
+   ========================================================= */
+.error-box {
+	background: var(--color-danger-bg);
+	border: 1px solid var(--color-danger-border);
+	color: var(--color-danger-text);
+	border-radius: 10px;
+	padding: 1rem 1.25rem;
+	font-size: 0.9rem;
+}
+
+.tip {
+	font-size: 0.78rem;
+	color: var(--color-muted);
+}
+
+/* Site pills */
+
+.ff-site-pill {
+	display: inline-block;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	padding: 1px 7px;
+	border-radius: 4px;
+	background: var(--color-surface-2);
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+.ff-site-pill[data-site="betclic"] { background: var(--site-betclic-bg); color: var(--site-betclic-text); }
+.ff-site-pill[data-site="betify"] { background: var(--site-betify-bg); color: var(--site-betify-text); }
+.ff-site-pill[data-site="betsson"] { background: var(--site-betsson-bg); color: var(--site-betsson-text); }
+.ff-site-pill[data-site="bwin"] { background: var(--site-bwin-bg); color: var(--site-bwin-text); }
+.ff-site-pill[data-site="daznbet"] { background: var(--site-daznbet-bg); color: var(--site-daznbet-text); }
+.ff-site-pill[data-site="feelingbet"] { background: var(--site-feelingbet-bg); color: var(--site-feelingbet-text); }
+.ff-site-pill[data-site="olybet"] { background: var(--site-olybet-bg); color: var(--site-olybet-text); }
+.ff-site-pill[data-site="piwix"] { background: var(--site-piwix-bg); color: var(--site-piwix-text); }
+.ff-site-pill[data-site="piwix"].ff-site-pill--lay { color: var(--site-piwix-lay); }
+.ff-site-pill[data-site="pmu"] { background: var(--site-pmu-bg); color: var(--site-pmu-text); }
+.ff-site-pill[data-site="pokerstars"] { background: var(--site-pokerstars-bg); color: var(--site-pokerstars-text); }
+.ff-site-pill[data-site="unibet"] { background: var(--site-unibet-bg); color: var(--site-unibet-text); }
+.ff-site-pill[data-site="vbet"] { background: var(--site-vbet-bg); color: var(--site-vbet-text); }
+.ff-site-pill[data-site="winamax"] { background: var(--site-winamax-bg); color: var(--site-winamax-text); }
+
+/* Mise type tag */
+
+.ff-mise-tag {
+	display: inline-block;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 0.62rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	padding: 1px 6px;
+	border-radius: 3px;
+	vertical-align: middle;
+}
+
+.ff-mise-tag--fb   { background: rgba(42, 157, 106, 0.18); color: var(--color-pos); }
+.ff-mise-tag--cash { background: rgba(251, 204, 4,  0.22); color: #a07800; }
+
+:root[data-theme="dark"] .ff-mise-tag--cash { color: #f0c030; }

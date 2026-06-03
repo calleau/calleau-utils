@@ -4,35 +4,37 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>Surebet calculator</title>
+	<title>Calculatrice couverture</title>
 
 	<link rel="stylesheet" href="../../theme.css" />
-	<link rel="stylesheet" href="surebet.css" />
+	<link rel="stylesheet" href="calc-couverture.css" />
 	<script src="../../theme-toggle.js"></script>
+	<script src="versions.js"></script>
+	<script src="../../versions-widget.js"></script>
 	<script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
 <body>
 	<main class="wrap">
 		<header class="toolbar">
-			<h1 class="title">Surebet calculator</h1>
-			<div class="actions">
-				<button id="add-col" class="btn btn-secondary">+ Ajouter une colonne de cote</button>
-				<button id="add-row" class="btn btn-primary">+ Ajouter une issue</button>
-			</div>
+			<a href="../../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Calculatrice couverture</h1>
 		</header>
 
 		<section class="card">
 			<div id="surebet-grid" class="sb-grid" data-odds-cols="0" aria-label="Tableau surebet">
 				<!-- EN-TÊTES -->
 				<div class="cell head sticky" data-oddslabelhead>Cotes</div>
+				<div class="cell head" data-typehead>Type</div>
 				<!-- Pas de colonne de cote par défaut -->
-				<div class="cell head" data-oddstotalhead>Cote totale</div>
+				<div class="cell head" data-oddstotalhead>Cote<br>totale</div>
 				<div class="cell head" data-stakehead>Mises</div>
 				<div class="cell head" data-fixehead>Fixe</div>
 				<div class="cell head" data-distributionhead>Distribution</div>
-				<div class="cell head" data-profithead>Profits</div>
-				<div class="cell head right" data-actionshead>Actions</div>
+				<div class="cell head" data-profithead>Profit</div>
+				<div class="cell head" data-profittotalhead>Profit total</div>
+				<div class="cell head right" data-actionshead></div>
+				<div class="row-sep"></div>
 
 				<!-- ISSUES -->
 
@@ -41,25 +43,37 @@
 
 				<!-- LIGNE TOTALE -->
 				<div class="cell rowhead sticky total-label">Total</div>
+				<div class="cell" data-type></div>
 				<!-- Pas de colonne de cote par défaut -->
-				<div class="cell" data-last-odds-total>TRJ : —</div>
+				<div class="cell" data-last-odds-total><span class="trj-label">TRJ</span><span class="trj-value">—</span></div>
 				<div class="cell" data-stake>
 					<!-- Mise à 10 par défaut, sera hydratée par JS aussi -->
 				</div>
 				<div class="cell">
-					<input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe total" checked>
+					<input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe total">
 				</div>
 				<div class="cell">
 					<input type="checkbox" class="check dist" aria-label="Distribution total" checked>
 				</div>
-				<div class="cell right" data-profit></div>
+				<div class="cell right"></div>
+				<div class="cell right" data-profit-total></div>
 				<div class="cell right"></div> <!-- pas de suppression sur la ligne totale -->
 			</div>
+			<div class="sb-error" id="sb-error" hidden></div>
+			<div class="card-actions">
+				<button id="add-col" class="btn btn-secondary">+ Ajouter une colonne de cote</button>
+				<button id="add-row" class="btn btn-primary">+ Ajouter une issue</button>
+			</div>
 		</section>
+
+		<footer class="page-footer">
+			<span class="footer-version" id="footer-version"></span>
+		</footer>
 	</main>
 
+	<div id="floating-actions"></div>
 	<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-	<script src="surebet.js"></script>
+	<script src="calc-couverture.js"></script>
 </body>
 
 </html>
