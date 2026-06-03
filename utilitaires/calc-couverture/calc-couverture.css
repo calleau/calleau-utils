@@ -41,9 +41,9 @@
 		auto
 		/* Mises */
 		auto
-		/* Distribution */
-		auto
 		/* Fixe */
+		auto
+		/* Distribution */
 		auto
 		/* Profit */
 		auto
@@ -52,6 +52,34 @@
 	/* Actions */
 	width: fit-content;
 	gap: .5em 2em;
+}
+
+/* Quand au moins une issue a 2+ détails, on insère la colonne Fixe détail
+   entre Mises et Fixe (8e position). */
+.sb-grid.has-multi-details {
+	grid-template-columns:
+		auto
+		auto
+		repeat(var(--nb-cotes), fit-content(180px))
+		auto
+		auto
+		auto /* Fixe détail */
+		auto
+		auto
+		auto
+		auto
+		auto;
+}
+
+/* Cellules Fixe détail : présentes dans le DOM mais invisibles tant que
+   la colonne n'est pas activée (aucune issue multi-détails). */
+.sb-grid:not(.has-multi-details) [data-fixedetailhead],
+.sb-grid:not(.has-multi-details) [data-fixedetail] {
+	display: none;
+}
+.sb-grid [data-fixedetailhead],
+.sb-grid [data-fixedetail] {
+	justify-content: center;
 }
 
 .cell {
@@ -226,6 +254,69 @@
 	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
 }
 
+/* Bouton "Ajouter détail" : compact, dans la cellule Actions de l'issue.
+   Visible uniquement quand la fonctionnalité globale "détails issues" est active. */
+.sb-grid .js-add-detail {
+	display: none;
+	background: transparent;
+	border: 1px dashed var(--color-divider);
+	border-radius: 5px;
+	padding: 2px 8px;
+	font-size: 11px;
+	color: var(--color-muted);
+	cursor: pointer;
+	margin-right: 6px;
+	white-space: nowrap;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sb-grid.with-details .js-add-detail {
+	display: inline-flex;
+	align-items: center;
+}
+.sb-grid .js-add-detail:hover {
+	background: var(--color-accent-100);
+	color: var(--color-accent-700);
+	border-color: var(--color-accent-600);
+}
+.sb-grid .js-del-detail {
+	background: transparent;
+	border: none;
+	border-radius: 5px;
+	width: 22px;
+	height: 22px;
+	display: grid;
+	place-items: center;
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+.sb-grid .js-del-detail:hover {
+	background: var(--color-danger-bg);
+	color: var(--color-neg);
+}
+.sb-grid .js-del-detail .icon {
+	width: 12px;
+	height: 12px;
+}
+
+/* Conteneur des actions par détail (mise + petit bouton supprimer détail). */
+.detail-actions {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+}
+
+/* Profit cell — affiche la valeur par détail, et optionnellement un total
+   issue agrégé sous la dernière valeur. */
+.profit-issue-sum {
+	display: block;
+	margin-top: 2px;
+	font-size: 11px;
+	color: var(--color-muted);
+	font-style: italic;
+}
+
 /* Boutons de suppression discrets (cotes & issues) */
 .sb-grid .js-del-col,
 .sb-grid .js-del-issue {
@@ -385,4 +476,60 @@
 .global-setting-detail label {
 	font-size: 13px;
 	color: var(--color-muted);
+}
+
+/* ===== Debug ===== */
+.cc-debug-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.65rem;
+	color: var(--color-muted);
+	opacity: 0.4;
+	padding: 2px 6px;
+	border-radius: 4px;
+	margin-left: 1rem;
+	transition: opacity 0.15s, color 0.15s;
+}
+
+.cc-debug-btn:hover { opacity: 0.8; }
+
+.cc-debug-btn--active {
+	color: var(--color-pos, #16a34a);
+	opacity: 1;
+}
+
+.cc-debug-icon {
+	filter: invert(60%) sepia(0%) saturate(0%) hue-rotate(0deg);
+}
+
+.cc-debug-btn--active .cc-debug-icon {
+	filter: invert(45%) sepia(80%) saturate(400%) hue-rotate(90deg) brightness(90%);
+}
+
+.cc-debug-dl-btn {
+	display: inline-block;
+	width: fit-content;
+	margin-top: 1rem;
+	padding: 7px 14px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	border: 1.5px dashed var(--color-pos, #16a34a);
+	border-radius: 8px;
+	background: none;
+	color: var(--color-pos, #16a34a);
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.cc-debug-dl-btn[hidden] {
+	display: none;
+}
+
+.cc-debug-dl-btn:hover {
+	background: color-mix(in srgb, var(--color-pos, #16a34a) 10%, transparent);
 }
