@@ -538,13 +538,14 @@ function recomputeAll(redistribute = true) {
 		isDist: !!(totalParts.$dist && totalParts.$dist.is(":checked")),
 	};
 
-	// TRJ : on prend la cote Back équivalente pour les lignes Lay (O → O/(O−1))
+	// TRJ : calculé à partir des cotes NETTES, en convertissant les Lay en Back-équivalent
+	// sur leur cote nette (O_net → O_net / (O_net − 1)).
 	let sumInv = 0, countValid = 0;
 	for (const it of issues) {
-		if (!it.hasValue || it.oddsTotal <= 0) continue;
+		if (!it.hasValue || it.oddsTotalNet <= 0) continue;
 		const effOdds = it.isLay
-			? (it.oddsTotal > 1 ? it.oddsTotal / (it.oddsTotal - 1) : null)
-			: it.oddsTotal;
+			? (it.oddsTotalNet > 1 ? it.oddsTotalNet / (it.oddsTotalNet - 1) : null)
+			: it.oddsTotalNet;
 		if (effOdds && effOdds > 0 && isFinite(effOdds)) {
 			sumInv += 1 / effOdds;
 			countValid++;
