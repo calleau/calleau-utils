@@ -3,27 +3,17 @@ const STEP = 0.01;
 const DEC = 2;
 
 let nb_odds = 0;
-let nb_issues = 0; // anciennement nb_lines
+let nb_issues = 0;
 
-let issueCounter = 1; // Pour générer I01, I02, ...
-let colCounter = 1;   // Pour générer C01, C02, ...
-const colIds = [];    // Liste ordonnée des IDs de colonnes (ex: ["C01", "C02, ...])
-
-
-/**
- * Il faut que cela équilibre les mises, en fonction de quelle ligne est considérée comme "fixe", pour essayer d'avoir un profit égal sur toutes les lignes. Et ça doit se faire dès qu'une cotes est mise à jour, que la ligne "fixe" est changée ou que la mise de la ligne fixe est modifiée.
- */
+let issueCounter = 1;   // I01, I02, ...
+let colCounter = 1;     // C01, C02, ...
+let detailCounter = 1;  // D01, D02, ...
+const colIds = [];
 
 /* ---------- Helpers ---------- */
 
-/**
- * Arrondit un nombre à 2 décimales (ou DEC).
- */
 function toFixed2(n) { return Number(n).toFixed(DEC); }
 
-/**
- * Normalise une chaîne de caractères en nombre décimal (format français/anglais).
- */
 function normalize(val) {
 	if (val === "" || val == null) return "";
 	const safe = String(val).replace(/[^\d.,-]/g, "");
@@ -33,47 +23,25 @@ function normalize(val) {
 	return Number.isNaN(num) ? "" : toFixed2(num);
 }
 
-/**
- * Retourne la lettre correspondant à l'index (1 => A, 2 => B, ...).
- */
 function letterFor(idx) { return String.fromCharCode(64 + idx); }
 
-/**
- * Génère un nouvel identifiant unique pour une issue (ex: I01, I02, ...).
- */
-function nextIssueId() {
-	let currStrIssueCounter = String(issueCounter++);
-	if(issueCounter < 10) currStrIssueCounter = "0" + currStrIssueCounter;
-	return "I" + currStrIssueCounter;
-}
+function pad2(n) { const s = String(n); return s.length < 2 ? "0" + s : s; }
 
-/**
- * Génère un nouvel identifiant unique pour une colonne (ex: C01, C02, ...).
- */
+function nextIssueId() { return "I" + pad2(issueCounter++); }
 function nextColId() {
-	let currStrOddsCounter = String(colCounter++);
-	if(colCounter < 10) currStrOddsCounter = "0" + currStrOddsCounter;
-	currStrOddsCounter = "C" + currStrOddsCounter;
-	colIds.push(currStrOddsCounter);
-	return currStrOddsCounter;
+	const id = "C" + pad2(colCounter++);
+	colIds.push(id);
+	return id;
 }
+function nextDetailId() { return "D" + pad2(detailCounter++); }
 
-/**
- * Construit un champ numérique avec steppers, valeur par défaut et minimum.
- */
-/**
- * Construit une cellule de cote ([data-odds]) avec l'input cote et l'input commission
- * empilés verticalement. La commission est cachée tant que le paramètre global n'est pas
- * activé (via la classe .with-commission sur la grille).
- */
 function getDefaultCommission() {
 	return ($("#commission-default").val() || "3,00").trim() || "3,00";
 }
 
-function buildOddsCell(colId, issueId, defaultOdds = "", isLay = false) {
-	// Back → commission vide (= 0). Lay → commission par défaut globale.
+function buildOddsCell(colId, issueId, detailId, defaultOdds = "", isLay = false) {
 	const defaultComm = isLay ? getDefaultCommission() : "";
-	const $cell = $(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}"></div>`);
+	const $cell = $(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}" data-detailid="${detailId}"></div>`);
 	const $stack = $("<div class='odds-input-stack'></div>");
 	$stack.append(buildNumberField("", defaultOdds, null));
 	const $commWrap = $("<div class='cell-commission'></div>");
@@ -101,13 +69,11 @@ function buildNumberField(ph = "", defaultValue = "", min = null, suffix = "") {
 	const $input = $el.find("input");
 	if (defaultValue !== "") $input.val(defaultValue.replace(".", ","));
 
-	// Gestion de la saisie et du minimum
 	$input.on("input", function () {
 		let v = this.value.replace(/[^\d.,-]/g, "");
 		const parts = v.replace(",", ".").split(".");
 		if (parts.length > 2) v = parts[0] + "." + parts.slice(1).join("");
 		this.value = v;
-		// Correction valeur min (sauf si le champ est vide)
 		if (this.value !== "") {
 			let num = Number(this.value.replace(",", "."));
 			if (min !== null && !isNaN(num) && num < min) {
@@ -128,11 +94,7 @@ function buildNumberField(ph = "", defaultValue = "", min = null, suffix = "") {
 		this.value = val;
 		$input.trigger("cote:changed");
 	});
-	$input.on("focus", function () {
-		this.select();
-	});
-	// Cliquer n'importe où dans le wrapper .num focus + sélectionne l'input
-	// (sauf clic sur les steppers + / − qui gardent leur action propre)
+	$input.on("focus", function () { this.select(); });
 	$el.on("click", function (e) {
 		if ($(e.target).closest(".step").length) return;
 		if (e.target === $input[0]) return;
@@ -155,36 +117,25 @@ function buildNumberField(ph = "", defaultValue = "", min = null, suffix = "") {
 	return $el;
 }
 
-/**
- * Applique le nombre de colonnes de cotes à la grille CSS.
- */
 function applyGridTemplate($grid) {
 	const n = Number($grid.attr("data-odds-cols"));
 	$grid[0].style.setProperty('--nb-cotes', n);
 }
 
-/**
- * Transforme les cellules vides en champs numériques interactifs.
- */
 function hydrate() {
 	const $grid = $("#surebet-grid");
 	$grid.find("[data-odds]").each(function () {
-		if (!$(this).children().length) $(this).append(buildNumberField("","", null));
+		if (!$(this).children().length) $(this).append(buildNumberField("", "", null));
 	});
 	$grid.find("[data-stake]").each(function () {
-		// Si c'est la mise du total, mettre 10 par défaut
 		if (!$(this).children().length) {
 			const isTotal = $(this).closest(".sb-grid").length && $(this).prevAll(".total-label").length > 0;
-			$(this).append(buildNumberField("",isTotal ? "10,00" : "", 0.01, "€"));
+			$(this).append(buildNumberField("", isTotal ? "10,00" : "", 0.01, "€"));
 		}
 	});
-	// Cocher toutes les cases de distribution par défaut
 	$grid.find('.check.dist').prop('checked', true);
 }
 
-/**
- * Met à jour les labels et data-col des en-têtes de colonnes de cotes.
- */
 function renumberColumnHeaders() {
 	$("#surebet-grid").find("[data-oddshead]").each(function (i) {
 		const idx = i + 1;
@@ -193,19 +144,89 @@ function renumberColumnHeaders() {
 	});
 }
 
-/**
- * Ajoute une colonne de cote à la grille, avec identifiant unique.
- */
+/* ---------- Construction des cellules par détail ---------- */
+
+function buildTypeCell(issueId, detailId) {
+	return $(`
+		<div class="cell" data-type data-issueid="${issueId}" data-detailid="${detailId}">
+			<button type="button" class="type-toggle" data-mode="back" aria-label="Basculer Back / Lay">
+				<span class="type-inner">
+					<span class="type-face type-face-back">+ Back</span>
+					<span class="type-face type-face-lay">− Lay</span>
+				</span>
+			</button>
+			<button class="btn-icon btn btn-danger js-del-detail" data-issueid="${issueId}" data-detailid="${detailId}" title="Supprimer ce détail" style="margin-left:6px;display:none;">
+				<i data-lucide="trash-2" class="icon"></i>
+			</button>
+		</div>
+	`);
+}
+
+function buildStakeCell(issueId, detailId, defaultStake = "") {
+	const $cell = $(`<div class='cell' data-stake data-issueid="${issueId}" data-detailid="${detailId}"></div>`);
+	const $sg = $("<div class='stake-input-group back-stake'><span class='stake-label'>Mise</span></div>")
+		.append(buildNumberField("", defaultStake, 0.01, "€"));
+	const $lg = $("<div class='stake-input-group liability'><span class='stake-label'>Engagement</span></div>")
+		.append(buildNumberField("", "", 0.01, "€"));
+	$cell.append($sg).append($lg);
+	return $cell;
+}
+
+function buildFixeDetailCell(issueId, detailId) {
+	return $(`
+		<div class="cell" data-fixedetail data-issueid="${issueId}" data-detailid="${detailId}">
+			<input type="checkbox" class="check fixe-detail" aria-label="Fixe détail">
+		</div>
+	`);
+}
+
+function buildOddsTotalCell(issueId, detailId) {
+	return $(`<div class="cell" data-odds-total data-issueid="${issueId}" data-detailid="${detailId}">—</div>`);
+}
+
+function buildProfitCell(issueId, detailId) {
+	return $(`<div class="cell right" data-profit data-issueid="${issueId}" data-detailid="${detailId}">—</div>`);
+}
+
+function buildIssueActionsCell(issueId) {
+	return $(`
+		<div class="cell right" data-actions data-issueid="${issueId}">
+			<div class="detail-actions">
+				<button type="button" class="js-add-detail" title="Ajouter une ligne de détail">+ Détail</button>
+				<button class="btn-icon btn btn-danger js-del-issue" title="Supprimer l'issue">
+					<i data-lucide="trash-2" class="icon"></i>
+				</button>
+			</div>
+		</div>
+	`);
+}
+
+/* Cellules par détail (Type, cotes, cote totale, mise, fixe détail).
+   Renvoie un tableau de jQuery objects à insérer dans le DOM. */
+function buildDetailCellsArr(issueId, detailId, opts = {}) {
+	const cells = [];
+	cells.push(buildTypeCell(issueId, detailId));
+	for (let i = 0; i < colIds.length; i++) {
+		const colId = colIds[i];
+		const defaultOdds = (opts.defaultOdds && i === 0) ? opts.defaultOdds : "";
+		cells.push(buildOddsCell(colId, issueId, detailId, defaultOdds, false));
+	}
+	cells.push(buildOddsTotalCell(issueId, detailId));
+	cells.push(buildStakeCell(issueId, detailId, opts.defaultStake || ""));
+	cells.push(buildFixeDetailCell(issueId, detailId));
+	return cells;
+}
+
+/* ---------- Ajout / suppression de colonnes de cotes ---------- */
+
 function addOddsColumn() {
 	const $grid = $("#surebet-grid");
 	let next = Number($grid.attr("data-odds-cols")) + 1;
 	$grid.attr("data-odds-cols", String(next));
 	applyGridTemplate($grid);
 
-	// Génère un nouvel ID de colonne
 	const colId = nextColId();
 
-	// En-tête avec corbeille
 	const $newHead = $(`
 		<div class="cell head colhead" data-oddshead data-col="${next}" data-colid="${colId}">
 			<span class="col-label">${letterFor(next)}</span>
@@ -217,66 +238,56 @@ function addOddsColumn() {
 	const $headerBefore = $grid.find("[data-oddstotalhead]").last();
 	$headerBefore.before($newHead);
 
-	// Pour chaque issue, insérer la nouvelle cellule de cote avec ID unique
-	$grid.find("[data-issuelabel]").each(function () {
-		const $issueLabel = $(this);
-		const issueId = $issueLabel.attr("data-issueid");
-		const $coteTotale = $issueLabel.nextAll("[data-odds-total]").first();
-		const $stakeCell = $issueLabel.nextAll("[data-stake]").first();
+	// Pour chaque détail de chaque issue, insérer la nouvelle cellule de cote
+	$grid.find("[data-type]").each(function () {
+		const $typeCell = $(this);
+		const issueId = $typeCell.attr("data-issueid");
+		const detailId = $typeCell.attr("data-detailid");
+		const $stakeCell = $grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
 		const isLay = $stakeCell.hasClass("lay-mode");
-		const $newOddsCell = buildOddsCell(colId, issueId, "", isLay);
-		if ($coteTotale.length) {
-			$coteTotale.before($newOddsCell);
-		}
+		const $oddsTotalCell = $grid.find(`[data-odds-total][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+		const $newOddsCell = buildOddsCell(colId, issueId, detailId, "", isLay);
+		$oddsTotalCell.before($newOddsCell);
 	});
 
-	// Ligne Totale : placeholder pour aligner TRJ
+	// Total : placeholder pour aligner TRJ
 	const $totalBefore = $grid.find("[data-last-odds-total]").last();
 	$totalBefore.before(`<div class="cell total-span" colspan data-colid="${colId}"></div>`);
 
 	nb_odds++;
-
-	if (window.lucide) {
-		lucide.createIcons();
-	}
+	if (window.lucide) lucide.createIcons();
 	refreshDeleteButtons();
 }
 
-/**
- * Affiche/masque les boutons de suppression selon les minima (1 cote, 2 issues).
- */
 function refreshDeleteButtons() {
 	const $grid = $("#surebet-grid");
 	$grid.find(".js-del-col").toggle(nb_odds > 1);
 	$grid.find(".js-del-issue").toggle(nb_issues > 2);
+	// Bouton supprimer détail : visible si l'issue a >=2 détails
+	$grid.find("[data-issuelabel]").each(function () {
+		const issueId = $(this).attr("data-issueid");
+		const k = $grid.find(`[data-type][data-issueid="${issueId}"]`).length;
+		const $btns = $grid.find(`.js-del-detail[data-issueid="${issueId}"]`);
+		if (k > 1) $btns.css("display", "inline-flex");
+		else $btns.css("display", "none");
+	});
 }
 
-/**
- * Supprime une colonne de cote (par son index 1-based), retire les cellules et met à jour les identifiants.
- */
-function removeOddsColumnAt(index1) { // index1 = 1-based
+function removeOddsColumnAt(index1) {
 	const $grid = $("#surebet-grid");
 	let count = Number($grid.attr("data-odds-cols"));
 	if (count <= 1) return;
 
-	// Trouver l'ID de colonne à supprimer
 	const $colHead = $grid.find(`[data-oddshead][data-col='${index1}']`);
 	const colId = $colHead.attr("data-colid");
 
-	// Supprime l'en-tête ciblé
 	$colHead.remove();
-
-	// Supprime toutes les cellules de cette colonne dans chaque issue
 	$grid.find(`[data-odds][data-colid='${colId}']`).remove();
-
-	// Supprime le placeholder de la ligne totale pour cette colonne
 	$grid.find(`.total-span[data-colid='${colId}']`).remove();
 
-	// Retire l'id de la colonne du tableau colIds
 	const idx = colIds.indexOf(colId);
 	if (idx !== -1) colIds.splice(idx, 1);
 
-	// MAJ compte + template + relabel
 	$grid.attr("data-odds-cols", String(count - 1));
 	applyGridTemplate($grid);
 	renumberColumnHeaders();
@@ -286,118 +297,151 @@ function removeOddsColumnAt(index1) { // index1 = 1-based
 	refreshDeleteButtons();
 }
 
-/**
- * Ajoute une nouvelle ligne d'issue avec identifiant unique et cellules de cotes.
- */
+/* ---------- Ajout / suppression d'issues ---------- */
+
 function addIssue() {
 	const $grid = $("#surebet-grid");
-	const nOdds = Number($grid.attr("data-odds-cols"));
 	const nextIndex = $grid.find("[data-issuelabel]").length + 1;
 	const issueId = nextIssueId();
+	const detailId = nextDetailId();
 
 	const frag = $(document.createDocumentFragment());
+
+	// Label issue
 	frag.append(`<div class="cell rowhead sticky" data-issuelabel data-issueid="${issueId}">${nextIndex}</div>`);
-	// Cellule Type (bouton flip Back / Lay)
+
+	// Cellules du premier détail (Type, cotes, cote totale, mise, fixe détail)
+	const detailCells = buildDetailCellsArr(issueId, detailId, {
+		defaultOdds: nextIndex <= 2 ? "2,00" : "",
+		defaultStake: nextIndex === 1 ? "5,00" : "",
+	});
+	for (const c of detailCells) frag.append(c);
+
+	// Cellules niveau issue : Fixe (radio), Distribution (checkbox)
 	frag.append(`
-		<div class="cell" data-type>
-			<button type="button" class="type-toggle" data-mode="back" aria-label="Basculer Back / Lay">
-				<span class="type-inner">
-					<span class="type-face type-face-back">+ Back</span>
-					<span class="type-face type-face-lay">− Lay</span>
-				</span>
-			</button>
+		<div class="cell" data-issueid="${issueId}" data-issuefixe>
+			<input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe issue ${nextIndex}"${nextIndex === 1 ? " checked" : ""}>
 		</div>
 	`);
-	// Pour chaque colonne existante, ajoute une cellule de cote avec ID unique
-	for (let i = 0; i < colIds.length; i++) {
-		const colId = colIds[i];
-		frag.append(buildOddsCell(colId, issueId, i === 0 && nextIndex <= 2 ? "2,00" : ""));
-	}
-	frag.append(`<div class="cell" data-odds-total>—</div>`);
-	// Cellule Mises : deux groupes (Mise + Engagement) — Engagement masqué tant que la ligne n'est pas en mode Lay
-	const $stakeCell = $("<div class='cell' data-stake></div>");
-	const $stakeGroup = $("<div class='stake-input-group back-stake'><span class='stake-label'>Mise</span></div>")
-		.append(buildNumberField("", nextIndex === 1 ? "5,00" : "", 0.01, "€"));
-	const $liabilityGroup = $("<div class='stake-input-group liability'><span class='stake-label'>Engagement</span></div>")
-		.append(buildNumberField("", "", 0.01, "€"));
-	$stakeCell.append($stakeGroup).append($liabilityGroup);
-	frag.append($stakeCell);
-	frag.append(`<div class="cell"><input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe issue ${nextIndex}"${nextIndex === 1 ? " checked" : ""}></div>`);
-	frag.append(`<div class="cell"><input type="checkbox" class="check dist" aria-label="Distribution issue ${nextIndex}" checked></div>`);
-	frag.append(`<div class="cell right" data-profit>—</div>`);
-	frag.append(`<div class="cell right" data-profit-total>—</div>`);
 	frag.append(`
-		<div class="cell right">
-			<button class="btn-icon btn btn-danger js-del-issue" title="Supprimer l'issue">
-				<i data-lucide="trash-2" class="icon"></i>
-			</button>
+		<div class="cell" data-issueid="${issueId}" data-issuedist>
+			<input type="checkbox" class="check dist" aria-label="Distribution issue ${nextIndex}" checked>
 		</div>
 	`);
-	frag.append(`<div class="row-sep"></div>`);
+
+	// Profit du premier détail (per-detail, va se placer après Dist en row 1)
+	frag.append(buildProfitCell(issueId, detailId));
+
+	// Profit total (issue-level, span K)
+	frag.append(`<div class="cell right" data-profit-total data-issueid="${issueId}">—</div>`);
+
+	// Actions (issue-level, span K) : + Détail / supprimer issue
+	frag.append(buildIssueActionsCell(issueId));
+
+	// Séparateur de ligne (entre issues)
+	frag.append(`<div class="row-sep" data-issueid="${issueId}"></div>`);
 
 	$grid.find(".divider").before(frag);
 
 	nb_issues++;
 
-	if (window.lucide) {
-		lucide.createIcons();
-	}
-
+	if (window.lucide) lucide.createIcons();
 	recomputeAll();
 	refreshDeleteButtons();
 }
 
-/**
- * Supprime une ligne d'issue et ses cellules associées.
- */
-function deleteIssue($issueLabelCell) { // anciennement deleteRow
+function deleteIssue($issueLabelCell) {
 	const $grid = $("#surebet-grid");
 	const minIssues = 2;
-	const totalIssues = $grid.find("[data-issuelabel]").length;
-	if (totalIssues <= minIssues) return;
+	if ($grid.find("[data-issuelabel]").length <= minIssues) return;
+	const issueId = $issueLabelCell.attr("data-issueid");
 
-	// Supprime toutes les cellules jusqu'à la prochaine issuelabel/divider/total-label
-	let $ptr = $issueLabelCell;
-	const toRemove = [$ptr.get(0)];
-	$ptr = $ptr.next();
-	while ($ptr.length && !$ptr.is("[data-issuelabel], .divider, .total-label")) {
-		toRemove.push($ptr.get(0));
-		$ptr = $ptr.next();
-	}
-	$(toRemove).remove();
+	$grid.find(`[data-issueid="${issueId}"]`).remove();
 
-	// Re-numérote les étiquettes d'issue
+	// Re-numérote les labels
 	let idx = 1;
 	$grid.find("[data-issuelabel]").each(function () { $(this).text(idx++); });
 	nb_issues--;
+	refreshMultiDetailsClass();
 	recomputeAll();
 	refreshDeleteButtons();
 }
 
-/**
- * Lit les cellules associées à une ligne (issue ou total) en parcourant les siblings du label
- * jusqu'au prochain séparateur de ligne.
- */
-function getRowParts($label) {
-	const parts = { $label, $oddsCells: [], $oddsTotal: null, $stake: null, $fixe: null, $dist: null, $profit: null, $profitTotal: null, isLay: false };
-	let $ptr = $label.next();
-	while ($ptr.length && !$ptr.is("[data-issuelabel], .divider, .total-label, .row-sep")) {
-		if ($ptr.is("[data-odds]")) parts.$oddsCells.push($ptr);
-		else if ($ptr.is("[data-odds-total], [data-last-odds-total]")) parts.$oddsTotal = $ptr;
-		else if ($ptr.is("[data-stake]")) {
-			parts.$stake = $ptr;
-			parts.isLay = $ptr.hasClass("lay-mode");
-		}
-		else if ($ptr.is("[data-profit-total]")) parts.$profitTotal = $ptr;
-		else if ($ptr.is("[data-profit]")) parts.$profit = $ptr;
-		const $r = $ptr.find(".radio.fixe");
-		if ($r.length) parts.$fixe = $r;
-		const $c = $ptr.find(".check.dist");
-		if ($c.length) parts.$dist = $c;
-		$ptr = $ptr.next();
-	}
-	return parts;
+/* ---------- Ajout / suppression de détails ---------- */
+
+function addDetail(issueId) {
+	const $grid = $("#surebet-grid");
+	const detailId = nextDetailId();
+
+	const detailCells = buildDetailCellsArr(issueId, detailId, {});
+	const $profitCell = buildProfitCell(issueId, detailId);
+
+	const $rowSep = $grid.find(`.row-sep[data-issueid="${issueId}"]`);
+	for (const c of detailCells) $rowSep.before(c);
+	$rowSep.before($profitCell);
+
+	updateIssueSpans(issueId);
+	refreshMultiDetailsClass();
+	// Si l'issue est Fixe, le nouveau détail doit aussi être marqué fixe
+	syncFixeIssueToDetails(issueId);
+
+	if (window.lucide) lucide.createIcons();
+	recomputeAll();
+	refreshDeleteButtons();
 }
+
+function removeDetail(issueId, detailId) {
+	const $grid = $("#surebet-grid");
+	const k = $grid.find(`[data-type][data-issueid="${issueId}"]`).length;
+	if (k <= 1) return;
+	$grid.find(`[data-issueid="${issueId}"][data-detailid="${detailId}"]`).remove();
+	updateIssueSpans(issueId);
+	refreshMultiDetailsClass();
+	recomputeAll();
+	refreshDeleteButtons();
+}
+
+function updateIssueSpans(issueId) {
+	const $grid = $("#surebet-grid");
+	const K = $grid.find(`[data-type][data-issueid="${issueId}"]`).length;
+	const spanVal = K > 1 ? `span ${K}` : "";
+
+	const $issueLevel = $grid.find(`[data-issueid="${issueId}"]`).filter(function () {
+		const $el = $(this);
+		if ($el.attr("data-detailid")) return false;
+		if ($el.is(".row-sep")) return false;
+		// Inclut : data-issuelabel, data-issuefixe, data-issuedist, data-profit-total, data-actions
+		return true;
+	});
+	$issueLevel.each(function () { $(this).css("grid-row", spanVal || ""); });
+}
+
+function refreshMultiDetailsClass() {
+	const $grid = $("#surebet-grid");
+	let hasMulti = false;
+	$grid.find("[data-issuelabel]").each(function () {
+		const id = $(this).attr("data-issueid");
+		const k = $grid.find(`[data-type][data-issueid="${id}"]`).length;
+		if (k >= 2) { hasMulti = true; return false; }
+	});
+	$grid.toggleClass("has-multi-details", hasMulti);
+}
+
+/* Si l'issue est Fixe (radio coché), tous ses détails sont marqués Fixe détail
+   et désactivés. Sinon, ils sont réactivés. */
+function syncFixeIssueToDetails(issueId) {
+	const $grid = $("#surebet-grid");
+	const $fixe = $grid.find(`[data-issuefixe][data-issueid="${issueId}"] .radio.fixe`);
+	const isFixed = $fixe.is(":checked");
+	const $detailChecks = $grid.find(`[data-fixedetail][data-issueid="${issueId}"] input.fixe-detail`);
+	if (isFixed) {
+		$detailChecks.prop("checked", true).prop("disabled", true);
+	} else {
+		$detailChecks.prop("disabled", false);
+	}
+}
+
+/* ---------- Lecture / écriture ---------- */
 
 function readNum($input) {
 	if (!$input || !$input.length) return 0;
@@ -407,7 +451,6 @@ function readNum($input) {
 
 function setStake($stakeCell, value) {
 	if (!$stakeCell || !$stakeCell.length) return;
-	// Cible le 1er input (back-stake pour les issues, l'unique input pour la ligne Total)
 	$stakeCell.find("input").first().val(value.toFixed(DEC).replace(".", ","));
 }
 
@@ -417,237 +460,334 @@ function setLiability($stakeCell, value) {
 	if ($input.length) $input.val(value.toFixed(DEC).replace(".", ","));
 }
 
+/* ---------- Recalcul global ---------- */
+
 let recomputing = false;
 
-/**
- * Recalcule l'ensemble : cotes totales, TRJ, mises distribuées et profits.
- * Déclenché à chaque changement d'input/radio/checkbox.
- */
 function recomputeAll(redistribute = true) {
 	if (recomputing) return;
 	recomputing = true;
 	const $grid = $("#surebet-grid");
-
-	// Collecte des issues
 	const commissionEnabled = $grid.hasClass("with-commission");
+
+	// Collecte des issues + détails
 	const issues = [];
 	$grid.find("[data-issuelabel]").each(function () {
-		const p = getRowParts($(this));
-		let hasValue = false;
-		let oddsTotal = 1;      // produit des cotes brutes
-		let oddsTotalNet = 1;   // produit des cotes nettes (cote − 1) × (1 − commission) + 1
-		for (const $c of p.$oddsCells) {
-			// Premier input de la cellule = cote (la commission est dans .cell-commission après)
-			const v = $c.find("input").not(".commission-input").first().val();
-			if (v && String(v).trim() !== "") hasValue = true;
-			const o = Number(String(v).replace(",", "."));
-			const oVal = Number.isNaN(o) ? 1 : o;
-			oddsTotal *= oVal;
-			const c = commissionEnabled ? (readNum($c.find(".commission-input").first()) / 100) : 0;
-			oddsTotalNet *= 1 + (oVal - 1) * (1 - c);
-		}
-		const $stakeInput = p.$stake && p.$stake.find(".back-stake input").first();
-		const $liabInput = p.$stake && p.$stake.find(".liability input").first();
-		const stakeVal = readNum($stakeInput && $stakeInput.length ? $stakeInput : p.$stake && p.$stake.find("input").first());
-		const engagementVal = readNum($liabInput);
-		issues.push({
-			parts: p,
-			hasValue,
-			oddsTotal,
-			oddsTotalNet,
-			stake: stakeVal,
-			engagement: engagementVal,
-			isFixed: !!(p.$fixe && p.$fixe.is(":checked")),
-			isDist: !!(p.$dist && p.$dist.is(":checked")),
-			isLay: !!p.isLay,
+		const $label = $(this);
+		const issueId = $label.attr("data-issueid");
+		const $fixeRadio = $grid.find(`[data-issuefixe][data-issueid="${issueId}"] .radio.fixe`);
+		const $distCheck = $grid.find(`[data-issuedist][data-issueid="${issueId}"] .check.dist`);
+		const $profitTotal = $grid.find(`[data-profit-total][data-issueid="${issueId}"]`);
+		const isFixed = $fixeRadio.is(":checked");
+		const isDist = $distCheck.is(":checked");
+
+		const details = [];
+		$grid.find(`[data-type][data-issueid="${issueId}"]`).each(function () {
+			const $typeCell = $(this);
+			const detailId = $typeCell.attr("data-detailid");
+			const isLay = $typeCell.find(".type-toggle").attr("data-mode") === "lay";
+
+			const $oddsCells = $grid.find(`[data-odds][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+			let hasValue = false;
+			let oddsTotal = 1;
+			let oddsTotalNet = 1;
+			$oddsCells.each(function () {
+				const $oc = $(this);
+				const v = $oc.find("input").not(".commission-input").first().val();
+				if (v && String(v).trim() !== "") hasValue = true;
+				const o = Number(String(v).replace(",", "."));
+				const oVal = Number.isNaN(o) ? 1 : o;
+				oddsTotal *= oVal;
+				const c = commissionEnabled ? (readNum($oc.find(".commission-input").first()) / 100) : 0;
+				oddsTotalNet *= 1 + (oVal - 1) * (1 - c);
+			});
+
+			const $stakeCell = $grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+			const $stakeInput = $stakeCell.find(".back-stake input").first();
+			const $liabInput = $stakeCell.find(".liability input").first();
+			const stakeVal = readNum($stakeInput.length ? $stakeInput : $stakeCell.find("input").first());
+			const engagementVal = readNum($liabInput);
+
+			const $fixeDetailInput = $grid.find(`[data-fixedetail][data-issueid="${issueId}"][data-detailid="${detailId}"] input`);
+			const isFixedDetail = $fixeDetailInput.is(":checked");
+
+			const $oddsTotalCell = $grid.find(`[data-odds-total][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+			const $profitCell = $grid.find(`[data-profit][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+
+			details.push({
+				detailId, isLay, hasValue, oddsTotal, oddsTotalNet,
+				stake: stakeVal, engagement: engagementVal,
+				isFixedDetail,
+				$stakeCell, $oddsTotalCell, $profitCell,
+			});
 		});
+
+		issues.push({ issueId, $label, $fixeRadio, $distCheck, $profitTotal, isFixed, isDist, details });
 	});
 
-	// Affichage des cotes totales par issue
-	// On masque dynamiquement la colonne Net (si pas de commission effective sur la ligne),
-	// la ligne Lay (si la ligne est Back), et les labels/headers s'il ne reste qu'une seule
-	// colonne ou ligne.
+	// Affichage de la cote totale pour chaque détail
 	const fmtBrut = (v) => (v !== null && isFinite(v)) ? v.toFixed(2).replace(".", ",") : "—";
 	const fmtNet  = (v) => (v !== null && isFinite(v)) ? v.toFixed(3).replace(".", ",") : "—";
-	for (const it of issues) {
-		if (!it.parts.$oddsTotal) continue;
-		if (!it.hasValue) {
-			it.parts.$oddsTotal.text("—");
-			continue;
+	for (const issue of issues) {
+		for (const d of issue.details) {
+			if (!d.$oddsTotalCell || !d.$oddsTotalCell.length) continue;
+			if (!d.hasValue) { d.$oddsTotalCell.text("—"); continue; }
+			const hasComm = Math.abs(d.oddsTotal - d.oddsTotalNet) > 1e-9;
+			const showLayRow = d.isLay;
+			const showNetCol = hasComm;
+
+			if (!showLayRow && !showNetCol) {
+				d.$oddsTotalCell.text(d.oddsTotal.toFixed(DEC).replace(".", ","));
+				continue;
+			}
+
+			let backBrut, backNet, layBrut, layNet;
+			if (d.isLay) {
+				layBrut = d.oddsTotal;
+				layNet = d.oddsTotalNet;
+				backBrut = layBrut > 1 ? layBrut / (layBrut - 1) : null;
+				backNet = layNet > 1 ? layNet / (layNet - 1) : null;
+			} else {
+				backBrut = d.oddsTotal;
+				backNet = d.oddsTotalNet;
+			}
+
+			const showColHeaders = showNetCol;
+			const showRowLabels = showLayRow;
+			const ncols = (showRowLabels ? 1 : 0) + (showNetCol ? 1 : 0) + 1;
+
+			let html = `<div class="odds-detail" style="grid-template-columns: repeat(${ncols}, auto)">`;
+			if (showColHeaders) {
+				if (showRowLabels) html += `<span></span>`;
+				html += `<span class="odds-detail-head">Net</span>`;
+				html += `<span class="odds-detail-head">Brut</span>`;
+			}
+			if (showRowLabels) html += `<span class="odds-detail-row-label odds-back-label">Back</span>`;
+			if (showNetCol) html += `<span class="odds-detail-value">${fmtNet(backNet)}</span>`;
+			html += `<span class="odds-detail-value">${fmtBrut(backBrut)}</span>`;
+
+			if (showLayRow) {
+				if (showRowLabels) html += `<span class="odds-detail-row-label odds-lay-label">Lay</span>`;
+				if (showNetCol) html += `<span class="odds-detail-value">${fmtNet(layNet)}</span>`;
+				html += `<span class="odds-detail-value">${fmtBrut(layBrut)}</span>`;
+			}
+
+			html += `</div>`;
+			d.$oddsTotalCell.html(html);
 		}
-
-		// Commission effective sur la ligne : net ≠ brut
-		const hasComm = Math.abs(it.oddsTotal - it.oddsTotalNet) > 1e-9;
-		const showLayRow = it.isLay;
-		const showNetCol = hasComm;
-
-		// Cas trivial : pas de Lay et pas de commission → simple valeur brute
-		if (!showLayRow && !showNetCol) {
-			it.parts.$oddsTotal.text(it.oddsTotal.toFixed(DEC).replace(".", ","));
-			continue;
-		}
-
-		// Cotes brutes/nettes natives + conversion vers l'autre type
-		let backBrut, backNet, layBrut, layNet;
-		if (it.isLay) {
-			layBrut = it.oddsTotal;
-			layNet = it.oddsTotalNet;
-			backBrut = layBrut > 1 ? layBrut / (layBrut - 1) : null;
-			backNet = layNet > 1 ? layNet / (layNet - 1) : null;
-		} else {
-			backBrut = it.oddsTotal;
-			backNet = it.oddsTotalNet;
-		}
-
-		const showColHeaders = showNetCol;  // n'a de sens que s'il y a 2 colonnes
-		const showRowLabels = showLayRow;   // n'a de sens que s'il y a 2 lignes
-		const ncols = (showRowLabels ? 1 : 0) + (showNetCol ? 1 : 0) + 1;
-
-		let html = `<div class="odds-detail" style="grid-template-columns: repeat(${ncols}, auto)">`;
-
-		// En-têtes de colonnes (si Net affichée)
-		if (showColHeaders) {
-			if (showRowLabels) html += `<span></span>`;
-			html += `<span class="odds-detail-head">Net</span>`;
-			html += `<span class="odds-detail-head">Brut</span>`;
-		}
-
-		// Ligne Back
-		if (showRowLabels) html += `<span class="odds-detail-row-label odds-back-label">Back</span>`;
-		if (showNetCol) html += `<span class="odds-detail-value">${fmtNet(backNet)}</span>`;
-		html += `<span class="odds-detail-value">${fmtBrut(backBrut)}</span>`;
-
-		// Ligne Lay (seulement si la ligne est Lay)
-		if (showLayRow) {
-			if (showRowLabels) html += `<span class="odds-detail-row-label odds-lay-label">Lay</span>`;
-			if (showNetCol) html += `<span class="odds-detail-value">${fmtNet(layNet)}</span>`;
-			html += `<span class="odds-detail-value">${fmtBrut(layBrut)}</span>`;
-		}
-
-		html += `</div>`;
-		it.parts.$oddsTotal.html(html);
 	}
 
 	// Ligne Total
 	const $totalLabel = $grid.find(".total-label");
-	const totalParts = getRowParts($totalLabel);
-	const total = {
-		parts: totalParts,
-		stake: readNum(totalParts.$stake && totalParts.$stake.find("input").first()),
-		isFixed: !!(totalParts.$fixe && totalParts.$fixe.is(":checked")),
-		isDist: !!(totalParts.$dist && totalParts.$dist.is(":checked")),
-	};
+	const $totalStake = $totalLabel.nextAll("[data-stake]").first();
+	const $totalFixe = $totalLabel.nextAll(".cell").has(".radio.fixe").first();
+	const $totalDist = $totalLabel.nextAll(".cell").has(".check.dist").first();
+	const $totalProfitTotal = $totalLabel.nextAll("[data-profit-total]").first();
+	const $totalOddsTotal = $totalLabel.nextAll("[data-last-odds-total]").first();
+	const totalIsFixed = $totalFixe.find(".radio.fixe").is(":checked");
+	const totalIsDist = $totalDist.find(".check.dist").is(":checked");
+	const totalStake = readNum($totalStake.find("input").first());
 
-	// TRJ : calculé à partir des cotes NETTES, en convertissant les Lay en Back-équivalent
-	// sur leur cote nette (O_net → O_net / (O_net − 1)).
-	let sumInv = 0, countValid = 0;
-	for (const it of issues) {
-		if (!it.hasValue || it.oddsTotalNet <= 0) continue;
-		const effOdds = it.isLay
-			? (it.oddsTotalNet > 1 ? it.oddsTotalNet / (it.oddsTotalNet - 1) : null)
-			: it.oddsTotalNet;
-		if (effOdds && effOdds > 0 && isFinite(effOdds)) {
-			sumInv += 1 / effOdds;
-			countValid++;
+	// Calculs agrégés par issue (pour l'équilibrage et le profit total)
+	// Pour chaque issue, on calcule :
+	//   - sumInvestedIssue : somme des montants engagés (Back : stake ; Lay : engagement)
+	//   - returnIfIssueWins : somme des retours bruts quand l'issue se réalise
+	//                         (Back : stake × oddsNet ; Lay : 0)
+	//   - effectiveOddsNet : cote nette agrégée pour la redistribution
+	// Si l'issue n'a qu'un détail, on retombe exactement sur le comportement classique.
+	for (const issue of issues) {
+		let sumInvested = 0;
+		let returnIfWin = 0;
+		let returnIfLose = 0; // somme des retours quand l'issue NE se réalise PAS
+		issue.hasValue = false;
+		for (const d of issue.details) {
+			if (!d.hasValue) continue;
+			issue.hasValue = true;
+			if (d.isLay) {
+				// Lay : engagement = stake × (oddsBrut − 1)
+				const liability = d.engagement || d.stake * Math.max(0, d.oddsTotal - 1);
+				sumInvested += liability;
+				// Si l'issue se réalise → on perd l'engagement → retour brut = 0
+				// Si l'issue NE se réalise PAS → on garde stake + engagement
+				returnIfLose += d.stake + liability;
+			} else {
+				sumInvested += d.stake;
+				returnIfWin += d.stake * d.oddsTotalNet;
+				// Back : si l'issue ne se réalise pas, on perd → retour = 0
+			}
 		}
+		issue.sumInvested = sumInvested;
+		issue.returnIfIssueWins = returnIfWin;
+		issue.returnIfIssueLoses = returnIfLose;
+		issue.effectiveOddsNet = sumInvested > 0 ? returnIfWin / sumInvested : 0;
+	}
+
+	// TRJ : basé sur la cote nette effective de chaque issue
+	let sumInv = 0, countValid = 0;
+	for (const issue of issues) {
+		if (!issue.hasValue || issue.effectiveOddsNet <= 0) continue;
+		sumInv += 1 / issue.effectiveOddsNet;
+		countValid++;
 	}
 	const trj = countValid > 0 ? 1 / sumInv : 0;
-	if (totalParts.$oddsTotal) {
-		const $trjValue = totalParts.$oddsTotal.find(".trj-value");
+	if ($totalOddsTotal && $totalOddsTotal.length) {
+		const $trjValue = $totalOddsTotal.find(".trj-value");
 		const trjText = countValid === 0 ? "—" : (trj * 100).toFixed(2).replace(".", ",") + " %";
 		if ($trjValue.length) $trjValue.text(trjText);
-		else totalParts.$oddsTotal.text(trjText);
+		else $totalOddsTotal.text(trjText);
 	}
 
-	// Équilibrage avec distribution / non-distribution.
-	// Désormais on utilise la cote NETTE pour la redistribution des mises et le calcul
-	// de K/S. L'engagement Lay reste basé sur la cote BRUTE (réalité physique du Lay).
-	const eligibles = issues.filter(it => it.hasValue && it.oddsTotalNet > 0);
-	const sigmaD = eligibles.filter(it => it.isDist).reduce((a, it) => a + 1 / it.oddsTotalNet, 0);
-	const sigmaN = eligibles.filter(it => !it.isDist).reduce((a, it) => a + 1 / it.oddsTotalNet, 0);
+	// Équilibrage des MISES.
+	// On garde le moteur existant (équilibrage entre issues) mais en mode multi-détail
+	// on ne redistribue PAS au sein d'une issue multi-détail (l'utilisateur gère ses détails).
+	// On ne redistribue qu'au sein des issues mono-détail.
+	const eligibles = issues.filter(it => it.hasValue && it.effectiveOddsNet > 0);
+	const sigmaD = eligibles.filter(it => it.isDist).reduce((a, it) => a + 1 / it.effectiveOddsNet, 0);
+	const sigmaN = eligibles.filter(it => !it.isDist).reduce((a, it) => a + 1 / it.effectiveOddsNet, 0);
 
-	const fixedIssue = issues.find(it => it.isFixed && it.hasValue && it.stake > 0);
+	const fixedIssue = issues.find(it => it.isFixed && it.hasValue && it.sumInvested > 0);
 	let K = null, S = null;
 	let errorMsg = null;
 
 	if (fixedIssue) {
 		if (fixedIssue.isDist) {
-			K = fixedIssue.stake * fixedIssue.oddsTotalNet;
+			K = fixedIssue.sumInvested * fixedIssue.effectiveOddsNet;
 			const denom = 1 - sigmaN;
 			if (denom > 0) S = K * sigmaD / denom;
 			else errorMsg = "Configuration impossible : trop de lignes non distribuées.";
 		} else {
-			S = fixedIssue.stake * fixedIssue.oddsTotalNet;
+			S = fixedIssue.sumInvested * fixedIssue.effectiveOddsNet;
 			if (sigmaD > 0) K = S * (1 - sigmaN) / sigmaD;
 			else errorMsg = "Aucune ligne en distribution — cochez au moins une ligne.";
 		}
-	} else if (total.isFixed && total.stake > 0) {
-		S = total.stake;
+	} else if (totalIsFixed && totalStake > 0) {
+		S = totalStake;
 		if (sigmaD > 0) K = S * (1 - sigmaN) / sigmaD;
 		else if (eligibles.length > 0) errorMsg = "Aucune ligne en distribution — cochez au moins une ligne.";
 	}
 
-	// Application des mises (si redistribution autorisée) — basée sur la cote NETTE
 	if (redistribute && !errorMsg && K !== null && S !== null) {
 		for (const it of eligibles) {
 			if (it.isFixed) continue;
-			const target = it.isDist ? K / it.oddsTotalNet : S / it.oddsTotalNet;
-			setStake(it.parts.$stake, target);
-			// Engagement Lay basé sur la cote BRUTE (réalité du marché)
-			if (it.isLay && it.oddsTotal > 1) {
-				const newEng = target * (it.oddsTotal - 1);
-				setLiability(it.parts.$stake, newEng);
-				it.engagement = newEng;
+			// Retour brut cible quand cette issue se réalise :
+			//   - issues distribuées → K (équilibre cible)
+			//   - issues non distribuées → S (somme totale investie)
+			const targetReturn = it.isDist ? K : S;
+
+			if (it.details.length === 1) {
+				// Mono-détail : on alloue tout au seul détail.
+				const d = it.details[0];
+				const target = targetReturn / d.oddsTotalNet;
+				setStake(d.$stakeCell, target);
+				if (d.isLay && d.oddsTotal > 1) {
+					const newEng = target * (d.oddsTotal - 1);
+					setLiability(d.$stakeCell, newEng);
+					d.engagement = newEng;
+					it.sumInvested = newEng;
+					it.returnIfIssueLoses = target + newEng;
+				} else {
+					it.sumInvested = target;
+					it.returnIfIssueWins = target * d.oddsTotalNet;
+				}
+				d.stake = target;
+			} else {
+				// Multi-détail : on répartit le retour cible entre les détails non-fixe.
+				//   - Détails Fixe détail (et tous si l'issue est Fixe) : contribution figée.
+				//   - Détails restants : se partagent à parts égales le solde restant.
+				//   - Back : stake = part / oddsNet.
+				//   - Lay : ne peut pas contribuer positivement quand l'issue gagne (la mise
+				//     est perdue) → on laisse tel quel.
+				let sumFixedReturn = 0;
+				const nonFixed = [];
+				for (const d of it.details) {
+					if (!d.hasValue) continue;
+					if (d.isFixedDetail) {
+						sumFixedReturn += d.isLay ? 0 : d.stake * d.oddsTotalNet;
+					} else {
+						nonFixed.push(d);
+					}
+				}
+				const eligibleBacks = nonFixed.filter(d => !d.isLay);
+				if (eligibleBacks.length > 0) {
+					const remaining = targetReturn - sumFixedReturn;
+					const perDetail = remaining / eligibleBacks.length;
+					for (const d of eligibleBacks) {
+						const stake = Math.max(0, perDetail / d.oddsTotalNet);
+						setStake(d.$stakeCell, stake);
+						d.stake = stake;
+					}
+				}
+
+				// Recalcule les agrégats de l'issue après mise à jour des mises
+				let nsi = 0, nrw = 0, nrl = 0;
+				for (const d of it.details) {
+					if (!d.hasValue) continue;
+					if (d.isLay) {
+						const liability = d.engagement || d.stake * Math.max(0, d.oddsTotal - 1);
+						nsi += liability;
+						nrl += d.stake + liability;
+					} else {
+						nsi += d.stake;
+						nrw += d.stake * d.oddsTotalNet;
+					}
+				}
+				it.sumInvested = nsi;
+				it.returnIfIssueWins = nrw;
+				it.returnIfIssueLoses = nrl;
 			}
-			it.stake = target;
 		}
-		if (!total.isFixed) {
-			setStake(total.parts.$stake, S);
-			total.stake = S;
+		if (!totalIsFixed) {
+			setStake($totalStake, S);
 		}
 	}
 
-	// Investissement total = somme des fonds réellement engagés.
-	//   - Back : stake (mise)
-	//   - Lay  : engagement (collatéral). Si l'utilisateur n'a pas saisi d'engagement,
-	//            on retombe sur la formule mise × (cote − 1).
-	const sumInvested = issues.reduce((a, it) => {
-		if (!it.hasValue || !it.stake) return a;
-		if (it.isLay) {
-			const eng = it.engagement || it.stake * Math.max(0, it.oddsTotal - 1);
-			return a + eng;
-		}
-		return a + it.stake;
-	}, 0);
+	// Recalcule sumInvested global après redistribution
+	let sumInvestedAll = 0;
+	for (const it of issues) sumInvestedAll += it.sumInvested;
 
-	// Affichage profits & profits totaux — utilisent la cote NETTE
-	for (const it of issues) {
-		if (it.parts.$profit) {
-			if (!it.hasValue || !it.stake) it.parts.$profit.text("—");
-			else {
-				// Back : profit = mise × cote nette (retour réel après commission).
-				// Lay  : profit = mise (gain conservé si l'issue ne se réalise pas).
-				const profit = it.isLay ? it.stake : it.oddsTotalNet * it.stake;
-				it.parts.$profit.text(profit.toFixed(DEC).replace(".", ",") + " €");
+	// Affichage Profit par détail + agrégation issue dans la même colonne
+	for (const issue of issues) {
+		const validDetails = issue.details.filter(d => d.hasValue && d.stake);
+		let sumProfitDetails = 0;
+		issue.details.forEach((d, idx) => {
+			if (!d.$profitCell || !d.$profitCell.length) return;
+			if (!d.hasValue || !d.stake) {
+				d.$profitCell.text("—");
+				return;
 			}
-		}
-		if (it.parts.$profitTotal) {
-			if (!it.hasValue || !it.stake) it.parts.$profitTotal.text("—");
-			else {
-				// "Retour quand le pari de cette ligne gagne" en valeurs nettes :
-				//   Back : stake × cote nette
-				//   Lay  : mise + engagement (le collatéral est récupéré sans commission)
-				const returnedOnWin = it.isLay
-					? it.stake + (it.engagement || it.stake * Math.max(0, it.oddsTotal - 1))
-					: it.stake * it.oddsTotalNet;
-				const profitTotal = returnedOnWin - sumInvested;
-				it.parts.$profitTotal.text(profitTotal.toFixed(DEC).replace(".", ",") + " €");
+			// Per-detail profit = retour quand cette ligne gagne
+			const profit = d.isLay ? d.stake : d.oddsTotalNet * d.stake;
+			sumProfitDetails += profit;
+			let html = profit.toFixed(DEC).replace(".", ",") + " €";
+			// Sur le dernier détail valide : afficher la somme issue (uniquement si >1 détails)
+			if (issue.details.length > 1 && idx === issue.details.length - 1 && validDetails.length > 1) {
+				html += `<span class="profit-issue-sum">Σ issue : ${sumProfitDetails.toFixed(DEC).replace(".", ",")} €</span>`;
+			}
+			d.$profitCell.html(html);
+		});
+
+		// Profit total de l'issue (cellule unique span K) :
+		// P/L quand cette issue se réalise.
+		if (issue.$profitTotal && issue.$profitTotal.length) {
+			if (!issue.hasValue) {
+				issue.$profitTotal.text("—");
+			} else {
+				// Retour brut quand cette issue se réalise =
+				//   Σ retours de ses détails (Back : stake × oddsNet ; Lay : 0)
+				// + Σ retours des autres issues quand cette issue se réalise = Σ (autres détails Lay : stake + engagement ; autres détails Back : 0)
+				let returnWhenIssueWins = issue.returnIfIssueWins;
+				for (const other of issues) {
+					if (other === issue) continue;
+					returnWhenIssueWins += other.returnIfIssueLoses;
+				}
+				const profitTotal = returnWhenIssueWins - sumInvestedAll;
+				issue.$profitTotal.text(profitTotal.toFixed(DEC).replace(".", ",") + " €");
 			}
 		}
 	}
-	if (totalParts.$profitTotal) {
-		if (K !== null && S !== null) totalParts.$profitTotal.text((K - sumInvested).toFixed(DEC).replace(".", ",") + " €");
-		else totalParts.$profitTotal.text("—");
+	if ($totalProfitTotal && $totalProfitTotal.length) {
+		if (K !== null && S !== null) $totalProfitTotal.text((K - sumInvestedAll).toFixed(DEC).replace(".", ",") + " €");
+		else $totalProfitTotal.text("—");
 	}
 
 	// Bannière d'erreur
@@ -655,7 +795,7 @@ function recomputeAll(redistribute = true) {
 	if (errorMsg) { $err.text(errorMsg).prop("hidden", false); }
 	else { $err.prop("hidden", true).text(""); }
 
-	// Couleur selon le TRJ — uniquement sur TRJ et profit_total des lignes distribuées
+	// Couleur selon le TRJ — uniquement sur TRJ et profits totaux des issues distribuées
 	const trjPct = trj * 100;
 	const tierClasses = "trj-tier-red trj-tier-dark-orange trj-tier-light-orange trj-tier-green";
 	let tier = "";
@@ -669,102 +809,263 @@ function recomputeAll(redistribute = true) {
 	$grid.find(".trj-value").removeClass(tierClasses);
 	if (tier) {
 		$grid.find(".trj-value").addClass(tier);
-		for (const it of issues) {
-			if (it.isDist && it.parts.$profitTotal) it.parts.$profitTotal.addClass(tier);
+		for (const issue of issues) {
+			if (issue.isDist && issue.$profitTotal) issue.$profitTotal.addClass(tier);
 		}
-		if (totalParts.$profitTotal) totalParts.$profitTotal.addClass(tier);
+		if ($totalProfitTotal && $totalProfitTotal.length) $totalProfitTotal.addClass(tier);
 	}
 
 	recomputing = false;
 }
 
-/**
- * Lie les événements de changement (cotes, mises, fixe, distribution) au recalcul global.
- */
+/* ---------- Bindings ---------- */
+
 function bindOddsInputs() {
 	const $grid = $("#surebet-grid");
-	// Cotes → recalcul complet (avec redistribution des mises)
-	// Cotes → recalcul complet (redistribution). Commission → refresh affichage seulement.
 	$grid.on("input cote:changed", "[data-odds] input:not(.commission-input)", () => recomputeAll(true));
 	$grid.on("input cote:changed", ".commission-input", () => recomputeAll(true));
-	// Saisie 0 dans une commission → on vide l'input
 	$grid.on("blur", ".commission-input", function () {
 		const v = Number(String(this.value).replace(",", "."));
 		if (!Number.isNaN(v) && v === 0) this.value = "";
 	});
-	// Mises → redistribution uniquement si la ligne modifiée est la ligne fixée
 	$grid.on("input cote:changed", "[data-stake] input", function () {
 		const $cell = $(this).closest("[data-stake]");
-		const $label = $cell.prevAll("[data-issuelabel], .total-label").first();
-		const parts = getRowParts($label);
-		const isFixed = !!(parts.$fixe && parts.$fixe.is(":checked"));
-		recomputeAll(isFixed);
+		const issueId = $cell.attr("data-issueid");
+		const detailId = $cell.attr("data-detailid");
+
+		// Ligne Total
+		if (!issueId) {
+			const $label = $cell.prevAll("[data-issuelabel], .total-label").first();
+			if ($label.is(".total-label")) {
+				const totalIsFixed = $grid.find(".total-label").nextAll(".cell").has(".radio.fixe").first().find(".radio.fixe").is(":checked");
+				recomputeAll(totalIsFixed);
+				return;
+			}
+			recomputeAll(false);
+			return;
+		}
+
+		// Cellule de détail
+		const isIssueFixed = $grid.find(`[data-issuefixe][data-issueid="${issueId}"] .radio.fixe`).is(":checked");
+		const k = $grid.find(`[data-type][data-issueid="${issueId}"]`).length;
+		if (k === 1) {
+			// Mono-détail : redistribue uniquement si l'issue est Fixe
+			recomputeAll(isIssueFixed);
+		} else {
+			// Multi-détail : redistribue si l'issue est Fixe OU si ce détail est Fixe détail
+			const isFixedDetail = $grid.find(`[data-fixedetail][data-issueid="${issueId}"][data-detailid="${detailId}"] input`).is(":checked");
+			recomputeAll(isIssueFixed || isFixedDetail);
+		}
 	});
-	// Changement de ligne fixe ou de distribution → recalcul complet
 	$grid.on("change", ".radio.fixe, .check.dist", function () {
-		// La checkbox de la ligne Total agit comme un master toggle
 		const $cell = $(this).closest(".cell");
 		const isTotalDist = $(this).hasClass("dist") && $cell.prevAll(".total-label").length > 0;
 		if (isTotalDist) {
 			const checked = $(this).is(":checked");
-			$grid.find("[data-issuelabel]").each(function () {
-				const parts = getRowParts($(this));
-				if (parts.$dist) parts.$dist.prop("checked", checked);
+			$grid.find("[data-issuedist] .check.dist").prop("checked", checked);
+		}
+		// Si une fixe issue change, propage aux détails
+		if ($(this).hasClass("fixe")) {
+			$grid.find("[data-issuefixe]").each(function () {
+				const id = $(this).attr("data-issueid");
+				if (id) syncFixeIssueToDetails(id);
 			});
 		}
 		recomputeAll(true);
 	});
+	// Changement de "Fixe détail" : on redistribue pour répartir le solde restant
+	// entre les autres détails de l'issue.
+	$grid.on("change", ".check.fixe-detail", function () {
+		recomputeAll(true);
+	});
 }
 
-/**
- * Initialisation du module surebet au chargement de la page.
- */
+/* ---------- Debug ---------- */
+
+let _debugMode = false;
+
+function toggleDebug() {
+	_debugMode = !_debugMode;
+	const btn = document.getElementById('cc-debug-btn');
+	const iconOff = document.getElementById('cc-debug-icon-off');
+	const iconOn = document.getElementById('cc-debug-icon-on');
+	const stateBtn = document.getElementById('cc-debug-state-btn');
+	if (btn) btn.classList.toggle('cc-debug-btn--active', _debugMode);
+	if (iconOff) iconOff.hidden = _debugMode;
+	if (iconOn) iconOn.hidden = !_debugMode;
+	if (stateBtn) stateBtn.hidden = !_debugMode;
+}
+
+function collectDebugState() {
+	const $grid = $("#surebet-grid");
+	const colsOrdered = [];
+	$grid.find("[data-oddshead]").each(function () {
+		const $h = $(this);
+		colsOrdered.push({
+			colId: $h.attr("data-colid"),
+			label: $h.find(".col-label").text(),
+			index: Number($h.attr("data-col")),
+		});
+	});
+
+	const issues = [];
+	$grid.find("[data-issuelabel]").each(function () {
+		const $label = $(this);
+		const issueId = $label.attr("data-issueid");
+		const $fixeRadio = $grid.find(`[data-issuefixe][data-issueid="${issueId}"] .radio.fixe`);
+		const $distCheck = $grid.find(`[data-issuedist][data-issueid="${issueId}"] .check.dist`);
+		const $profitTotal = $grid.find(`[data-profit-total][data-issueid="${issueId}"]`);
+
+		const details = [];
+		$grid.find(`[data-type][data-issueid="${issueId}"]`).each(function () {
+			const $typeCell = $(this);
+			const detailId = $typeCell.attr("data-detailid");
+			const mode = $typeCell.find(".type-toggle").attr("data-mode");
+			const cotes = [];
+			$grid.find(`[data-odds][data-issueid="${issueId}"][data-detailid="${detailId}"]`).each(function () {
+				const $oc = $(this);
+				cotes.push({
+					colId: $oc.attr("data-colid"),
+					cote: ($oc.find("input").not(".commission-input").first().val() || "").toString(),
+					commission: ($oc.find(".commission-input").first().val() || "").toString(),
+				});
+			});
+			const $stakeCell = $grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+			const $oddsTotalCell = $grid.find(`[data-odds-total][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+			const $profitCell = $grid.find(`[data-profit][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+			const $fixeDetailInput = $grid.find(`[data-fixedetail][data-issueid="${issueId}"][data-detailid="${detailId}"] input`);
+			details.push({
+				detailId,
+				type: mode,
+				cotes,
+				coteTotale: ($oddsTotalCell.text() || "").trim(),
+				mise: ($stakeCell.find(".back-stake input").first().val() || "").toString(),
+				engagement: ($stakeCell.find(".liability input").first().val() || "").toString(),
+				fixeDetail: $fixeDetailInput.is(":checked"),
+				profit: ($profitCell.text() || "").trim(),
+			});
+		});
+
+		issues.push({
+			issueId,
+			index: Number($label.text()),
+			fixe: $fixeRadio.is(":checked"),
+			distribution: $distCheck.is(":checked"),
+			profitTotal: ($profitTotal.text() || "").trim(),
+			details,
+		});
+	});
+
+	const $totalLabel = $grid.find(".total-label");
+	const $totalStake = $totalLabel.nextAll("[data-stake]").first();
+	const $totalFixe = $totalLabel.nextAll(".cell").has(".radio.fixe").first().find(".radio.fixe");
+	const $totalDist = $totalLabel.nextAll(".cell").has(".check.dist").first().find(".check.dist");
+	const $totalProfitTotal = $totalLabel.nextAll("[data-profit-total]").first();
+	const $totalOddsTotal = $totalLabel.nextAll("[data-last-odds-total]").first();
+
+	return {
+		_meta: {
+			timestamp: new Date().toISOString(),
+			version: window.CURRENT_VERSION || "?",
+			utility: "calc-couverture",
+		},
+		global: {
+			commissionEnabled: $("#commission-enabled").is(":checked"),
+			commissionDefault: ($("#commission-default").val() || "").toString(),
+			detailsEnabled: $("#details-enabled").is(":checked"),
+			hasMultiDetails: $grid.hasClass("has-multi-details"),
+		},
+		grid: {
+			nbOddsCols: Number($grid.attr("data-odds-cols")),
+			columns: colsOrdered,
+		},
+		issues,
+		total: {
+			mise: ($totalStake.find("input").first().val() || "").toString(),
+			fixe: $totalFixe.is(":checked"),
+			distribution: $totalDist.is(":checked"),
+			trj: ($totalOddsTotal.find(".trj-value").text() || "").trim(),
+			profitTotal: ($totalProfitTotal.text() || "").trim(),
+		},
+	};
+}
+
+function downloadDebugStateJson() {
+	const payload = collectDebugState();
+	const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = url;
+	a.download = `calc-couverture-state-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+	a.click();
+	URL.revokeObjectURL(url);
+}
+
+window.toggleDebug = toggleDebug;
+window.downloadDebugStateJson = downloadDebugStateJson;
+
+/* ---------- Initialisation ---------- */
+
 $(function () {
 	applyGridTemplate($("#surebet-grid"));
 	hydrate();
 	renumberColumnHeaders();
 
-	// Ajoute une colonne de cote par défaut au chargement
 	addOddsColumn();
-	addIssue(); // Ajoute une issue par défaut au chargement
+	addIssue();
 	addIssue();
 
 	bindOddsInputs();
 	recomputeAll();
 
 	$("#add-col").on("click", addOddsColumn);
-	$("#add-row").on("click", addIssue); // anciennement addRow
+	$("#add-row").on("click", addIssue);
 
-	// Délégation suppression issue
+	// Suppression issue
 	$("#surebet-grid").on("click", ".js-del-issue", function () {
-		const $label = $(this).closest(".cell").prevAll("[data-issuelabel]").first();
+		const issueId = $(this).closest("[data-actions]").attr("data-issueid");
+		if (!issueId) return;
+		const $label = $(`#surebet-grid [data-issuelabel][data-issueid="${issueId}"]`);
 		deleteIssue($label);
 	});
 
-	// Délégation suppression colonne (depuis l'en-tête)
+	// Suppression colonne
 	$("#surebet-grid").on("click", ".js-del-col", function () {
 		const idx = Number($(this).closest("[data-oddshead]").attr("data-col"));
 		removeOddsColumnAt(idx);
 	});
 
-	// Bascule Back / Lay sur le bouton flip
+	// Ajout détail
+	$("#surebet-grid").on("click", ".js-add-detail", function () {
+		const issueId = $(this).closest("[data-actions]").attr("data-issueid");
+		if (!issueId) return;
+		addDetail(issueId);
+	});
+
+	// Suppression détail
+	$("#surebet-grid").on("click", ".js-del-detail", function () {
+		const issueId = $(this).attr("data-issueid");
+		const detailId = $(this).attr("data-detailid");
+		if (!issueId || !detailId) return;
+		removeDetail(issueId, detailId);
+	});
+
+	// Bascule Back / Lay sur le bouton flip (par détail)
 	$("#surebet-grid").on("click", ".type-toggle", function () {
 		const $btn = $(this);
 		const newMode = $btn.attr("data-mode") === "back" ? "lay" : "back";
 		$btn.attr("data-mode", newMode);
-		const $typeCell = $btn.closest(".cell");
-		const $stakeCell = $typeCell.nextAll("[data-stake]").first();
-		const $oddsTotalCell = $typeCell.nextAll("[data-odds-total]").first();
-		const $label = $typeCell.prevAll("[data-issuelabel]").first();
-		const issueId = $label.attr("data-issueid");
+		const $typeCell = $btn.closest("[data-type]");
+		const issueId = $typeCell.attr("data-issueid");
+		const detailId = $typeCell.attr("data-detailid");
+		const $stakeCell = $("#surebet-grid").find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+		const $oddsTotalCell = $("#surebet-grid").find(`[data-odds-total][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
 		if ($stakeCell.length) $stakeCell.toggleClass("lay-mode", newMode === "lay");
 
-		// Commission : remplir avec la valeur par défaut en Lay, vider en Back
-		const $commInputs = $("#surebet-grid").find(`[data-odds][data-issueid='${issueId}'] .commission-input`);
+		const $commInputs = $("#surebet-grid").find(`[data-odds][data-issueid="${issueId}"][data-detailid="${detailId}"] .commission-input`);
 		if (newMode === "lay") $commInputs.val(getDefaultCommission());
 		else $commInputs.val("");
 
-		// Conversion automatique Mise / Engagement à partir de la cote totale courante
 		const $mainInput = $stakeCell.find(".back-stake input").first();
 		const $liabInput = $stakeCell.find(".liability input").first();
 		const odds = parseFloat(($oddsTotalCell.text() || "").replace(",", "."));
@@ -772,13 +1073,11 @@ $(function () {
 
 		if (currentMain > 0 && !isNaN(odds) && odds > 1) {
 			if (newMode === "lay") {
-				// Back → Lay : liability = stake × odds, lay_stake = liability / (odds - 1)
 				const liability = currentMain * odds;
 				const layStake = liability / (odds - 1);
 				$mainInput.val(layStake.toFixed(DEC).replace(".", ","));
 				$liabInput.val(liability.toFixed(DEC).replace(".", ","));
 			} else {
-				// Lay → Back : back_stake = liability / odds
 				const liability = readNum($liabInput) || currentMain * (odds - 1);
 				const backStake = liability / odds;
 				$mainInput.val(backStake.toFixed(DEC).replace(".", ","));
@@ -788,9 +1087,7 @@ $(function () {
 		recomputeAll(true);
 	});
 
-	if (window.lucide) {
-		lucide.createIcons();
-	}
+	if (window.lucide) lucide.createIcons();
 
 	// ===== Paramètres globaux : commission Lay (localStorage) =====
 	(function () {
@@ -821,5 +1118,23 @@ $(function () {
 		});
 		$val.on("focus", function () { this.select(); });
 	})();
-});
 
+	// ===== Paramètre global : "Détails issues" (localStorage) =====
+	(function () {
+		const KEY_ON = "calcCouv.detailsEnabled";
+		const $enabled = $("#details-enabled");
+
+		function applyDetailsVisibility() {
+			const on = $enabled.is(":checked");
+			$("#surebet-grid").toggleClass("with-details", on);
+		}
+
+		$enabled.prop("checked", localStorage.getItem(KEY_ON) === "true");
+		applyDetailsVisibility();
+
+		$enabled.on("change", function () {
+			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
+			applyDetailsVisibility();
+		});
+	})();
+});

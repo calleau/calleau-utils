@@ -29,6 +29,7 @@
 				<!-- Pas de colonne de cote par défaut -->
 				<div class="cell head" data-oddstotalhead>Cote<br>totale</div>
 				<div class="cell head" data-stakehead>Mises</div>
+					<div class="cell head" data-fixedetailhead>Fixe<br>détail</div>
 				<div class="cell head" data-fixehead>Fixe</div>
 				<div class="cell head" data-distributionhead>Distribution</div>
 				<div class="cell head" data-profithead>Profit</div>
@@ -49,6 +50,7 @@
 				<div class="cell" data-stake>
 					<!-- Mise à 10 par défaut, sera hydratée par JS aussi -->
 				</div>
+				<div class="cell" data-fixedetail></div>
 				<div class="cell">
 					<input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe total">
 				</div>
@@ -68,6 +70,10 @@
 
 		<section class="global-settings">
 			<label class="global-setting-toggle">
+				<input type="checkbox" id="details-enabled">
+				<span>Activer détails issues</span>
+			</label>
+			<label class="global-setting-toggle">
 				<input type="checkbox" id="commission-enabled">
 				<span>Activer commission</span>
 			</label>
@@ -80,8 +86,17 @@
 			</div>
 		</section>
 
+		<button id="cc-debug-state-btn" class="cc-debug-dl-btn" onclick="downloadDebugStateJson()" hidden>
+			<img width="12" height="12" alt="" style="vertical-align:middle;margin-right:5px;" src="../../assets/icons/bug.svg" />Télécharger état actuel (debug)
+		</button>
+
 		<footer class="page-footer">
 			<span class="footer-version" id="footer-version"></span>
+			<button id="cc-debug-btn" class="cc-debug-btn" onclick="toggleDebug()" title="Mode debug">
+				<img id="cc-debug-icon-off" class="cc-debug-icon" width="12" height="12" alt="" src="../../assets/icons/bug-off.svg" />
+				<img id="cc-debug-icon-on" class="cc-debug-icon" width="12" height="12" alt="" src="../../assets/icons/bug.svg" hidden />
+				debug
+			</button>
 		</footer>
 	</main>
 
