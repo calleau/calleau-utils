@@ -836,8 +836,10 @@ function recomputeAll(redistribute = true) {
 				d.$profitCell.text("—");
 				return;
 			}
-			// Per-detail profit = retour quand cette ligne gagne
-			const profit = d.isLay ? d.stake : d.oddsTotalNet * d.stake;
+			// Per-detail profit = gain quand cette ligne gagne :
+			//   Back : mise × cote nette (retour brut net après commission)
+			//   Lay  : mise × (1 − c) (lay_stake conservée, nette de commission)
+			const profit = d.isLay ? d.stake * d.layNetWinFactor : d.oddsTotalNet * d.stake;
 			sumProfitDetails += profit;
 			let html = profit.toFixed(DEC).replace(".", ",") + " €";
 			// Sur le dernier détail valide : afficher la somme issue (uniquement si >1 détails)
@@ -847,22 +849,26 @@ function recomputeAll(redistribute = true) {
 			d.$profitCell.html(html);
 		});
 
-		// Profit total de l'issue (cellule unique span K) :
-		// P/L quand cette issue se réalise.
+		// Profit total de l'issue : pour chaque détail
+		//   Back : Profit − Perte totale
+		//   Lay  : Profit (= mise × (1−c)) + Engagement − Perte totale
+		// où Perte totale = sumInvestedAll (somme des mises Back et engagements Lay).
 		if (issue.$profitTotal && issue.$profitTotal.length) {
 			if (!issue.hasValue) {
 				issue.$profitTotal.text("—");
 			} else {
-				// Retour brut quand cette issue se réalise =
-				//   Σ retours de ses détails (Back : stake × oddsNet ; Lay : 0)
-				// + Σ retours des autres issues quand cette issue se réalise = Σ (autres détails Lay : stake + engagement ; autres détails Back : 0)
-				let returnWhenIssueWins = issue.returnIfIssueWins;
-				for (const other of issues) {
-					if (other === issue) continue;
-					returnWhenIssueWins += other.returnIfIssueLoses;
+				let issueProfitTotal = 0;
+				for (const d of issue.details) {
+					if (!d.hasValue || !d.stake) continue;
+					if (d.isLay) {
+						const eng = d.engagement || d.stake * Math.max(0, d.oddsTotal - 1);
+						issueProfitTotal += d.stake * d.layNetWinFactor + eng;
+					} else {
+						issueProfitTotal += d.stake * d.oddsTotalNet;
+					}
 				}
-				const profitTotal = returnWhenIssueWins - sumInvestedAll;
-				issue.$profitTotal.text(profitTotal.toFixed(DEC).replace(".", ",") + " €");
+				issueProfitTotal -= sumInvestedAll;
+				issue.$profitTotal.text(issueProfitTotal.toFixed(DEC).replace(".", ",") + " €");
 			}
 		}
 	}
