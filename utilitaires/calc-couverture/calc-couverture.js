@@ -490,7 +490,8 @@ function recomputeAll(redistribute = true) {
 			const $oddsCells = $grid.find(`[data-odds][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
 			let hasValue = false;
 			let oddsTotal = 1;
-			let oddsTotalNet = 1;
+			let oddsTotalNet = 1;       // Back : produit des (1+(O−1)(1−c))
+			let layNetWinFactor = 1;    // Lay : produit des (1−c) — coef sur lay_stake après commission
 			$oddsCells.each(function () {
 				const $oc = $(this);
 				const v = $oc.find("input").not(".commission-input").first().val();
@@ -500,7 +501,12 @@ function recomputeAll(redistribute = true) {
 				oddsTotal *= oVal;
 				const c = commissionEnabled ? (readNum($oc.find(".commission-input").first()) / 100) : 0;
 				oddsTotalNet *= 1 + (oVal - 1) * (1 - c);
+				layNetWinFactor *= (1 - c);
 			});
+			// Pour un Lay, retour total quand le pari gagne (par unité de mise) =
+			// mise_net + engagement = mise×(1−c) + mise×(O−1) = mise×(O−c).
+			// Généralisation multi-cote : (mise × Π(1−c_i)) + mise × (ΠO_i − 1).
+			const layReturnFactor = layNetWinFactor + (oddsTotal - 1);
 
 			const $stakeCell = $grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
 			const $stakeInput = $stakeCell.find(".back-stake input").first();
@@ -516,6 +522,7 @@ function recomputeAll(redistribute = true) {
 
 			details.push({
 				detailId, isLay, hasValue, oddsTotal, oddsTotalNet,
+				layNetWinFactor, layReturnFactor,
 				stake: stakeVal, engagement: engagementVal,
 				isFixedDetail,
 				$stakeCell, $oddsTotalCell, $profitCell,
@@ -588,6 +595,25 @@ function recomputeAll(redistribute = true) {
 	const totalIsDist = $totalDist.find(".check.dist").is(":checked");
 	const totalStake = readNum($totalStake.find("input").first());
 
+	// Si la ligne fixée a une cote remplie mais pas de mise, on met 10 € par défaut
+	// (uniquement pour les issues mono-détail, et seulement si on a le droit d'écrire).
+	if (redistribute) {
+		for (const issue of issues) {
+			if (!issue.isFixed) continue;
+			if (issue.details.length !== 1) continue;
+			const d = issue.details[0];
+			if (d.hasValue && (!d.stake || d.stake <= 0)) {
+				setStake(d.$stakeCell, 10);
+				d.stake = 10;
+				if (d.isLay && d.oddsTotal > 1) {
+					const newEng = 10 * (d.oddsTotal - 1);
+					setLiability(d.$stakeCell, newEng);
+					d.engagement = newEng;
+				}
+			}
+		}
+	}
+
 	// Calculs agrégés par issue (pour l'équilibrage et le profit total)
 	// Pour chaque issue, on calcule :
 	//   - sumInvestedIssue : somme des montants engagés (Back : stake ; Lay : engagement)
@@ -598,28 +624,43 @@ function recomputeAll(redistribute = true) {
 	for (const issue of issues) {
 		let sumInvested = 0;
 		let returnIfWin = 0;
-		let returnIfLose = 0; // somme des retours quand l'issue NE se réalise PAS
+		let returnIfLose = 0; // somme des retours nets quand l'issue NE se réalise PAS
 		issue.hasValue = false;
 		for (const d of issue.details) {
 			if (!d.hasValue) continue;
 			issue.hasValue = true;
 			if (d.isLay) {
-				// Lay : engagement = stake × (oddsBrut − 1)
+				// Lay : engagement = mise × (oddsBrut − 1) ; retour si Lay gagne =
+				// mise × (1 − c) + engagement = mise × layReturnFactor
 				const liability = d.engagement || d.stake * Math.max(0, d.oddsTotal - 1);
 				sumInvested += liability;
-				// Si l'issue se réalise → on perd l'engagement → retour brut = 0
-				// Si l'issue NE se réalise PAS → on garde stake + engagement
-				returnIfLose += d.stake + liability;
+				returnIfLose += d.stake * d.layNetWinFactor + liability;
 			} else {
+				// Back : retour si Back gagne = mise × oddsTotalNet
 				sumInvested += d.stake;
 				returnIfWin += d.stake * d.oddsTotalNet;
-				// Back : si l'issue ne se réalise pas, on perd → retour = 0
 			}
 		}
 		issue.sumInvested = sumInvested;
 		issue.returnIfIssueWins = returnIfWin;
 		issue.returnIfIssueLoses = returnIfLose;
-		issue.effectiveOddsNet = sumInvested > 0 ? returnIfWin / sumInvested : 0;
+		if (issue.details.length === 1 && issue.details[0].hasValue) {
+			// Mono-détail : on utilise la cote nette back-équivalente comme facteur
+			// effectif pour l'équilibrage et le TRJ.
+			//   Back : back-équivalent = oddsTotalNet
+			//   Lay  : back-équivalent = layReturnFactor / (oddsTotal − 1)
+			//          (= (O − c) / (O − 1) en mono-cote)
+			const d = issue.details[0];
+			if (d.isLay && d.oddsTotal > 1) {
+				issue.effectiveOddsNet = d.layReturnFactor / (d.oddsTotal - 1);
+			} else {
+				issue.effectiveOddsNet = d.oddsTotalNet;
+			}
+		} else if (sumInvested > 0) {
+			issue.effectiveOddsNet = returnIfWin / sumInvested;
+		} else {
+			issue.effectiveOddsNet = 0;
+		}
 	}
 
 	// TRJ : basé sur la cote nette effective de chaque issue
@@ -677,14 +718,18 @@ function recomputeAll(redistribute = true) {
 			if (it.details.length === 1) {
 				// Mono-détail : on alloue tout au seul détail.
 				const d = it.details[0];
-				const target = targetReturn / d.oddsTotalNet;
+				// Back : target = K / oddsTotalNet (= mise qui rapporte K si Back gagne).
+				// Lay  : target = K / layReturnFactor (= mise telle que mise×(1−c)+engagement = K).
+				const target = d.isLay && d.layReturnFactor > 0
+					? targetReturn / d.layReturnFactor
+					: targetReturn / d.oddsTotalNet;
 				setStake(d.$stakeCell, target);
 				if (d.isLay && d.oddsTotal > 1) {
 					const newEng = target * (d.oddsTotal - 1);
 					setLiability(d.$stakeCell, newEng);
 					d.engagement = newEng;
 					it.sumInvested = newEng;
-					it.returnIfIssueLoses = target + newEng;
+					it.returnIfIssueLoses = target * d.layNetWinFactor + newEng;
 				} else {
 					it.sumInvested = target;
 					it.returnIfIssueWins = target * d.oddsTotalNet;
@@ -738,6 +783,42 @@ function recomputeAll(redistribute = true) {
 		}
 		if (!totalIsFixed) {
 			setStake($totalStake, S);
+		}
+	}
+
+	// Engagement Lay = mise × (cote_brute − 1) pour TOUS les détails Lay (y compris
+	// les détails Fixe ou mono-détail ignorés par la redistribution).
+	for (const issue of issues) {
+		for (const d of issue.details) {
+			if (!d.isLay || !d.hasValue || d.oddsTotal <= 1) continue;
+			const newEng = d.stake * (d.oddsTotal - 1);
+			setLiability(d.$stakeCell, newEng);
+			d.engagement = newEng;
+		}
+		// Re-agrège les indicateurs par issue après mise à jour des engagements
+		let nsi = 0, nrw = 0, nrl = 0;
+		for (const d of issue.details) {
+			if (!d.hasValue) continue;
+			if (d.isLay) {
+				nsi += d.engagement || 0;
+				nrl += d.stake * d.layNetWinFactor + (d.engagement || 0);
+			} else {
+				nsi += d.stake;
+				nrw += d.stake * d.oddsTotalNet;
+			}
+		}
+		issue.sumInvested = nsi;
+		issue.returnIfIssueWins = nrw;
+		issue.returnIfIssueLoses = nrl;
+		if (issue.details.length === 1 && issue.details[0].hasValue) {
+			const d = issue.details[0];
+			if (d.isLay && d.oddsTotal > 1) {
+				issue.effectiveOddsNet = d.layReturnFactor / (d.oddsTotal - 1);
+			} else {
+				issue.effectiveOddsNet = d.oddsTotalNet;
+			}
+		} else {
+			issue.effectiveOddsNet = nsi > 0 ? nrw / nsi : 0;
 		}
 	}
 
