@@ -334,9 +334,68 @@ function buildBetDetailRow(bet: BetDetail, idx: number): string {
   </div>`;
 }
 
+// Extract commission rate (in %) for a cover bet from the raw data.
+// For PIWIx-style exchanges we have val.Lay = {odds, odds_net} or val.Back = {odds, odds_net}
+// from which we can derive c = 1 - (odds_net - 1)/(odds - 1). For non-exchange sites
+// commission is 0.
+function extractCommissionPct(bet: BetDetail): number {
+  const leg = bet.legs[0];
+  if (!leg || !_data) return 0;
+  const val = _data[leg.eventKey]?.markets?.[leg.marketName]?.[leg.outcomeName]?.[bet.site];
+  if (!val || typeof val !== 'object') return 0;
+  const isLayBet = leg.betType === 'Lay';
+  const side = isLayBet ? val.Lay : val.Back;
+  if (!side || !side.odds || !side.odds_net) return 0;
+  const denom = side.odds - 1;
+  if (denom <= 0) return 0;
+  const c = 1 - (side.odds_net - 1) / denom;
+  return Math.max(0, Math.min(100, c * 100));
+}
+
+// Build a URL pointing to the couv-seq utility, pre-loaded with the principal
+// combiné as the placed bet and each cover (Back or Lay) pre-filled.
+// couv-seq accepts state via the URL hash: #s=URLENCODED({v:1, b, c, n}).
+function buildCouvSeqUrl(r: CoveringSetResult): string {
+  const principal = r.bets.find(b => b.role === 'principal');
+  if (!principal) return '';
+  const covers = r.bets.filter(b => b.role === 'cover');
+  if (!covers.length) return '';
+
+  const placedBet = {
+    id: 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    type: principal.betType === 'fb' ? 'freebet' : 'cash',
+    amount: principal.stake,
+    oddsMode: 'individual',
+    totalOdd: null as number | null,
+    odds: principal.legs.map(l => getLegIndivOdds(l, principal.site) ?? null),
+  };
+
+  const coversArr = covers.map(c => {
+    const isLay = c.legs[0]?.betType === 'Lay';
+    const commission = extractCommissionPct(c);
+    return {
+      status: 'pending',
+      backOdd: isLay ? null : c.odds,
+      layOdd: isLay ? c.odds : null,
+      commission,
+      loss: null as number | null,
+    };
+  });
+
+  const state = { v: 1, b: [placedBet], c: coversArr, n: covers.length };
+  return '../couv-seq/#s=' + encodeURIComponent(JSON.stringify(state));
+}
+
 function buildDetailContent(r: CoveringSetResult): string {
   const rows = r.bets.map((b, i) => buildBetDetailRow(b, i)).join('');
-  return `<div class="ff-betlist">${rows}</div>`;
+  let header = '';
+  if (r.timing === 'seq' && r.nMatches >= 2) {
+    const url = buildCouvSeqUrl(r);
+    if (url) {
+      header = `<div class="ff-detail-actions"><a class="ff-detail-action-link" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir dans Couv-Seq ↗</a></div>`;
+    }
+  }
+  return `${header}<div class="ff-betlist">${rows}</div>`;
 }
 
 // ===== COLUMN FILTERS =====
