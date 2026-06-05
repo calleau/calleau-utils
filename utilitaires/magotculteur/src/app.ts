@@ -334,21 +334,15 @@ function buildBetDetailRow(bet: BetDetail, idx: number): string {
   </div>`;
 }
 
-// Extract commission rate (in %) for a cover bet from the raw data.
-// For PIWIx-style exchanges we have val.Lay = {odds, odds_net} or val.Back = {odds, odds_net}
-// from which we can derive c = 1 - (odds_net - 1)/(odds - 1). For non-exchange sites
-// commission is 0.
+// Commission rate (in %) for a site. Looked up in sites-informations.json
+// (commission_winning, stored as a fraction 0..1). Lecture directe — déduire la
+// commission à partir des cotes odds_net est imprécis car odds_net est arrondi
+// à quelques décimales dans les données (ex. 3 % réel sort à 2,9 %).
 function extractCommissionPct(bet: BetDetail): number {
-  const leg = bet.legs[0];
-  if (!leg || !_data) return 0;
-  const val = _data[leg.eventKey]?.markets?.[leg.marketName]?.[leg.outcomeName]?.[bet.site];
-  if (!val || typeof val !== 'object') return 0;
-  const isLayBet = leg.betType === 'Lay';
-  const side = isLayBet ? val.Lay : val.Back;
-  if (!side || !side.odds || !side.odds_net) return 0;
-  const denom = side.odds - 1;
-  if (denom <= 0) return 0;
-  const c = 1 - (side.odds_net - 1) / denom;
+  const entry = _sitesInfo?.[bet.site];
+  const c = (entry && typeof entry.commission_winning === 'number')
+    ? entry.commission_winning
+    : (_sitesInfo?.default?.commission_winning ?? 0);
   return Math.max(0, Math.min(100, c * 100));
 }
 
