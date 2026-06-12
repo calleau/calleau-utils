@@ -192,8 +192,10 @@ function renderBookies() {
                     <span class="bonus-dot bonus-dot-${i}" data-bonus="${b.bonus}"></span>
                     <select id="bonus-${i}" onchange="bookies[${i}].bonus=this.value; updateBonusDot(${i}, this.value); updateConvRateVisibility(${i}, this.value)">
                       <option value="freebet_lose"   ${b.bonus === 'freebet_lose' ? 'selected' : ''}>Freebet si perdant</option>
+                      <option value="freebet_win"    ${b.bonus === 'freebet_win' ? 'selected' : ''}>Freebet si gagnant</option>
                       <option value="freebet_always" ${b.bonus === 'freebet_always' ? 'selected' : ''}>Freebet toujours</option>
                       <option value="cash_lose"      ${b.bonus === 'cash_lose' ? 'selected' : ''}>Cash si perdant</option>
+                      <option value="cash_win"       ${b.bonus === 'cash_win' ? 'selected' : ''}>Cash si gagnant</option>
                       <option value="cash_always"    ${b.bonus === 'cash_always' ? 'selected' : ''}>Cash toujours</option>
                       <option value="no_bonus"       ${b.bonus === 'no_bonus' ? 'selected' : ''}>Sans bonus</option>
                     </select>
@@ -220,7 +222,7 @@ function renderBookies() {
                   </div>
                 </div>
                 <div class="bg-cell">
-                  <div id="conv-cell-${i}" class="numinput" ${['cash_lose','cash_always','no_bonus'].includes(b.bonus) ? 'hidden' : ''}>
+                  <div id="conv-cell-${i}" class="numinput" ${['cash_lose','cash_always','cash_win','no_bonus'].includes(b.bonus) ? 'hidden' : ''}>
                     <input type="number" id="conv-${i}" value="${b.convRate}" min="1" max="100" step="1"
                       oninput="bookies[${i}].convRate=Math.min(100,Math.max(1,parseFloat(this.value)||80))"
                       onclick="this.select()" />
@@ -339,7 +341,7 @@ function decrementConv(i) {
 }
 function updateConvRateVisibility(i, bonusType) {
 	const cell = document.getElementById(`conv-cell-${i}`);
-	if (cell) cell.hidden = ['cash_lose', 'cash_always', 'no_bonus'].includes(bonusType);
+	if (cell) cell.hidden = ['cash_lose', 'cash_always', 'cash_win', 'no_bonus'].includes(bonusType);
 }
 
 function selectSite(i, siteKey) {
@@ -383,7 +385,7 @@ function slotScore(siteIdx, odds) {
 	const b = bookies[siteIdx];
 	let r;
 	if (b.bonus === 'no_bonus') r = 0;
-	else if (b.bonus === 'cash_lose' || b.bonus === 'cash_always') r = 1;
+	else if (b.bonus === 'cash_lose' || b.bonus === 'cash_always' || b.bonus === 'cash_win') r = 1;
 	else r = b.convRate / 100;
 	return 1 / Math.max(odds - r, 0.001);
 }
@@ -449,28 +451,31 @@ function computeStakes(active) {
 
 	const effectiveConv = active.map(b => {
 		if (b.bonus === 'no_bonus') return 0;
-		if (b.bonus === 'cash_lose' || b.bonus === 'cash_always') return 1;
+		if (b.bonus === 'cash_lose' || b.bonus === 'cash_always' || b.bonus === 'cash_win') return 1;
 		return b.convRate / 100;
 	});
+
+	const givesBonusOnWin = b => b.bonus === 'freebet_always' || b.bonus === 'cash_always' || b.bonus === 'freebet_win' || b.bonus === 'cash_win';
+	const givesBonusOnLose = b => b.bonus === 'freebet_lose' || b.bonus === 'cash_lose' || b.bonus === 'freebet_always' || b.bonus === 'cash_always';
 
 	let capped = active.map(() => false);
 	let stakes = null;
 
 	for (let iter = 0; iter < 20; iter++) {
 		const winCoef = active.map((b, j) => {
-			if (b.bonus === 'no_bonus' || b.bonus === 'freebet_lose' || b.bonus === 'cash_lose') return b.odds - 1;
+			if (!givesBonusOnWin(b)) return b.odds - 1;
 			return capped[j] ? (b.odds - 1) : (b.odds - 1 + effectiveConv[j]);
 		});
 		const winConst = active.map((b, j) => {
-			if ((b.bonus === 'freebet_always' || b.bonus === 'cash_always') && capped[j]) return effectiveConv[j] * b.maxBonus;
+			if (givesBonusOnWin(b) && capped[j]) return effectiveConv[j] * b.maxBonus;
 			return 0;
 		});
 		const loseCoef = active.map((b, j) => {
-			if (b.bonus === 'no_bonus') return -1;
+			if (!givesBonusOnLose(b)) return -1;
 			return capped[j] ? -1 : -(1 - effectiveConv[j]);
 		});
 		const loseConst = active.map((b, j) => {
-			if (b.bonus === 'no_bonus') return 0;
+			if (!givesBonusOnLose(b)) return 0;
 			return capped[j] ? effectiveConv[j] * b.maxBonus : 0;
 		});
 
@@ -514,9 +519,10 @@ function computeStakes(active) {
 			const s = stakes[j];
 			if (j === outcomeIdx) {
 				g += (bk.odds - 1) * s;
-				if (bk.bonus === 'freebet_always' || bk.bonus === 'cash_always') g += bonusAmount(bk, s, j);
+				if (givesBonusOnWin(bk)) g += bonusAmount(bk, s, j);
 			} else {
-				g += -s + bonusAmount(bk, s, j);
+				g += -s;
+				if (givesBonusOnLose(bk)) g += bonusAmount(bk, s, j);
 			}
 		});
 		return g;
@@ -526,7 +532,7 @@ function computeStakes(active) {
 	const avgGain     = gains.reduce((a, b) => a + b, 0) / gains.length;
 	const roi         = totalStaked > 0 ? (avgGain / totalStaked) * 100 : 0;
 
-	return { stakes, gains, avgGain, totalStaked, roi, effectiveConv, capped, bonusAmount };
+	return { stakes, gains, avgGain, totalStaked, roi, effectiveConv, capped, bonusAmount, givesBonusOnWin, givesBonusOnLose };
 }
 
 function calculate() {
@@ -687,7 +693,7 @@ function showError(msg) {
 
 // ---- Détail d'une combinaison ----
 
-function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusAmount, matchIndices }) {
+function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusAmount, givesBonusOnWin, givesBonusOnLose, matchIndices }) {
 	const matchLabel = matchIndices ? matchIndices.map(mi => matches[mi].name).join(' + ') : (active[0]?.matchLabel || '');
 	document.getElementById('gain-banner').innerHTML = `
         ${matchLabel ? '<div class="result-match-label">' + matchLabel + '</div>' : ''}
@@ -755,18 +761,19 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusA
                     </td>
                     ${active.map((_, outcomeIdx) => {
 			const wins = siteIdx === outcomeIdx;
+			const winBonus  = givesBonusOnWin(site);
+			const loseBonus = givesBonusOnLose(site);
 			if (wins) {
-				const cashProfit     = (site.odds - 1) * s;
-				const hasAlwaysBonus = site.bonus === 'freebet_always' || site.bonus === 'cash_always';
-				const bonusIfWin     = hasAlwaysBonus ? bonusCash : 0;
-				const total          = cashProfit + bonusIfWin;
+				const cashProfit = (site.odds - 1) * s;
+				const bonusIfWin = winBonus ? bonusCash : 0;
+				const total      = cashProfit + bonusIfWin;
 				if (isCash) return `
                           <td class="td-outcome win">
                             <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val pos">+${fmt(cashProfit)} €</span></div>
                             <div class="detail-line"><span class="detail-lbl">Bonus cash</span><span class="detail-val ${bonusIfWin > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusIfWin)} €</span></div>
                             <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val pos strong">+${fmt(total)} €</span></div>
                           </td>`;
-				const fbRaw = hasAlwaysBonus ? bonusRaw : 0;
+				const fbRaw = winBonus ? bonusRaw : 0;
 				return `
                           <td class="td-outcome win">
                             <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val pos">+${fmt(cashProfit)} €</span></div>
@@ -775,19 +782,21 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusA
                             <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val pos strong">+${fmt(total)} €</span></div>
                           </td>`;
 			} else {
-				const cashLoss = -s;
-				const total    = cashLoss + bonusCash;
+				const cashLoss    = -s;
+				const bonusIfLose = loseBonus ? bonusCash : 0;
+				const fbRawLose   = loseBonus ? bonusRaw : 0;
+				const total       = cashLoss + bonusIfLose;
 				if (isCash) return `
                           <td class="td-outcome lose">
                             <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val neg">${fmt(cashLoss)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Bonus cash</span><span class="detail-val ${bonusCash > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusCash)} €</span></div>
+                            <div class="detail-line"><span class="detail-lbl">Bonus cash</span><span class="detail-val ${bonusIfLose > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusIfLose)} €</span></div>
                             <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val ${total >= 0 ? 'neut' : 'neg'} strong">${fmt(total)} €</span></div>
                           </td>`;
 				return `
                           <td class="td-outcome lose">
                             <div class="detail-line"><span class="detail-lbl">Cash</span><span class="detail-val neg">${fmt(cashLoss)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${bonusRaw > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusRaw)} €</span></div>
-                            <div class="detail-line"><span class="detail-lbl">Freebet @${site.convRate}%</span><span class="detail-val ${bonusCash > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusCash)} €</span></div>
+                            <div class="detail-line"><span class="detail-lbl">Freebet brut</span><span class="detail-val ${fbRawLose > 0 ? 'neut' : 'text-muted'}">+${fmt(fbRawLose)} €</span></div>
+                            <div class="detail-line"><span class="detail-lbl">Freebet @${site.convRate}%</span><span class="detail-val ${bonusIfLose > 0 ? 'neut' : 'text-muted'}">+${fmt(bonusIfLose)} €</span></div>
                             <div class="detail-line total-line"><span class="detail-lbl">Total</span><span class="detail-val ${total >= 0 ? 'neut' : 'neg'} strong">${fmt(total)} €</span></div>
                           </td>`;
 			}
@@ -812,14 +821,16 @@ function showResults({ active, stakes, avgGain, totalStaked, roi, capped, bonusA
 			if (!isCash && site.bonus !== 'no_bonus') hasFb = true;
 			if (wins) {
 				totalCash += (site.odds - 1) * s;
-				if (site.bonus === 'freebet_always' || site.bonus === 'cash_always') {
+				if (givesBonusOnWin(site)) {
 					if (isCash) totalCashBonus += bCash;
 					else { totalFbRaw += bonusRaw; totalFbConv += bCash; }
 				}
 			} else {
 				totalCash += -s;
-				if (isCash) totalCashBonus += bCash;
-				else { totalFbRaw += bonusRaw; totalFbConv += bCash; }
+				if (givesBonusOnLose(site)) {
+					if (isCash) totalCashBonus += bCash;
+					else { totalFbRaw += bonusRaw; totalFbConv += bCash; }
+				}
 			}
 		});
 		const total = totalCash + totalFbConv + totalCashBonus;

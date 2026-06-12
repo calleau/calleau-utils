@@ -711,8 +711,10 @@ input[type="number"] { -moz-appearance: textfield; }
 
 .bonus-dot[data-bonus="freebet_always"] { background: var(--c-primary); }
 .bonus-dot[data-bonus="freebet_lose"]   { background: var(--c-tertiary); }
+.bonus-dot[data-bonus="freebet_win"]    { background: #9B7EC4; }
 .bonus-dot[data-bonus="cash_always"]    { background: var(--color-pos); }
 .bonus-dot[data-bonus="cash_lose"]      { background: #7BA18A; }
+.bonus-dot[data-bonus="cash_win"]       { background: #C4A255; }
 .bonus-dot[data-bonus="no_bonus"]       { background: var(--color-muted); }
 
 /* =========================================================
