@@ -1369,11 +1369,12 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
 
         const trySeqCombo = (legList: Leg[]) => {
           if (opts.coteMinParSelection > 0 && legList.some(l => l.b < opts.coteMinParSelection)) return;
-          // Classify symmetry: sym if all principal legs use the same market type, asym otherwise
-          const marketTypes = new Set(legList.map(l => norm(l.marketName)));
-          const symmetry: 'sym' | 'asym' = marketTypes.size === 1 ? 'sym' : 'asym';
-          if (symmetry === 'sym' && !opts.allowSym) return;
-          if (symmetry === 'asym' && !opts.allowAsym) return;
+          // En seq, le résultat est un combiné principal unique + des covers — il n'y a
+          // pas de matrice cross-product entre events (cf. doc "Symetrie"). Les combinés
+          // multi-events à marchés différents sont autorisés sans condition : on classe
+          // toujours en 'sym'. Le flag allowAsym ne s'applique qu'au simultané.
+          const symmetry: 'sym' = 'sym';
+          if (!opts.allowSym) return;
 
           // Cotes combinées arrondies à 2 décimales avant tout calcul (convention
           // bookmaker : la cote affichée sur le ticket est la base des gains réels).

@@ -5,4 +5,4 @@ window.AVAILABLE_VERSIONS = [
 ];
 
 // Version actuelle de la page (affichée dans le footer).
-window.CURRENT_VERSION = 'v6.4.2';
+window.CURRENT_VERSION = 'v6.4.3';
