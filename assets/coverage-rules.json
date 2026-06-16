@@ -66,12 +66,12 @@
 	{
 		"issues": 2,
 		"A": [
-			{ "market": "/^Total \\w+$/", "issue": "/^(\\d+,\\d+)([+-])$/", "betType": "Back" },
-			{ "market": "$market", "issue": "$1$2~+-", "betType": "Lay" }
+			{ "market": "/^Total \\w+$/", "issue": "/^([+-])(\\d+,\\d+)$/", "betType": "Back" },
+			{ "market": "$market", "issue": "$1~+-$2", "betType": "Lay" }
 		],
 		"B": [
 			{ "market": "$market", "issue": "$1$2", "betType": "Lay" },
-			{ "market": "$market", "issue": "$1$2~+-", "betType": "Back" }
+			{ "market": "$market", "issue": "$1~+-$2", "betType": "Back" }
 		]
 	},
 	{
