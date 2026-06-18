@@ -34,6 +34,17 @@ function getDefaultCommission() {
 	return ($("#commission-default").val() || "3,00").trim() || "3,00";
 }
 
+/* Renvoie le coefficient p ∈ [0,1] de répartition de la perte (paramètre global).
+   Si le paramètre n'est pas activé, on retourne 0 (= comportement classique :
+   ligne distribuée concentre tout le profit, ligne non distribuée à 0). */
+function getLossDistribution() {
+	if (!$("#loss-dist-enabled").is(":checked")) return 0;
+	const raw = ($("#loss-dist-default").val() || "0").replace(",", ".");
+	const v = parseFloat(raw);
+	if (Number.isNaN(v)) return 0;
+	return Math.max(0, Math.min(100, v)) / 100;
+}
+
 function buildOddsCell(colId, issueId, detailId, defaultOdds = "", isLay = false) {
 	const defaultComm = isLay ? getDefaultCommission() : "";
 	const $cell = $(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}" data-detailid="${detailId}"></div>`);
@@ -735,7 +746,12 @@ function initCalculator($card, opts = {}) {
 		if (redistribute && !errorMsg && K !== null && S !== null) {
 			for (const it of eligibles) {
 				if (it.isFixed) continue;
-				const targetReturn = it.isDist ? K : S;
+				// Répartition de la perte : on interpole entre K (profit concentré, p=0)
+				// et S (équilibrage des profits totaux, p=1). Si TOUTES les lignes sont
+				// distribuées (sigmaN = 0), la répartition n'a pas de sens (pas de ligne
+				// non-distribuée vers laquelle "déplacer" du profit) → on garde K.
+				const lossP = sigmaN > 0 ? getLossDistribution() : 0;
+				const targetReturn = it.isDist ? ((1 - lossP) * K + lossP * S) : S;
 
 				if (it.details.length === 1) {
 					const d = it.details[0];
@@ -1326,6 +1342,42 @@ function initGlobalSettings() {
 		});
 		$val.on("input blur", function () {
 			localStorage.setItem(KEY_VAL, this.value);
+		});
+		$val.on("focus", function () { this.select(); });
+	})();
+
+	// Loss distribution (toggle + value applied to all calculators)
+	(function () {
+		const KEY_ON = "calcCouv.lossDistEnabled";
+		const KEY_VAL = "calcCouv.lossDistDefault";
+		const $enabled = $("#loss-dist-enabled");
+		const $detail = $("#loss-dist-detail");
+		const $val = $("#loss-dist-default");
+
+		function applyLossDistVisibility() {
+			const on = $enabled.is(":checked");
+			$detail.prop("hidden", !on);
+			$(".calc-card").each(function () {
+				const calc = $(this).data("calc");
+				if (calc) calc.recomputeAll(true);
+			});
+		}
+
+		$enabled.prop("checked", localStorage.getItem(KEY_ON) === "true");
+		const stored = localStorage.getItem(KEY_VAL);
+		if (stored !== null) $val.val(stored);
+		$detail.prop("hidden", !$enabled.is(":checked"));
+
+		$enabled.on("change", function () {
+			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
+			applyLossDistVisibility();
+		});
+		$val.on("input blur", function () {
+			localStorage.setItem(KEY_VAL, this.value);
+			$(".calc-card").each(function () {
+				const calc = $(this).data("calc");
+				if (calc) calc.recomputeAll(true);
+			});
 		});
 		$val.on("focus", function () { this.select(); });
 	})();

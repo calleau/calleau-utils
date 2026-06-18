@@ -544,6 +544,15 @@
 	display: none;
 }
 
+/* Chaque paramètre (checkbox + détail) empilé verticalement.
+   Les groupes restent côte à côte grâce au flex-row de .global-settings. */
+.global-setting-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	align-items: flex-start;
+}
+
 .global-setting-detail label {
 	font-size: 13px;
 	color: var(--color-muted);
