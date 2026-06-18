@@ -61,7 +61,7 @@ jobs:
           # après aplatissement ils sont à _site/x/, donc ../foo suffit.
           # On utilise une whitelist pour éviter de toucher les références
           # entre calculateurs frères (ex: ../welcome-bonus/welcome-bonus.css).
-          ROOT_RES='(theme\.css|theme-toggle\.js|homepage\.css|script\.js|index\.html|assets/)'
+          ROOT_RES='(theme\.css|theme-toggle\.js|homepage\.css|script\.js|index\.html|versions-widget\.js|assets/)'
           find _site -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.mjs' \) \
             -not -path '_site/assets/*' \
             -print0 | \
