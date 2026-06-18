@@ -21,52 +21,11 @@
 			<h1 class="title">Calculatrice couverture</h1>
 		</header>
 
-		<section class="card">
-			<div id="surebet-grid" class="sb-grid" data-odds-cols="0" aria-label="Tableau surebet">
-				<!-- EN-TÊTES -->
-				<div class="cell head sticky" data-oddslabelhead>Cotes</div>
-				<div class="cell head" data-typehead>Type</div>
-				<!-- Pas de colonne de cote par défaut -->
-				<div class="cell head" data-oddstotalhead>Cote<br>totale</div>
-				<div class="cell head" data-stakehead>Mises</div>
-					<div class="cell head" data-fixedetailhead>Fixe<br>détail</div>
-				<div class="cell head" data-fixehead>Fixe</div>
-				<div class="cell head" data-distributionhead>Distribution</div>
-				<div class="cell head" data-profithead>Profit</div>
-				<div class="cell head" data-profittotalhead>Profit total</div>
-				<div class="cell head right" data-actionshead></div>
-				<div class="row-sep"></div>
+		<div id="calculators-container"></div>
 
-				<!-- ISSUES -->
-
-				<!-- DIVISEUR -->
-				<div class="divider" role="separator" aria-hidden="true"></div>
-
-				<!-- LIGNE TOTALE -->
-				<div class="cell rowhead sticky total-label">Total</div>
-				<div class="cell" data-type></div>
-				<!-- Pas de colonne de cote par défaut -->
-				<div class="cell" data-last-odds-total><span class="trj-label">TRJ</span><span class="trj-value">—</span></div>
-				<div class="cell" data-stake>
-					<!-- Mise à 10 par défaut, sera hydratée par JS aussi -->
-				</div>
-				<div class="cell" data-fixedetail></div>
-				<div class="cell">
-					<input type="radio" name="fixeChoice" class="radio fixe" aria-label="Fixe total">
-				</div>
-				<div class="cell">
-					<input type="checkbox" class="check dist" aria-label="Distribution total" checked>
-				</div>
-				<div class="cell right"></div>
-				<div class="cell right" data-profit-total></div>
-				<div class="cell right"></div> <!-- pas de suppression sur la ligne totale -->
-			</div>
-			<div class="sb-error" id="sb-error" hidden></div>
-			<div class="card-actions">
-				<button id="add-col" class="btn btn-secondary">+ Ajouter une colonne de cote</button>
-				<button id="add-row" class="btn btn-primary">+ Ajouter une issue</button>
-			</div>
-		</section>
+		<div class="add-calculator-row">
+			<button id="add-calculator" class="btn btn-secondary"><svg class="btn-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v17a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1H3"/><path d="M16 19h6"/><path d="M19 22v-6"/></svg>Calculateur</button>
+		</div>
 
 		<section class="global-settings">
 			<label class="global-setting-toggle">

@@ -6,6 +6,50 @@
 	width: fit-content;
 }
 
+#calculators-container {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 2rem;
+}
+
+.add-calculator-row {
+	display: flex;
+	justify-content: flex-start;
+	margin: 1rem 0 0;
+}
+
+.js-duplicate-calc {
+	margin-left: auto;
+}
+
+.js-duplicate-calc,
+.js-delete-calc {
+	font-size: 0.85rem;
+}
+
+.js-delete-calc {
+	color: var(--color-neg);
+}
+.js-delete-calc .btn-icon-img {
+	width: 1rem;
+	height: 1rem;
+}
+.js-delete-calc:hover {
+	background: var(--color-danger-bg);
+	border-color: var(--color-danger-border);
+}
+
+/* Icône inline dans un bouton : suit la couleur du texte (currentColor). */
+.btn-svg {
+	width: 1rem;
+	height: 1rem;
+	vertical-align: middle;
+	margin-right: 6px;
+	flex-shrink: 0;
+}
+
 .sb-error {
 	padding: 0.75rem 1rem;
 	margin-top: 1rem;
@@ -30,7 +74,7 @@
 	border-radius: var(--radius);
 	overflow: hidden;
 	grid-template-columns:
-		auto
+		min-content
 		/* N° / Total */
 		auto
 		/* Type (Back/Lay) */
@@ -51,14 +95,14 @@
 		auto;
 	/* Actions */
 	width: fit-content;
-	gap: .5em 2em;
+	gap: .5em 1em;
 }
 
 /* Quand au moins une issue a 2+ détails, on insère la colonne Fixe détail
    entre Mises et Fixe (8e position). */
 .sb-grid.has-multi-details {
 	grid-template-columns:
-		auto
+		min-content
 		auto
 		repeat(var(--nb-cotes), fit-content(180px))
 		auto
@@ -90,6 +134,8 @@
 .cell.head {
 	font-weight: 600;
 	line-height: .8em;
+	justify-content: center;
+	text-align: center;
 }
 
 /* Séparateur horizontal pleine largeur entre chaque ligne */
@@ -112,6 +158,13 @@
 .total-label {
 	color: var(--color-text);
 	font-weight: 700;
+	/* Le texte "Total" ne doit pas dimensionner la colonne 1 : on lui donne
+	   une largeur intrinsèque nulle et on laisse le texte déborder visuellement
+	   sur la cellule Type (vide pour la ligne Total). */
+	width: 0;
+	min-width: 0;
+	overflow: visible;
+	white-space: nowrap;
 }
 
 .divider {
@@ -188,6 +241,11 @@
 /* Cote totale alignée à droite */
 .sb-grid [data-oddstotalhead],
 .sb-grid [data-odds-total] {
+	justify-content: center;
+}
+
+.sb-grid [data-profit-total],
+.sb-grid [data-profit] {
 	justify-content: flex-end;
 	text-align: right;
 }
@@ -256,8 +314,20 @@
 
 /* Bouton "Ajouter détail" : compact, dans la cellule Actions de l'issue.
    Visible uniquement quand la fonctionnalité globale "détails issues" est active. */
-.sb-grid .js-add-detail {
+/* Cellule "+ Détail" : positionnée en colonne 2 (sous Type), affichée uniquement
+   en mode "détails issues" actif. */
+.sb-grid .add-detail-cell {
 	display: none;
+	grid-column: 2;
+	margin-top: -1rem;
+}
+.sb-grid.with-details .add-detail-cell {
+	display: flex;
+}
+
+.sb-grid .js-add-detail {
+	display: inline-flex;
+	align-items: center;
 	background: transparent;
 	border: 1px dashed var(--color-divider);
 	border-radius: 5px;
@@ -265,13 +335,13 @@
 	font-size: 11px;
 	color: var(--color-muted);
 	cursor: pointer;
-	margin-right: 6px;
 	white-space: nowrap;
 	transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.sb-grid.with-details .js-add-detail {
-	display: inline-flex;
-	align-items: center;
+.sb-grid .js-add-detail .btn-svg {
+	width: 0.9rem;
+	height: 0.9rem;
+	margin-right: 4px;
 }
 .sb-grid .js-add-detail:hover {
 	background: var(--color-accent-100);
@@ -286,7 +356,7 @@
 	height: 22px;
 	display: grid;
 	place-items: center;
-	color: var(--color-muted);
+	color: var(--color-neg);
 	cursor: pointer;
 	transition: background 0.15s, color 0.15s;
 }
@@ -294,9 +364,10 @@
 	background: var(--color-danger-bg);
 	color: var(--color-neg);
 }
-.sb-grid .js-del-detail .icon {
-	width: 12px;
-	height: 12px;
+.sb-grid .js-del-detail .icon,
+.sb-grid .js-del-detail svg {
+	width: 1rem;
+	height: 1rem;
 }
 
 /* Conteneur des actions par détail (mise + petit bouton supprimer détail). */
@@ -317,7 +388,7 @@
 	font-style: italic;
 }
 
-/* Boutons de suppression discrets (cotes & issues) */
+/* Boutons de suppression (cotes & issues) — icône en rouge par défaut */
 .sb-grid .js-del-col,
 .sb-grid .js-del-issue {
 	background: transparent;
@@ -327,7 +398,7 @@
 	height: 26px;
 	display: grid;
 	place-items: center;
-	color: var(--color-muted);
+	color: var(--color-neg);
 	cursor: pointer;
 	transition: background 0.15s, color 0.15s;
 }
@@ -335,19 +406,14 @@
 .sb-grid .js-del-col:hover,
 .sb-grid .js-del-issue:hover {
 	background: var(--color-danger-bg);
-	color: var(--color-neg);
 }
 
 .sb-grid .js-del-col .icon,
-.sb-grid .js-del-issue .icon {
-	width: 14px;
-	height: 14px;
-}
-
-/* ===== Colonne Type : bouton flip Back / Lay ===== */
-.sb-grid [data-typehead],
-.sb-grid [data-type] {
-	justify-content: center;
+.sb-grid .js-del-issue .icon,
+.sb-grid .js-del-col svg,
+.sb-grid .js-del-issue svg {
+	width: 1rem;
+	height: 1rem;
 }
 
 .type-toggle {
@@ -416,6 +482,11 @@
 [data-stake] {
 	gap: 8px;
 	justify-content: center;
+}
+
+[data-stake] .num input{
+	width: 6rem;
+	padding-right: 4px;
 }
 
 /* Engagement : repliable horizontalement avec transition (largeur + opacité).
