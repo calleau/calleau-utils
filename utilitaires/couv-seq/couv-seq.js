@@ -712,12 +712,13 @@ function evaluateCombination(combo, W, cashRisk, L){
 
 function computeSequential(){
   // Agrégation des paris placés
-  let W = 0, cashRisk = 0, validBets = 0;
+  let W = 0, cashRisk = 0, freebetTotal = 0, validBets = 0;
   for(const bet of placedBets){
     const o = computeTotalOdd(bet);
     if(!o || o <= 1 || !bet.amount || bet.amount <= 0) continue;
     W += bet.amount * (o - 1);
     if(bet.type === 'cash') cashRisk += bet.amount;
+    else freebetTotal += bet.amount;
     validBets++;
   }
 
@@ -733,14 +734,14 @@ function computeSequential(){
     if(covers[i].status === 'pending') pendingIdx.push(i);
   }
 
-  if(validBets === 0) return { W, L, cashRisk, status:'no-bets' };
-  if(pendingIdx.length === 0) return { W, L, cashRisk, status:'no-pending' };
+  if(validBets === 0) return { W, L, cashRisk, freebetTotal, status:'no-bets' };
+  if(pendingIdx.length === 0) return { W, L, cashRisk, freebetTotal, status:'no-pending' };
 
   // Options par couverture (Lay et/ou Back opp.)
   const options = pendingIdx.map(i => getCoverFactorsOptions(covers[i]));
   const firstMissing = options.findIndex(o => o.length === 0);
   if(firstMissing !== -1){
-    return { W, L, cashRisk, status:'missing-odds', firstMissingIdx: pendingIdx[firstMissing] };
+    return { W, L, cashRisk, freebetTotal, status:'missing-odds', firstMissingIdx: pendingIdx[firstMissing] };
   }
 
   // Brute-force sur le produit cartésien des options (max 2^K, K ≤ 8 ⇒ ≤ 256)
@@ -774,7 +775,7 @@ function computeSequential(){
     });
   }
 
-  return { W, L, cashRisk, P: best.P, stakes, status:'ok' };
+  return { W, L, cashRisk, freebetTotal, P: best.P, stakes, status:'ok' };
 }
 
 function fmt2(n){ return (Math.round(n * 100) / 100).toFixed(2); }
@@ -823,35 +824,34 @@ function updateGlobalSummary(r){
     el.innerHTML = '<div class="summary-empty">Ajoutez au moins un pari placé pour démarrer le calcul.</div>';
     return;
   }
-  if(r.status === 'no-pending'){
-    const net = -r.L;
-    const cls = net > 0.01 ? 'profit-pos' : net < -0.01 ? 'profit-neg' : 'profit-zero';
-    el.innerHTML = ''
-      + '<div class="summary-card">'
-      +   '<div class="summary-row"><span class="summary-label">Toutes les couvertures sont réalisées</span>'
-      +   '<span class="summary-value ' + cls + '">' + (net >= 0 ? '+' : '') + fmt2(net) + ' €</span></div>'
-      +   '<div class="summary-row-sub"><span>Pertes cumulées : <strong>−' + fmt2(r.L) + ' €</strong></span></div>'
-      + '</div>';
-    return;
-  }
   if(r.status === 'missing-odds'){
     el.innerHTML = '<div class="summary-empty">Renseignez les cotes (Lay ou Back opposé) des couvertures à venir pour obtenir le profit équilibré.</div>';
     return;
   }
 
-  const cls = r.P > 0.01 ? 'profit-pos' : r.P < -0.01 ? 'profit-neg' : 'profit-zero';
-  const sub = [];
-  sub.push('<span>Gain placés si tout gagne : <strong>+' + fmt2(r.W) + ' €</strong></span>');
-  if(r.L > 0)        sub.push('<span>Pertes réalisées : <strong>−' + fmt2(r.L) + ' €</strong></span>');
-  if(r.cashRisk > 0) sub.push('<span>Cash engagé : <strong>' + fmt2(r.cashRisk) + ' €</strong></span>');
+  // 'ok' ou 'no-pending' (toutes réalisées) : on affiche les 3 métriques.
+  const cashRecup = r.status === 'no-pending' ? -r.L : r.P;
+  const conv = r.freebetTotal > 0 ? (cashRecup / r.freebetTotal) * 100 : null;
+  const sign = v => v > 0.01 ? 'profit-pos' : v < -0.01 ? 'profit-neg' : 'profit-zero';
+  const cashCls = sign(cashRecup);
+  const convCls = conv === null ? '' : sign(conv);
 
   el.innerHTML = ''
     + '<div class="summary-card">'
-    +   '<div class="summary-row">'
-    +     '<span class="summary-label">Profit net équilibré</span>'
-    +     '<span class="summary-value ' + cls + '">' + (r.P >= 0 ? '+' : '') + fmt2(r.P) + ' €</span>'
+    +   '<div class="summary-metrics">'
+    +     '<div class="summary-metric">'
+    +       '<div class="summary-metric-label">Freebet placé</div>'
+    +       '<div class="summary-metric-value">' + fmt2(r.freebetTotal) + ' €</div>'
+    +     '</div>'
+    +     '<div class="summary-metric">'
+    +       '<div class="summary-metric-label">Cash récupéré</div>'
+    +       '<div class="summary-metric-value ' + cashCls + '">' + (cashRecup >= 0 ? '+' : '') + fmt2(cashRecup) + ' €</div>'
+    +     '</div>'
+    +     '<div class="summary-metric">'
+    +       '<div class="summary-metric-label">Conversion</div>'
+    +       '<div class="summary-metric-value ' + convCls + '">' + (conv !== null ? conv.toFixed(1) + ' %' : '—') + '</div>'
+    +     '</div>'
     +   '</div>'
-    +   '<div class="summary-row-sub">' + sub.join('') + '</div>'
     + '</div>';
 }
 

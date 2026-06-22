@@ -68,7 +68,9 @@
 	flex-wrap: wrap;
 }
 
-/* Grille principale (+ colonne Actions) */
+/* Grille principale.
+   Ordre des colonnes : N°/Total | Type | Cotes A..N | Cote totale | Mises |
+   Profit | Suppr détail | Fixe | Distribution | Profit total | Actions */
 .sb-grid {
 	display: grid;
 	border-radius: var(--radius);
@@ -85,11 +87,13 @@
 		auto
 		/* Mises */
 		auto
+		/* Profit */
+		auto
+		/* Suppr détail (sans header) */
+		auto
 		/* Fixe */
 		auto
 		/* Distribution */
-		auto
-		/* Profit */
 		auto
 		/* Profit total */
 		auto;
@@ -98,8 +102,8 @@
 	gap: .5em 1em;
 }
 
-/* Quand au moins une issue a 2+ détails, on insère la colonne Fixe détail
-   entre Mises et Fixe (8e position). */
+/* Quand au moins une issue a 2+ détails, la colonne Fixe détail s'insère
+   entre Suppr détail et Fixe. */
 .sb-grid.has-multi-details {
 	grid-template-columns:
 		min-content
@@ -107,8 +111,9 @@
 		repeat(var(--nb-cotes), fit-content(180px))
 		auto
 		auto
+		auto /* Profit */
+		auto /* Suppr détail */
 		auto /* Fixe détail */
-		auto
 		auto
 		auto
 		auto
@@ -319,10 +324,136 @@
 .sb-grid .add-detail-cell {
 	display: none;
 	grid-column: 2;
-	margin-top: -1rem;
+	margin-top: -.5rem;
+	gap: 6px;
+	/* La cellule ne doit PAS dimensionner la colonne Type : on lui donne une
+	   largeur intrinsèque nulle et on laisse les boutons déborder visuellement. */
+	width: 0;
+	min-width: 0;
+	overflow: visible;
+	white-space: nowrap;
 }
-.sb-grid.with-details .add-detail-cell {
+.sb-grid.with-details .add-detail-cell,
+.sb-grid.with-fixed-gain .add-detail-cell {
 	display: flex;
+}
+
+/* Cellule Σ issue placée à la colonne Profit (3e en partant de la fin) sur la
+   même ligne que la cellule "+ Détail / + Gain fixe". */
+.sb-grid .issue-sum-profit {
+	grid-column: calc(5 + var(--nb-cotes)) / span 1;
+	justify-content: flex-end;
+	margin-top: -.5rem;
+}
+
+/* Cote moyenne issue : sur la même ligne que les boutons + Détail / + Gain fixe,
+   dans la colonne Cote totale (3 + nb_cotes depuis le début). */
+.sb-grid .issue-avg-cote {
+	grid-column: calc(3 + var(--nb-cotes)) / span 1;
+	justify-content: flex-end;
+	margin-top: -.5rem;
+}
+
+/* Surbrillance d'une ligne (détail) ou d'une issue lors du hover de sa corbeille.
+   La box-shadow avec spread étend le fond dans les gap de la grille (gap: .5em 1em →
+   0.5em vertical, 0.5em de chaque côté pour le horizontal de 1em → couverture complète). */
+/* Surbrillance d'une ligne (détail) ou d'une issue lors du hover de sa corbeille :
+   une overlay absolument positionnée couvre la bounding box des cellules visées
+   (incluant les gaps de la grille). Les cellules sont rendues au-dessus de
+   l'overlay grâce à un z-index supérieur. */
+.sb-grid {
+	position: relative;
+}
+.sb-grid > * {
+	position: relative;
+	z-index: 1;
+}
+.row-highlight-overlay {
+	position: absolute;
+	left: 0;
+	right: 0;
+	background: var(--color-danger-bg);
+	z-index: 0;
+	pointer-events: none;
+	display: none;
+}
+
+/* Placeholders d'une ligne Gain fixe sur les colonnes Type/cotes/cote-totale/mise */
+.sb-grid .cell.fg-empty {
+	background: transparent;
+}
+
+/* Cellule profit d'un Gain fixe : input + label au-dessus + corbeille à droite. */
+.sb-grid .fixed-gain-profit {
+	gap: 6px;
+	justify-content: flex-end;
+}
+.fixed-gain-input-group {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.fixed-gain-label {
+	font-size: 11px;
+	color: var(--color-muted);
+	font-weight: 500;
+	letter-spacing: 0.02em;
+}
+
+/* Espacement entre la corbeille du détail et le bouton Back/Lay dans la cellule Type */
+.sb-grid [data-type] {
+	gap: 4px;
+}
+
+/* Visibilité indépendante des deux boutons selon le paramètre actif. */
+.sb-grid .js-add-detail,
+.sb-grid .js-add-fixed-gain {
+	display: none;
+}
+.sb-grid.with-details .js-add-detail,
+.sb-grid.with-fixed-gain .js-add-fixed-gain {
+	display: inline-flex;
+	align-items: center;
+}
+
+/* Cellule large d'un détail "Gain fixe" : un seul input qui couvre Type + cotes + cote totale. */
+.sb-grid .fixed-gain-input-cell {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 0 8px;
+	position: relative;
+}
+.fixed-gain-label {
+	font-weight: 600;
+	color: var(--color-muted);
+	font-size: 13px;
+}
+.sb-grid .fixed-gain-input-cell .js-del-detail {
+	margin-left: auto;
+}
+
+/* Bouton "+ Gain fixe" : même style que "+ Détail" */
+.sb-grid .js-add-fixed-gain {
+	background: transparent;
+	border: 1px dashed var(--color-divider);
+	border-radius: 5px;
+	padding: 2px 8px;
+	font-size: 11px;
+	color: var(--color-muted);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sb-grid .js-add-fixed-gain .btn-svg {
+	width: 0.9rem;
+	height: 0.9rem;
+	margin-right: 4px;
+}
+.sb-grid .js-add-fixed-gain:hover {
+	background: var(--color-accent-100);
+	color: var(--color-accent-700);
+	border-color: var(--color-accent-600);
 }
 
 .sb-grid .js-add-detail {
