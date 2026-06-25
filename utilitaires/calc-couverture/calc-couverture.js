@@ -402,10 +402,23 @@ function initCalculator($card, opts = {}) {
 		$grid.find(".js-del-issue").toggle(nb_issues > 2);
 		$grid.find("[data-issuelabel]").each(function () {
 			const issueId = $(this).attr("data-issueid");
-			const k = countDetails(issueId);
-			const $btns = $grid.find(`.js-del-detail[data-issueid="${issueId}"]`);
-			if (k > 1) $btns.css("display", "inline-flex");
-			else $btns.css("display", "none");
+			// Pour un détail Back/Lay : on ne montre la corbeille que s'il existe au
+			// moins 2 détails Back/Lay (sinon on autoriserait à laisser l'issue avec
+			// uniquement des Gain fixe, qui ne sont pas des paris).
+			const nBetDetails = $grid.find(`[data-type][data-issueid="${issueId}"]`).length;
+			const showBetDel = nBetDetails > 1;
+			$grid.find(`[data-type][data-issueid="${issueId}"]`).each(function () {
+				const detailId = $(this).attr("data-detailid");
+				$grid.find(`.js-del-detail[data-issueid="${issueId}"][data-detailid="${detailId}"]`)
+					.css("display", showBetDel ? "inline-flex" : "none");
+			});
+			// Pour un détail Gain fixe : toujours supprimable (le Back/Lay d'ancrage
+			// reste de toute façon — on ne crée jamais de FG sans Back/Lay préalable).
+			$grid.find(`[data-fixed-gain-input][data-issueid="${issueId}"]`).each(function () {
+				const detailId = $(this).attr("data-detailid");
+				$grid.find(`.js-del-detail[data-issueid="${issueId}"][data-detailid="${detailId}"]`)
+					.css("display", "inline-flex");
+			});
 		});
 	}
 
@@ -533,7 +546,31 @@ function initCalculator($card, opts = {}) {
 		if ($grid.find("[data-issuelabel]").length <= minIssues) return;
 		const issueId = $issueLabelCell.attr("data-issueid");
 
+		// Si l'issue supprimée était l'issue fixe, on transfère le flag "fixe" et la
+		// mise vers l'issue suivante (ou la première restante si on supprime la
+		// dernière) pour ne pas perdre l'ancrage du calcul.
+		const wasFixed = $grid.find(`[data-issuefixe][data-issueid="${issueId}"] .radio.fixe`).is(":checked");
+		let stakeToTransfer = null;
+		let $nextLabel = $();
+		if (wasFixed) {
+			const $stakeInput = $grid.find(`[data-stake][data-issueid="${issueId}"] .back-stake input`).first();
+			if ($stakeInput.length) stakeToTransfer = $stakeInput.val() || null;
+			$nextLabel = $issueLabelCell.nextAll("[data-issuelabel]").first();
+			if (!$nextLabel.length) {
+				$nextLabel = $grid.find("[data-issuelabel]").not($issueLabelCell).first();
+			}
+		}
+
 		$grid.find(`[data-issueid="${issueId}"]`).remove();
+
+		if (wasFixed && $nextLabel.length) {
+			const nextIssueId = $nextLabel.attr("data-issueid");
+			$grid.find(`[data-issuefixe][data-issueid="${nextIssueId}"] .radio.fixe`).prop("checked", true);
+			syncFixeIssueToDetails(nextIssueId);
+			if (stakeToTransfer != null) {
+				$grid.find(`[data-stake][data-issueid="${nextIssueId}"] .back-stake input`).first().val(stakeToTransfer);
+			}
+		}
 
 		let idx = 1;
 		$grid.find("[data-issuelabel]").each(function () { $(this).text(idx++); });
@@ -594,6 +631,19 @@ function initCalculator($card, opts = {}) {
 		// on autorise sa suppression complète sauf si c'est le seul détail de l'issue.
 		if (total <= 1) return;
 		$target.remove();
+
+		// Si on retombe à K=1, on doit restaurer l'ordre DOM "K=1" : les cellules
+		// du détail restant doivent précéder les cellules issue-level (Fixe radio,
+		// Dist, Profit total, Actions). Sinon, sans les spans rows, l'auto-flow de
+		// la grille place les cellules issue-level dans les colonnes du détail.
+		if (countDetails(issueId) === 1) {
+			const $issueFixe = $grid.find(`[data-issuefixe][data-issueid="${issueId}"]`);
+			if ($issueFixe.length) {
+				const $remaining = $grid.find(`[data-issueid="${issueId}"][data-detailid]`);
+				$remaining.insertBefore($issueFixe);
+			}
+		}
+
 		updateIssueSpans(issueId);
 		refreshMultiDetailsClass();
 		recomputeAll();
@@ -643,6 +693,14 @@ function initCalculator($card, opts = {}) {
 			if (countDetails(id) >= 2) { hasMulti = true; return false; }
 		});
 		$grid.toggleClass("has-multi-details", hasMulti);
+		// La colonne "Fixe détail" n'apparaît qu'en mode multi-details. À chaque
+		// transition (apparition ou disparition) on resynchronise les checkboxes
+		// de TOUTES les issues : celle qui est fixe doit avoir ses détails cochés
+		// et désactivés, peu importe où le détail vient d'être ajouté.
+		$grid.find("[data-issuefixe]").each(function () {
+			const id = $(this).attr("data-issueid");
+			if (id) syncFixeIssueToDetails(id);
+		});
 	}
 
 	function syncFixeIssueToDetails(issueId) {
@@ -1243,6 +1301,7 @@ function initCalculator($card, opts = {}) {
 		const issueId = $(this).closest("[data-actions]").attr("data-issueid");
 		if (!issueId) return;
 		const $label = $grid.find(`[data-issuelabel][data-issueid="${issueId}"]`);
+		hideHighlight();
 		deleteIssue($label);
 	});
 
@@ -1267,6 +1326,7 @@ function initCalculator($card, opts = {}) {
 		const issueId = $(this).attr("data-issueid");
 		const detailId = $(this).attr("data-detailid");
 		if (!issueId || !detailId) return;
+		hideHighlight();
 		removeDetail(issueId, detailId);
 	});
 
