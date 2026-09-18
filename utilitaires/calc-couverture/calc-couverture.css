@@ -69,9 +69,14 @@
 }
 
 /* Grille principale.
-   Ordre des colonnes : N°/Total | Type | Cotes A..N | Cote totale | Mises |
-   Profit | Suppr détail | Fixe | Distribution | Profit total | Actions */
+   Ordre des colonnes : N°/Total | Type | [Site] | Cotes A..N | Cote totale |
+   Mises | Profit | Suppr détail | [Fixe détail] | Fixe | Distribution |
+   Profit total | Actions.
+   Les colonnes [Site] et [Fixe détail] sont conditionnelles (classes
+   .with-detail-sites et .has-multi-details). --site-shift décale les cellules
+   qui utilisent un grid-column numérique (issue-avg-cote, issue-sum-profit). */
 .sb-grid {
+	--site-shift: 0;
 	display: grid;
 	border-radius: var(--radius);
 	overflow: hidden;
@@ -118,6 +123,138 @@
 		auto
 		auto
 		auto;
+}
+
+/* Variante Site actif : colonne Site auto insérée entre Type et Cotes. */
+.sb-grid.with-detail-sites {
+	--site-shift: 1;
+	grid-template-columns:
+		min-content
+		auto /* Type */
+		auto /* Site */
+		repeat(var(--nb-cotes), fit-content(180px))
+		auto
+		auto
+		auto
+		auto
+		auto
+		auto
+		auto
+		auto;
+}
+.sb-grid.has-multi-details.with-detail-sites {
+	grid-template-columns:
+		min-content
+		auto /* Type */
+		auto /* Site */
+		repeat(var(--nb-cotes), fit-content(180px))
+		auto
+		auto
+		auto
+		auto
+		auto /* Fixe détail */
+		auto
+		auto
+		auto
+		auto;
+}
+
+/* Cellules Site / header Site : présentes dans le DOM même quand le toggle
+   est off (auto-flow simplifié, pas de sync JS) ; masquées via display:none
+   pour ne pas apparaître ET pour être retirées du placement CSS Grid. */
+.sb-grid:not(.with-detail-sites) [data-sitehead],
+.sb-grid:not(.with-detail-sites) [data-site] {
+	display: none;
+}
+.sb-grid [data-sitehead],
+.sb-grid [data-site] {
+	justify-content: center;
+}
+.sb-grid .site-cell {
+	/* align-self:center + display:inline-block → la cellule ne stretch pas à
+	   la hauteur de la ligne, elle prend uniquement la hauteur de son contenu.
+	   Pas de min-width : la piste "auto" de la grille se dimensionne sur la
+	   valeur la plus longue de la colonne. */
+	align-self: center;
+	display: inline-block;
+	padding: 4px 6px;
+	font-size: 12px;
+	color: var(--color-text);
+	border: 1px dashed transparent;
+	border-radius: 4px;
+	text-align: center;
+	outline: none;
+	cursor: text;
+}
+.sb-grid .site-cell:hover {
+	border-color: var(--color-divider);
+}
+.sb-grid .site-cell:focus {
+	border-color: var(--c-primary);
+	border-style: solid;
+	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
+}
+.sb-grid .site-cell:empty::before {
+	content: attr(data-placeholder);
+	color: var(--color-muted);
+	font-style: italic;
+	pointer-events: none;
+}
+
+/* Application des couleurs de pill du theme.css quand on détecte un site connu
+   dans le texte saisi. data-site-match est posé côté JS (applySiteDetection).
+   On calque les mêmes variables --site-*-bg / --site-*-text que .ff-site-pill. */
+.sb-grid .site-cell[data-site-match] {
+	border-color: transparent;
+	font-weight: 700;
+}
+.sb-grid .site-cell[data-site-match="bet365"]     { background: var(--site-bet365-bg);     color: var(--site-bet365-text); }
+.sb-grid .site-cell[data-site-match="betclic"]    { background: var(--site-betclic-bg);    color: var(--site-betclic-text); }
+.sb-grid .site-cell[data-site-match="betify"]     { background: var(--site-betify-bg);     color: var(--site-betify-text); }
+.sb-grid .site-cell[data-site-match="betsson"]    { background: var(--site-betsson-bg);    color: var(--site-betsson-text); }
+.sb-grid .site-cell[data-site-match="bwin"]       { background: var(--site-bwin-bg);       color: var(--site-bwin-text); }
+.sb-grid .site-cell[data-site-match="daznbet"]    { background: var(--site-daznbet-bg);    color: var(--site-daznbet-text); }
+.sb-grid .site-cell[data-site-match="feelingbet"] { background: var(--site-feelingbet-bg); color: var(--site-feelingbet-text); }
+.sb-grid .site-cell[data-site-match="olybet"]     { background: var(--site-olybet-bg);     color: var(--site-olybet-text); }
+.sb-grid .site-cell[data-site-match="piwix"]      { background: var(--site-piwix-bg);      color: var(--site-piwix-text); }
+.sb-grid .site-cell[data-site-match="pmu"]        { background: var(--site-pmu-bg);        color: var(--site-pmu-text); }
+.sb-grid .site-cell[data-site-match="pokerstars"] { background: var(--site-pokerstars-bg); color: var(--site-pokerstars-text); }
+.sb-grid .site-cell[data-site-match="unibet"]     { background: var(--site-unibet-bg);     color: var(--site-unibet-text); }
+.sb-grid .site-cell[data-site-match="vbet"]       { background: var(--site-vbet-bg);       color: var(--site-vbet-text); }
+.sb-grid .site-cell[data-site-match="winamax"]    { background: var(--site-winamax-bg);    color: var(--site-winamax-text); }
+
+/* Intitulé d'issue : pleine largeur au-dessus de chaque issue quand actif. */
+.sb-grid .issue-label-cell {
+	grid-column: 1 / -1;
+	display: none;
+	padding: 4px 8px;
+	margin-top: .25rem;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--color-text);
+	border: 1px dashed transparent;
+	border-radius: 4px;
+	outline: none;
+	cursor: text;
+	min-height: 1.2em;
+}
+.sb-grid.with-issue-labels .issue-label-cell {
+	display: block;
+}
+.sb-grid.with-issue-labels .issue-label-cell:hover {
+	border-color: var(--color-divider);
+}
+.sb-grid.with-issue-labels .issue-label-cell:focus {
+	border-color: var(--c-primary);
+	border-style: solid;
+	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
+}
+.sb-grid.with-issue-labels .issue-label-cell:empty::before {
+	content: attr(data-placeholder);
+	color: var(--color-muted);
+	font-weight: 400;
+	font-style: italic;
+	pointer-events: none;
 }
 
 /* Cellules Fixe détail : présentes dans le DOM mais invisibles tant que
@@ -339,17 +476,18 @@
 }
 
 /* Cellule Σ issue placée à la colonne Profit (3e en partant de la fin) sur la
-   même ligne que la cellule "+ Détail / + Gain fixe". */
+   même ligne que la cellule "+ Détail / + Gain fixe". --site-shift ajoute 1
+   colonne quand la colonne Site est active. */
 .sb-grid .issue-sum-profit {
-	grid-column: calc(5 + var(--nb-cotes)) / span 1;
+	grid-column: calc(5 + var(--nb-cotes) + var(--site-shift)) / span 1;
 	justify-content: flex-end;
 	margin-top: -.5rem;
 }
 
 /* Cote moyenne issue : sur la même ligne que les boutons + Détail / + Gain fixe,
-   dans la colonne Cote totale (3 + nb_cotes depuis le début). */
+   dans la colonne Cote totale (3 + nb_cotes depuis le début, +1 si Site actif). */
 .sb-grid .issue-avg-cote {
-	grid-column: calc(3 + var(--nb-cotes)) / span 1;
+	grid-column: calc(3 + var(--nb-cotes) + var(--site-shift)) / span 1;
 	justify-content: flex-end;
 	margin-top: -.5rem;
 }

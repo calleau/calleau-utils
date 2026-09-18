@@ -34,6 +34,30 @@ function getDefaultCommission() {
 	return ($("#commission-default").val() || "3,00").trim() || "3,00";
 }
 
+/* Liste des sites connus (miroir des règles .ff-site-pill[data-site="..."] du
+   theme.css). Détection par substring insensible à la casse : dès qu'un nom
+   apparaît dans le texte, on pose data-site sur la cellule pour appliquer la
+   couleur de pill. Le premier match gagne (ordre = ordre de theme.css). */
+const KNOWN_SITES = [
+	"bet365", "betclic", "betify", "betsson", "bwin", "daznbet", "feelingbet",
+	"olybet", "piwix", "pmu", "pokerstars", "unibet", "vbet", "winamax",
+];
+
+function detectSiteFromText(text) {
+	const t = String(text || "").toLowerCase();
+	if (!t) return null;
+	for (const s of KNOWN_SITES) {
+		if (t.includes(s)) return s;
+	}
+	return null;
+}
+
+function applySiteDetection($cell) {
+	const site = detectSiteFromText($cell.text());
+	if (site) $cell.attr("data-site-match", site);
+	else $cell.removeAttr("data-site-match");
+}
+
 /* Renvoie le coefficient p ∈ [0,1] de répartition de la perte (paramètre global).
    Si le paramètre n'est pas activé, on retourne 0 (= comportement classique :
    ligne distribuée concentre tout le profit, ligne non distribuée à 0). */
@@ -136,6 +160,19 @@ function buildTypeCell(issueId, detailId) {
 	`);
 }
 
+/* Cellule "Site" — champ contenteditable pour annoter le site du détail (utile
+   pour les screenshots). Colonne masquée tant que le toggle global n'est pas
+   actif. Le contenu texte survit à outerHTML → duplication OK. */
+function buildSiteCell(issueId, detailId) {
+	return $(`<div class="cell site-cell" data-site data-issueid="${issueId}" data-detailid="${detailId}" contenteditable="true" data-placeholder="Site"></div>`);
+}
+
+/* Cellule pleine largeur au-dessus d'une issue pour un intitulé libre. Spans
+   1/-1 via CSS. Masquée tant que le toggle global n'est pas actif. */
+function buildIssueLabelCell(issueId) {
+	return $(`<div class="cell issue-label-cell" data-issue-label data-issueid="${issueId}" contenteditable="true" data-placeholder="Intitulé de l'issue…"></div>`);
+}
+
 /* Cellule dédiée à la corbeille de suppression d'un détail (colonne sans header
    entre Profit et Fixe détail). Affichée uniquement si l'issue a >=2 détails. */
 function buildDelDetailCell(issueId, detailId) {
@@ -222,6 +259,9 @@ function buildIssueAvgCoteCell(issueId) {
 function buildFixedGainDetailCells(issueId, detailId, colIds) {
 	const cells = [];
 	cells.push($(`<div class="cell fg-empty fg-type" data-issueid="${issueId}" data-detailid="${detailId}"></div>`));
+	// Cellule Site pour les détails Gain fixe — contenteditable pour permettre
+	// d'annoter aussi les gains fixes si besoin (screenshots).
+	cells.push($(`<div class="cell site-cell fg-site" data-site data-issueid="${issueId}" data-detailid="${detailId}" contenteditable="true" data-placeholder="Site"></div>`));
 	for (const colId of colIds) {
 		cells.push($(`<div class="cell fg-empty fg-cote" data-colid="${colId}" data-issueid="${issueId}" data-detailid="${detailId}"></div>`));
 	}
@@ -262,6 +302,7 @@ function buildFixedGainDetailCells(issueId, detailId, colIds) {
 function buildDetailCellsArr(colIds, issueId, detailId, opts = {}) {
 	const cells = [];
 	cells.push(buildTypeCell(issueId, detailId));
+	cells.push(buildSiteCell(issueId, detailId));
 	for (let i = 0; i < colIds.length; i++) {
 		const colId = colIds[i];
 		const defaultOdds = (opts.defaultOdds && i === 0) ? opts.defaultOdds : "";
@@ -308,6 +349,7 @@ function buildCalcCardHTML(calcId) {
 			<!-- EN-TÊTES — ordre : Type, Cote totale, Mises, Profit, [Suppr détail], Fixe détail, Fixe, Distribution, Profit total, Actions -->
 			<div class="cell head sticky" data-oddslabelhead></div>
 			<div class="cell head" data-typehead>Type</div>
+			<div class="cell head" data-sitehead>Site</div>
 			<!-- Pas de colonne de cote par défaut -->
 			<div class="cell head" data-oddstotalhead>Cote<br>totale</div>
 			<div class="cell head" data-stakehead>Mises</div>
@@ -328,6 +370,7 @@ function buildCalcCardHTML(calcId) {
 			<!-- LIGNE TOTALE -->
 			<div class="cell rowhead sticky total-label">Total</div>
 			<div class="cell" data-type></div>
+			<div class="cell" data-site></div>
 			<!-- Pas de colonne de cote par défaut -->
 			<div class="cell" data-last-odds-total><span class="trj-label">TRJ</span><span class="trj-value">—</span></div>
 			<div class="cell" data-stake></div>
@@ -501,6 +544,11 @@ function initCalculator($card, opts = {}) {
 		const detailId = nextDetailId();
 
 		const frag = $(document.createDocumentFragment());
+
+		// Intitulé libre au-dessus de l'issue (masqué tant que le toggle global
+		// n'est pas actif). Insertion en premier pour que l'auto-flow le place
+		// avant la ligne principale de l'issue.
+		frag.append(buildIssueLabelCell(issueId));
 
 		frag.append(`<div class="cell rowhead sticky" data-issuelabel data-issueid="${issueId}">${nextIndex}</div>`);
 
@@ -681,6 +729,8 @@ function initCalculator($card, opts = {}) {
 			const $el = $(this);
 			if ($el.attr("data-detailid")) return false;
 			if ($el.is(".row-sep")) return false;
+			// La cellule intitulé (spans 1/-1) est sur sa propre ligne, pas de span vertical.
+			if ($el.is(".issue-label-cell")) return false;
 			return true;
 		});
 		$issueLevel.each(function () { $(this).css("grid-row", spanVal || ""); });
@@ -1290,6 +1340,9 @@ function initCalculator($card, opts = {}) {
 		$grid.on("change", ".check.fixe-detail", function () {
 			recomputeAll(true);
 		});
+		$grid.on("input", ".site-cell", function () {
+			applySiteDetection($(this));
+		});
 	}
 
 	// Card-level button bindings
@@ -1465,6 +1518,8 @@ function initCalculator($card, opts = {}) {
 	$grid.toggleClass("with-commission", $("#commission-enabled").is(":checked"));
 	$grid.toggleClass("with-details", $("#details-enabled").is(":checked"));
 	$grid.toggleClass("with-fixed-gain", $("#fixed-gain-enabled").is(":checked"));
+	$grid.toggleClass("with-issue-labels", $("#issue-labels-enabled").is(":checked"));
+	$grid.toggleClass("with-detail-sites", $("#detail-sites-enabled").is(":checked"));
 
 	return api;
 }
@@ -1791,6 +1846,50 @@ function initGlobalSettings() {
 		$enabled.on("change", function () {
 			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
 			applyFixedGainVisibility();
+		});
+	})();
+
+	// Issue labels toggle (contenteditable row above each issue)
+	(function () {
+		const KEY_ON = "calcCouv.issueLabelsEnabled";
+		const $enabled = $("#issue-labels-enabled");
+
+		function apply() {
+			const on = $enabled.is(":checked");
+			$(".calc-card").each(function () {
+				const calc = $(this).data("calc");
+				if (!calc) return;
+				$(this).find(".sb-grid").toggleClass("with-issue-labels", on);
+			});
+		}
+
+		$enabled.prop("checked", localStorage.getItem(KEY_ON) === "true");
+
+		$enabled.on("change", function () {
+			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
+			apply();
+		});
+	})();
+
+	// Detail sites toggle (contenteditable column per detail)
+	(function () {
+		const KEY_ON = "calcCouv.detailSitesEnabled";
+		const $enabled = $("#detail-sites-enabled");
+
+		function apply() {
+			const on = $enabled.is(":checked");
+			$(".calc-card").each(function () {
+				const calc = $(this).data("calc");
+				if (!calc) return;
+				$(this).find(".sb-grid").toggleClass("with-detail-sites", on);
+			});
+		}
+
+		$enabled.prop("checked", localStorage.getItem(KEY_ON) === "true");
+
+		$enabled.on("change", function () {
+			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
+			apply();
 		});
 	})();
 }
