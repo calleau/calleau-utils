@@ -806,16 +806,21 @@ function initCalculator($card, opts = {}) {
 				$oddsCells.each(function () {
 					const $oc = $(this);
 					const v = $oc.find("input").not(".commission-input").not(".boost-input").first().val();
-					if (v && String(v).trim() !== "") hasValue = true;
-					const o = Number(String(v).replace(",", "."));
-					const oVal = Number.isNaN(o) ? 1 : o;
-					oddsTotal *= oVal;
+					const vStr = String(v || "").trim();
+					// Cellule vide → colonne ignorée pour cette ligne (Number("")
+					// vaut 0 en JS, pas NaN, donc sans ce garde-fou oddsTotal
+					// tombait à 0 dès qu'une colonne était vide).
+					if (vStr === "") return;
+					hasValue = true;
+					const o = Number(vStr.replace(",", "."));
+					if (Number.isNaN(o)) return;
+					oddsTotal *= o;
 					const c = commissionEnabled ? (readNum($oc.find(".commission-input").first()) / 100) : 0;
 					// Boost bookmaker : gonfle le gain net de b%. Cote boostée =
 					// 1 + (o-1)·(1+b). N'affecte pas layNetWinFactor (le boost
 					// n'existe pas sur les Lay d'exchange).
 					const b = boostEnabled ? (readNum($oc.find(".boost-input").first()) / 100) : 0;
-					oddsTotalNet *= 1 + (oVal - 1) * (1 + b) * (1 - c);
+					oddsTotalNet *= 1 + (o - 1) * (1 + b) * (1 - c);
 					layNetWinFactor *= (1 - c);
 				});
 				const layReturnFactor = layNetWinFactor + (oddsTotal - 1);
@@ -959,6 +964,17 @@ function initCalculator($card, opts = {}) {
 			let sumInvested = 0;
 			let returnIfWin = 0;
 			let returnIfLose = 0;
+			// Décomposition algébrique pour la formule σ-corrigée :
+			//   sumInvested_i = a_i + b_i · target_i
+			// avec b_i = (1/N) · Σ(investFactor/returnFactor) sur les détails
+			// non-fixes non-FG (= 1/cote « flexible », excluant FG et détails
+			// fixés), et a_i = constInvest_i − constReturn_i · b_i.
+			// Cette décomposition permet de résoudre S en un passage même quand
+			// la cote effective d'une issue dépend de la mise (cas FG ≠ 0).
+			let constReturn = 0;
+			let constInvest = 0;
+			let flexFactorSum = 0;
+			let flexCount = 0;
 			issue.hasValue = false;
 			for (const d of issue.details) {
 				if (!d.hasValue) continue;
@@ -966,18 +982,39 @@ function initCalculator($card, opts = {}) {
 				if (d.isFixedGain) {
 					// Gain fixe : ajouté à "returns when issue happens", pas d'investissement.
 					returnIfWin += d.fixedGainValue;
+					constReturn += d.fixedGainValue;
 				} else if (d.isLay) {
 					const liability = d.engagement || d.stake * Math.max(0, d.oddsTotal - 1);
 					sumInvested += liability;
+					// Cf. sumFixedReturn (redistribution) : stake × layReturnFactor
+					// = retour total quand le Lay gagne (gain net + engagement
+					// récupéré).
+					returnIfWin += d.stake * d.layReturnFactor;
 					returnIfLose += d.stake * d.layNetWinFactor + liability;
+					if (d.isFixedDetail) {
+						constReturn += d.stake * d.layReturnFactor;
+						constInvest += liability;
+					} else {
+						const rf = d.layReturnFactor;
+						const invF = Math.max(0, d.oddsTotal - 1);
+						if (rf > 0) { flexFactorSum += invF / rf; flexCount++; }
+					}
 				} else {
 					sumInvested += d.stake;
 					returnIfWin += d.stake * d.oddsTotalNet;
+					if (d.isFixedDetail) {
+						constReturn += d.stake * d.oddsTotalNet;
+						constInvest += d.stake;
+					} else {
+						if (d.oddsTotalNet > 0) { flexFactorSum += 1 / d.oddsTotalNet; flexCount++; }
+					}
 				}
 			}
 			issue.sumInvested = sumInvested;
 			issue.returnIfIssueWins = returnIfWin;
 			issue.returnIfIssueLoses = returnIfLose;
+			issue.b = flexCount > 0 ? flexFactorSum / flexCount : 0;
+			issue.a = constInvest - constReturn * issue.b;
 			if (issue.details.length === 1 && issue.details[0].hasValue) {
 				const d = issue.details[0];
 				if (d.isLay && d.oddsTotal > 1) {
@@ -1032,8 +1069,13 @@ function initCalculator($card, opts = {}) {
 		}
 
 		const eligibles = issues.filter(it => it.hasValue && it.effectiveOddsNet > 0);
-		const sigmaD = eligibles.filter(it => it.isDist).reduce((a, it) => a + 1 / it.effectiveOddsNet, 0);
-		const sigmaN = eligibles.filter(it => !it.isDist).reduce((a, it) => a + 1 / it.effectiveOddsNet, 0);
+		// Formule σ-corrigée pour supporter les Gain fixe (constantes non
+		// proportionnelles à la mise) : sumInvestedAll = Σ (a_i + b_i · target_i).
+		// σD/σN somment les b_i (= 1/cote flexible) au lieu de 1/effOdds — la
+		// diff est nulle quand il n'y a ni FG ni détail fixé.
+		const constSum = eligibles.reduce((acc, it) => acc + it.a, 0);
+		const sigmaD = eligibles.filter(it => it.isDist).reduce((acc, it) => acc + it.b, 0);
+		const sigmaN = eligibles.filter(it => !it.isDist).reduce((acc, it) => acc + it.b, 0);
 
 		const fixedIssue = issues.find(it => it.isFixed && it.hasValue && it.sumInvested > 0);
 		let K = null, S = null;
@@ -1043,16 +1085,16 @@ function initCalculator($card, opts = {}) {
 			if (fixedIssue.isDist) {
 				K = fixedIssue.sumInvested * fixedIssue.effectiveOddsNet;
 				const denom = 1 - sigmaN;
-				if (denom > 0) S = K * sigmaD / denom;
+				if (denom > 0) S = (constSum + K * sigmaD) / denom;
 				else errorMsg = "Configuration impossible : trop de lignes non distribuées.";
 			} else {
 				S = fixedIssue.sumInvested * fixedIssue.effectiveOddsNet;
-				if (sigmaD > 0) K = S * (1 - sigmaN) / sigmaD;
+				if (sigmaD > 0) K = (S * (1 - sigmaN) - constSum) / sigmaD;
 				else errorMsg = "Aucune ligne en distribution — cochez au moins une ligne.";
 			}
 		} else if (totalIsFixed && totalStake > 0) {
 			S = totalStake;
-			if (sigmaD > 0) K = S * (1 - sigmaN) / sigmaD;
+			if (sigmaD > 0) K = (S * (1 - sigmaN) - constSum) / sigmaD;
 			else if (eligibles.length > 0) errorMsg = "Aucune ligne en distribution — cochez au moins une ligne.";
 		}
 
@@ -1150,8 +1192,12 @@ function initCalculator($card, opts = {}) {
 				if (d.isFixedGain) {
 					nrw += d.fixedGainValue;
 				} else if (d.isLay) {
-					nsi += d.engagement || 0;
-					nrl += d.stake * d.layNetWinFactor + (d.engagement || 0);
+					const liability = d.engagement || 0;
+					nsi += liability;
+					// Cf. loop de collecte : Lay contribue stake*layReturnFactor
+					// à returnIfWin pour cohérence multi-détail (FG négatif etc.).
+					nrw += d.stake * d.layReturnFactor;
+					nrl += d.stake * d.layNetWinFactor + liability;
 				} else {
 					nsi += d.stake;
 					nrw += d.stake * d.oddsTotalNet;
@@ -1309,8 +1355,10 @@ function initCalculator($card, opts = {}) {
 				const $oddsCells = $grid.find(`[data-odds][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
 				let oddsTotal = 1;
 				$oddsCells.each(function () {
-					const v = $(this).find("input").not(".commission-input").first().val();
-					const n = Number(String(v).replace(",", "."));
+					const v = $(this).find("input").not(".commission-input").not(".boost-input").first().val();
+					const vStr = String(v || "").trim();
+					if (vStr === "") return;
+					const n = Number(vStr.replace(",", "."));
 					if (!Number.isNaN(n)) oddsTotal *= n;
 				});
 				const eng = Number(String(this.value).replace(",", "."));
@@ -1554,6 +1602,7 @@ function rebindClonedNumberFields($grid) {
 		const placeholder = $oldInput.attr("placeholder") || "";
 		const isCommission = $oldInput.hasClass("commission-input");
 		const isBoost = $oldInput.hasClass("boost-input");
+		const isFixedGain = $oldInput.hasClass("fixed-gain-value");
 		const $suffix = $oldNum.find(".num-suffix");
 		const suffix = $suffix.length ? $suffix.text() : "";
 		// Determine min based on context: stakes use 0.01, others use null
@@ -1562,6 +1611,9 @@ function rebindClonedNumberFields($grid) {
 		const $newNum = buildNumberField(placeholder, value, min, suffix);
 		if (isCommission) $newNum.find("input").addClass("commission-input");
 		if (isBoost) $newNum.find("input").addClass("boost-input");
+		// Sans cette classe, la collecte des Gain fixe (input.fixed-gain-value)
+		// ne trouve plus rien après clone → FG traité comme 0 dans le calc.
+		if (isFixedGain) $newNum.find("input").addClass("fixed-gain-value");
 		$oldNum.replaceWith($newNum);
 	});
 }
