@@ -176,13 +176,13 @@ function buildTypeCell(issueId, detailId) {
    pour les screenshots). Colonne masquée tant que le toggle global n'est pas
    actif. Le contenu texte survit à outerHTML → duplication OK. */
 function buildSiteCell(issueId, detailId) {
-	return $(`<div class="cell site-cell" data-site data-issueid="${issueId}" data-detailid="${detailId}" contenteditable="true" data-placeholder="Site"></div>`);
+	return $(`<div class="cell site-cell" data-site data-issueid="${issueId}" data-detailid="${detailId}" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off" data-placeholder="Site"></div>`);
 }
 
 /* Cellule pleine largeur au-dessus d'une issue pour un intitulé libre. Spans
    1/-1 via CSS. Masquée tant que le toggle global n'est pas actif. */
 function buildIssueLabelCell(issueId) {
-	return $(`<div class="cell issue-label-cell" data-issue-label data-issueid="${issueId}" contenteditable="true" data-placeholder="Intitulé de l'issue…"></div>`);
+	return $(`<div class="cell issue-label-cell" data-issue-label data-issueid="${issueId}" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off" data-placeholder="Intitulé de l'issue…"></div>`);
 }
 
 /* Cellule dédiée à la corbeille de suppression d'un détail (colonne sans header
@@ -273,7 +273,7 @@ function buildFixedGainDetailCells(issueId, detailId, colIds) {
 	cells.push($(`<div class="cell fg-empty fg-type" data-issueid="${issueId}" data-detailid="${detailId}"></div>`));
 	// Cellule Site pour les détails Gain fixe — contenteditable pour permettre
 	// d'annoter aussi les gains fixes si besoin (screenshots).
-	cells.push($(`<div class="cell site-cell fg-site" data-site data-issueid="${issueId}" data-detailid="${detailId}" contenteditable="true" data-placeholder="Site"></div>`));
+	cells.push($(`<div class="cell site-cell fg-site" data-site data-issueid="${issueId}" data-detailid="${detailId}" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off" data-placeholder="Site"></div>`));
 	for (const colId of colIds) {
 		cells.push($(`<div class="cell fg-empty fg-cote" data-colid="${colId}" data-issueid="${issueId}" data-detailid="${detailId}"></div>`));
 	}
