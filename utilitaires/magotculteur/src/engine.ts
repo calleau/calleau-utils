@@ -406,14 +406,29 @@ function buildAsymLightLegs(split: AsymLightSplit): LegRef[][] {
 function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): number {
   const sites = Object.keys(opts.sites).length > 0 ? Object.keys(opts.sites) : collectSites(data);
   if (!sites.length) return 0;
+  const obligSet = new Set(getObligatorySites(opts));
   let invSum = 0;
   for (const legs of legsArray) {
     let bestO = 0;
+    let bestOblig = 0;
+    let hasNonOblig = false;
     for (const s of sites) {
       const o = legGroupOdds(data, legs, s, opts.coteMinParSelection);
-      if (o && o > bestO) bestO = o;
+      if (!o) continue;
+      if (o > bestO) bestO = o;
+      if (obligSet.has(s)) {
+        if (o > bestOblig) bestOblig = o;
+      } else {
+        hasNonOblig = true;
+      }
     }
     if (bestO <= 1) return 0;
+    // Mirror makeSimultResult's coteMin check: it rejects groups placed on an obligatory
+    // site whose displayOdds < coteMin. If no obligatory site meets coteMin AND no
+    // non-obligatory site offers this group as a cover fallback, the split has no valid
+    // placement — drop it so it doesn't waste MAX_ASYMLIGHT slots on unusable candidates.
+    if (opts.coteMin > 0 && obligSet.size > 0 && bestOblig < opts.coteMin && !hasNonOblig) return 0;
+    if (opts.coteMin > 0 && obligSet.size === 0 && bestO < opts.coteMin) return 0;
     invSum += opts.betType === 'fb' ? 1 / (bestO - 1) : 1 / bestO;
   }
   return invSum > 0 ? 1 / invSum : 0;
