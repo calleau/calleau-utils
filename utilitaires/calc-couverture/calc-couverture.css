@@ -335,34 +335,57 @@
 	gap: 4px;
 }
 
-/* Commission par cellule de cote : cachée tant que le paramètre global n'est pas activé */
-.cell-commission {
+/* Commission / Boost par cellule de cote : cachés tant que le paramètre global
+   n'est pas activé. Mêmes contraintes visuelles (compact, sans steppers). */
+.cell-commission,
+.cell-boost {
 	display: none;
 }
-.sb-grid.with-commission .cell-commission {
+.sb-grid.with-commission .cell-commission,
+.sb-grid.with-boost .cell-boost {
 	display: flex;
 	justify-content: flex-end;
 	align-items: center;
 	gap: 6px;
 }
-.cell-commission-label {
+.cell-commission-label,
+.cell-boost-label {
 	font-size: 11px;
 	color: var(--color-muted);
 	font-weight: 500;
 }
-.cell-commission .num {
+.cell-boost-icon,
+.cell-commission-icon {
+	color: var(--color-muted);
+	width: 14px;
+	height: 14px;
+	display: inline-flex;
+	align-items: center;
+	margin-left: -2px;
+}
+.cell-boost-icon svg,
+.cell-commission-icon svg {
+	width: 14px;
+	height: 14px;
+	stroke: currentColor;
+}
+.cell-commission .num,
+.cell-boost .num {
 	height: 28px;
 }
-.cell-commission .num input {
+.cell-commission .num input,
+.cell-boost .num input {
 	width: 3.5rem;
 	font-size: 13px;
 	padding: 0 6px;
 }
-.cell-commission .num-suffix {
+.cell-commission .num-suffix,
+.cell-boost .num-suffix {
 	font-size: 12px;
 	padding-right: 6px;
 }
-.cell-commission .steppers {
+.cell-commission .steppers,
+.cell-boost .steppers {
 	display: none;
 }
 

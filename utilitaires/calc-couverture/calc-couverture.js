@@ -74,8 +74,20 @@ function buildOddsCell(colId, issueId, detailId, defaultOdds = "", isLay = false
 	const $cell = $(`<div class='cell' data-odds data-colid="${colId}" data-issueid="${issueId}" data-detailid="${detailId}"></div>`);
 	const $stack = $("<div class='odds-input-stack'></div>");
 	$stack.append(buildNumberField("", defaultOdds, null));
+
+	// Boost (bonification bookmaker) — mêmes contraintes visuelles que la commission,
+	// mais formule inverse (multiplie le gain plutôt que d'en retirer une part).
+	const $boostWrap = $("<div class='cell-boost'></div>");
+	$boostWrap.append("<span class='cell-boost-label'>Boost</span>");
+	$boostWrap.append("<i data-lucide='trending-up' class='cell-boost-icon'></i>");
+	const $boostField = buildNumberField("", "", null, "%");
+	$boostField.find("input").addClass("boost-input");
+	$boostWrap.append($boostField);
+	$stack.append($boostWrap);
+
 	const $commWrap = $("<div class='cell-commission'></div>");
 	$commWrap.append("<span class='cell-commission-label'>Com.</span>");
+	$commWrap.append("<i data-lucide='hand-coins' class='cell-commission-icon'></i>");
 	const $commField = buildNumberField("", defaultComm, null, "%");
 	$commField.find("input").addClass("commission-input");
 	$commWrap.append($commField);
@@ -768,6 +780,7 @@ function initCalculator($card, opts = {}) {
 		if (recomputing) return;
 		recomputing = true;
 		const commissionEnabled = $grid.hasClass("with-commission");
+		const boostEnabled = $grid.hasClass("with-boost");
 
 		const issues = [];
 		$grid.find("[data-issuelabel]").each(function () {
@@ -792,13 +805,17 @@ function initCalculator($card, opts = {}) {
 				let layNetWinFactor = 1;
 				$oddsCells.each(function () {
 					const $oc = $(this);
-					const v = $oc.find("input").not(".commission-input").first().val();
+					const v = $oc.find("input").not(".commission-input").not(".boost-input").first().val();
 					if (v && String(v).trim() !== "") hasValue = true;
 					const o = Number(String(v).replace(",", "."));
 					const oVal = Number.isNaN(o) ? 1 : o;
 					oddsTotal *= oVal;
 					const c = commissionEnabled ? (readNum($oc.find(".commission-input").first()) / 100) : 0;
-					oddsTotalNet *= 1 + (oVal - 1) * (1 - c);
+					// Boost bookmaker : gonfle le gain net de b%. Cote boostée =
+					// 1 + (o-1)·(1+b). N'affecte pas layNetWinFactor (le boost
+					// n'existe pas sur les Lay d'exchange).
+					const b = boostEnabled ? (readNum($oc.find(".boost-input").first()) / 100) : 0;
+					oddsTotalNet *= 1 + (oVal - 1) * (1 + b) * (1 - c);
 					layNetWinFactor *= (1 - c);
 				});
 				const layReturnFactor = layNetWinFactor + (oddsTotal - 1);
@@ -1270,10 +1287,11 @@ function initCalculator($card, opts = {}) {
 	}
 
 	function bindOddsInputs() {
-		$grid.on("input cote:changed", "[data-odds] input:not(.commission-input)", () => recomputeAll(true));
+		$grid.on("input cote:changed", "[data-odds] input:not(.commission-input):not(.boost-input)", () => recomputeAll(true));
 		$grid.on("input cote:changed", ".commission-input", () => recomputeAll(true));
+		$grid.on("input cote:changed", ".boost-input", () => recomputeAll(true));
 		$grid.on("input cote:changed", ".fixed-gain-value", () => recomputeAll(true));
-		$grid.on("blur", ".commission-input", function () {
+		$grid.on("blur", ".commission-input, .boost-input", function () {
 			const v = Number(String(this.value).replace(",", "."));
 			if (!Number.isNaN(v) && v === 0) this.value = "";
 		});
@@ -1516,6 +1534,7 @@ function initCalculator($card, opts = {}) {
 
 	// Apply current global-setting classes
 	$grid.toggleClass("with-commission", $("#commission-enabled").is(":checked"));
+	$grid.toggleClass("with-boost", $("#boost-enabled").is(":checked"));
 	$grid.toggleClass("with-details", $("#details-enabled").is(":checked"));
 	$grid.toggleClass("with-fixed-gain", $("#fixed-gain-enabled").is(":checked"));
 	$grid.toggleClass("with-issue-labels", $("#issue-labels-enabled").is(":checked"));
@@ -1534,6 +1553,7 @@ function rebindClonedNumberFields($grid) {
 		const value = $oldInput.val() || "";
 		const placeholder = $oldInput.attr("placeholder") || "";
 		const isCommission = $oldInput.hasClass("commission-input");
+		const isBoost = $oldInput.hasClass("boost-input");
 		const $suffix = $oldNum.find(".num-suffix");
 		const suffix = $suffix.length ? $suffix.text() : "";
 		// Determine min based on context: stakes use 0.01, others use null
@@ -1541,6 +1561,7 @@ function rebindClonedNumberFields($grid) {
 		const min = $closestStake.length ? 0.01 : null;
 		const $newNum = buildNumberField(placeholder, value, min, suffix);
 		if (isCommission) $newNum.find("input").addClass("commission-input");
+		if (isBoost) $newNum.find("input").addClass("boost-input");
 		$oldNum.replaceWith($newNum);
 	});
 }
@@ -1846,6 +1867,29 @@ function initGlobalSettings() {
 		$enabled.on("change", function () {
 			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
 			applyFixedGainVisibility();
+		});
+	})();
+
+	// Boost toggle (bonification bookmaker par cellule de cote)
+	(function () {
+		const KEY_ON = "calcCouv.boostEnabled";
+		const $enabled = $("#boost-enabled");
+
+		function apply() {
+			const on = $enabled.is(":checked");
+			$(".calc-card").each(function () {
+				const calc = $(this).data("calc");
+				if (!calc) return;
+				$(this).find(".sb-grid").toggleClass("with-boost", on);
+				calc.recomputeAll(true);
+			});
+		}
+
+		$enabled.prop("checked", localStorage.getItem(KEY_ON) === "true");
+
+		$enabled.on("change", function () {
+			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
+			apply();
 		});
 	})();
 
