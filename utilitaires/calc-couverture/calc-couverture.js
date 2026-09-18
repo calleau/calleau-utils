@@ -1990,13 +1990,357 @@ function initGlobalSettings() {
 	})();
 }
 
+/* ---------- URL state (encoding + decoding + auto-sync) ----------
+
+   Format : JSON compact avec clés courtes et OMISSION AGRESSIVE des valeurs
+   par défaut → LZString.compressToEncodedURIComponent → ?s=<encoded>.
+   Sur mutation d'input/click/change, on debounce ~500ms et on écrit via
+   history.replaceState (pas de pollution de l'historique). Le décodage se
+   fait au boot ; si échec, on retombe silencieusement sur le bootstrap par
+   défaut et on nettoie le param corrompu.
+
+   Défauts implicites (non stockés) :
+   - Toggles globaux : 0 (off)
+   - commissionDefault : "3,00"
+   - lossDistDefault : "50"
+   - Nombre de colonnes : 1
+   - Total row : { s: "", f: 0, d: 1 }
+   - Issue : { l: "", f: 0, d: 1 }
+   - Detail : { t: "b", w: "", o/m/b vides, s: "", x: 0 }
+   - Fixed gain : { v: "" } */
+
+const URL_PARAM = "s";
+const URL_STATE_VERSION = 1;
+const URL_MAX_TEXT_LEN = 200;
+
+function serializeGlobalsForUrl() {
+	const g = {};
+	if ($("#commission-enabled").is(":checked")) g.cm = 1;
+	const cv = ($("#commission-default").val() || "").trim();
+	if (cv && cv !== "3,00") g.cv = cv;
+	if ($("#boost-enabled").is(":checked")) g.b = 1;
+	if ($("#details-enabled").is(":checked")) g.d = 1;
+	if ($("#fixed-gain-enabled").is(":checked")) g.fg = 1;
+	if ($("#issue-labels-enabled").is(":checked")) g.il = 1;
+	if ($("#detail-sites-enabled").is(":checked")) g.ds = 1;
+	if ($("#loss-dist-enabled").is(":checked")) g.ld = 1;
+	const lv = ($("#loss-dist-default").val() || "").trim();
+	if (lv && lv !== "50") g.lv = lv;
+	return g;
+}
+
+function serializeDetailForUrl($grid, issueId, detailId, colIds, $primary, isIssueFixed) {
+	const d = {};
+
+	const $siteCell = $grid.find(`.site-cell[data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+	const site = ($siteCell.text() || "").trim().slice(0, URL_MAX_TEXT_LEN);
+	if (site) d.w = site;
+
+	if ($primary.is("[data-fixed-gain-input]")) {
+		d.t = "f";
+		const val = ($primary.find("input.fixed-gain-value").val() || "").trim();
+		if (val) d.v = val;
+		return d;
+	}
+
+	const mode = $primary.find(".type-toggle").attr("data-mode");
+	if (mode === "lay") d.t = "l";
+
+	const o = [], m = [], b = [];
+	for (const colId of colIds) {
+		const $cell = $grid.find(`[data-odds][data-colid="${colId}"][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+		o.push(($cell.find("input").not(".commission-input").not(".boost-input").first().val() || "").trim());
+		m.push(($cell.find(".commission-input").first().val() || "").trim());
+		b.push(($cell.find(".boost-input").first().val() || "").trim());
+	}
+	if (o.some(x => x !== "")) d.o = o;
+	if (m.some(x => x !== "")) d.m = m;
+	if (b.some(x => x !== "")) d.b = b;
+
+	const stake = ($grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"] .back-stake input`).first().val() || "").trim();
+	if (stake) d.s = stake;
+
+	// x (fixed-detail) : redondant quand l'issue est fixée (auto-coché) → on omet.
+	if (!isIssueFixed) {
+		const isFixedDetail = $grid.find(`[data-fixedetail][data-issueid="${issueId}"][data-detailid="${detailId}"] input`).is(":checked");
+		if (isFixedDetail) d.x = 1;
+	}
+
+	return d;
+}
+
+function serializeIssueForUrl($grid, issueId, colIds) {
+	const iss = {};
+
+	const label = ($grid.find(`.issue-label-cell[data-issueid="${issueId}"]`).text() || "").trim().slice(0, URL_MAX_TEXT_LEN);
+	if (label) iss.l = label;
+	if ($grid.find(`[data-issuefixe][data-issueid="${issueId}"] .radio.fixe`).is(":checked")) iss.f = 1;
+	const isDist = $grid.find(`[data-issuedist][data-issueid="${issueId}"] .check.dist`).is(":checked");
+	if (!isDist) iss.d = 0;
+
+	const details = [];
+	$grid.find(`[data-issueid="${issueId}"]`).filter("[data-type],[data-fixed-gain-input]").each(function () {
+		const $primary = $(this);
+		const detailId = $primary.attr("data-detailid");
+		if (!detailId) return;
+		details.push(serializeDetailForUrl($grid, issueId, detailId, colIds, $primary, iss.f === 1));
+	});
+	if (details.length > 0) iss.dt = details;
+
+	return iss;
+}
+
+function serializeCalcForUrl($card) {
+	const $grid = $card.find(".sb-grid");
+	const calc = {};
+
+	const colIds = $grid.find("[data-oddshead]").map((_, el) => $(el).attr("data-colid")).get();
+	if (colIds.length !== 1) calc.n = colIds.length;
+
+	const $totalLabel = $grid.find(".total-label");
+	const totalStake = ($totalLabel.nextAll("[data-stake]").first().find("input").first().val() || "").trim();
+	const totalFixe = $totalLabel.nextAll(".cell").has(".radio.fixe").first().find(".radio.fixe").is(":checked");
+	const totalDist = $totalLabel.nextAll(".cell").has(".check.dist").first().find(".check.dist").is(":checked");
+	const t = {};
+	if (totalStake) t.s = totalStake;
+	if (totalFixe) t.f = 1;
+	if (!totalDist) t.d = 0;
+	if (Object.keys(t).length > 0) calc.t = t;
+
+	const issues = [];
+	$grid.find("[data-issuelabel]").each(function () {
+		issues.push(serializeIssueForUrl($grid, $(this).attr("data-issueid"), colIds));
+	});
+	if (issues.length > 0) calc.i = issues;
+
+	return calc;
+}
+
+function serializeStateForUrl() {
+	const state = { v: URL_STATE_VERSION };
+	const g = serializeGlobalsForUrl();
+	if (Object.keys(g).length > 0) state.g = g;
+	const calcs = [];
+	$("#calculators-container .calc-card").each(function () { calcs.push(serializeCalcForUrl($(this))); });
+	if (calcs.length > 0) state.c = calcs;
+	return state;
+}
+
+/* -------- Apply state (URL → DOM) -------- */
+
+function applyGlobalsFromUrl(g) {
+	const setToggle = (id, on, keyOn) => {
+		$("#" + id).prop("checked", !!on);
+		localStorage.setItem(keyOn, String(!!on));
+	};
+	setToggle("commission-enabled", g.cm, "calcCouv.commissionEnabled");
+	setToggle("boost-enabled", g.b, "calcCouv.boostEnabled");
+	setToggle("details-enabled", g.d, "calcCouv.detailsEnabled");
+	setToggle("fixed-gain-enabled", g.fg, "calcCouv.fixedGainEnabled");
+	setToggle("issue-labels-enabled", g.il, "calcCouv.issueLabelsEnabled");
+	setToggle("detail-sites-enabled", g.ds, "calcCouv.detailSitesEnabled");
+	setToggle("loss-dist-enabled", g.ld, "calcCouv.lossDistEnabled");
+	if (g.cv) { $("#commission-default").val(g.cv); localStorage.setItem("calcCouv.commissionDefault", g.cv); }
+	if (g.lv) { $("#loss-dist-default").val(g.lv); localStorage.setItem("calcCouv.lossDistDefault", g.lv); }
+	$("#commission-detail").prop("hidden", !$("#commission-enabled").is(":checked"));
+	$("#loss-dist-detail").prop("hidden", !$("#loss-dist-enabled").is(":checked"));
+}
+
+function applyDetailFromUrl($grid, issueId, detailId, d) {
+	const $siteCell = $grid.find(`.site-cell[data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+	$siteCell.text(d.w || "");
+	applySiteDetection($siteCell);
+
+	const type = d.t || "b";
+	if (type === "f") {
+		$grid.find(`[data-fixed-gain-input][data-issueid="${issueId}"][data-detailid="${detailId}"] input.fixed-gain-value`).val(d.v || "");
+		return;
+	}
+
+	// Toggle back/lay type via user-visible click (fires the type-toggle handler which
+	// aussi ajuste commissions par défaut, engagement, etc.). On écrase ensuite avec les
+	// valeurs de l'URL, donc les side-effects n'ont pas d'impact final.
+	const $btn = $grid.find(`[data-type][data-issueid="${issueId}"][data-detailid="${detailId}"] .type-toggle`);
+	const currentMode = $btn.attr("data-mode");
+	const targetMode = type === "l" ? "lay" : "back";
+	if (currentMode !== targetMode) $btn.trigger("click");
+
+	const colIds = $grid.find("[data-oddshead]").map((_, el) => $(el).attr("data-colid")).get();
+	for (let k = 0; k < colIds.length; k++) {
+		const $cell = $grid.find(`[data-odds][data-colid="${colIds[k]}"][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+		$cell.find("input").not(".commission-input").not(".boost-input").first().val((d.o && d.o[k]) || "");
+		$cell.find(".commission-input").first().val((d.m && d.m[k]) || "");
+		$cell.find(".boost-input").first().val((d.b && d.b[k]) || "");
+	}
+
+	$grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"] .back-stake input`).first().val(d.s || "");
+	$grid.find(`[data-fixedetail][data-issueid="${issueId}"][data-detailid="${detailId}"] input`).prop("checked", !!d.x);
+}
+
+function applyIssueFromUrl($grid, issueId, iss) {
+	$grid.find(`.issue-label-cell[data-issueid="${issueId}"]`).text(iss.l || "");
+	$grid.find(`[data-issuedist][data-issueid="${issueId}"] .check.dist`).prop("checked", iss.d !== 0);
+	// La radio fixe est gérée au niveau calc (reset global + set unique) car
+	// .prop("checked", true) ne décoche pas les autres radios du groupe.
+
+	const stateDetails = iss.dt || [];
+	// Ajouter les détails manquants (le détail par défaut existe déjà après addIssue).
+	const countDetails = () => $grid.find(`[data-issueid="${issueId}"]`).filter("[data-type],[data-fixed-gain-input]").length;
+	for (let i = countDetails(); i < stateDetails.length; i++) {
+		const wantType = stateDetails[i].t || "b";
+		const selector = wantType === "f" ? ".js-add-fixed-gain" : ".js-add-detail";
+		$grid.find(`.add-detail-cell[data-issueid="${issueId}"] ${selector}`).trigger("click");
+	}
+
+	// Remplir chaque détail par index
+	const $details = $grid.find(`[data-issueid="${issueId}"]`).filter("[data-type],[data-fixed-gain-input]");
+	stateDetails.forEach((d, i) => {
+		const detailId = $details.eq(i).attr("data-detailid");
+		if (detailId) applyDetailFromUrl($grid, issueId, detailId, d);
+	});
+}
+
+function applyCalcFromUrl($card, calcData) {
+	const $grid = $card.find(".sb-grid");
+
+	// Adjust column count via public button (initialise proprement colIds, headers, etc.)
+	const desiredCols = calcData.n || 1;
+	while (Number($grid.attr("data-odds-cols")) < desiredCols) {
+		$card.find(".js-add-col").trigger("click");
+	}
+
+	// Adjust issue count (minimum 2 via addNewCalc, on ajoute les extras)
+	const desiredIssues = (calcData.i || []).length || 2;
+	while ($grid.find("[data-issuelabel]").length < desiredIssues) {
+		$card.find(".js-add-row").trigger("click");
+	}
+
+	// Reset toutes les radios fixe (issues + total) AVANT de peupler → évite
+	// que la radio checked par défaut (issue 1) coexiste avec celle demandée
+	// par l'état. On la re-positionne juste après.
+	$grid.find(".radio.fixe").prop("checked", false);
+
+	(calcData.i || []).forEach((issState, idx) => {
+		const issueId = $grid.find("[data-issuelabel]").eq(idx).attr("data-issueid");
+		applyIssueFromUrl($grid, issueId, issState);
+	});
+
+	// Positionne la radio fixe unique (issue ou total) et déclenche 'change'
+	// pour que syncFixeIssueToDetails coche/désactive les fixe-details de
+	// l'issue fixée.
+	const t = calcData.t || {};
+	let fixedIssueIdx = -1;
+	(calcData.i || []).forEach((issState, idx) => { if (issState.f) fixedIssueIdx = idx; });
+	if (fixedIssueIdx >= 0) {
+		const issueId = $grid.find("[data-issuelabel]").eq(fixedIssueIdx).attr("data-issueid");
+		$grid.find(`[data-issuefixe][data-issueid="${issueId}"] .radio.fixe`).prop("checked", true).trigger("change");
+	} else if (t.f) {
+		$grid.find(".total-label").nextAll(".cell").has(".radio.fixe").first().find(".radio.fixe").prop("checked", true).trigger("change");
+	}
+
+	// Override des fixe-details pour les issues NON-fixées (autoSetFixeDetailsOnAdd
+	// coche les détails existants quand on ajoute un 2e — on écrase avec l'état
+	// de l'URL). Les issues fixées sont gérées par syncFixeIssueToDetails ci-dessus.
+	(calcData.i || []).forEach((issState, idx) => {
+		if (issState.f) return;
+		const issueId = $grid.find("[data-issuelabel]").eq(idx).attr("data-issueid");
+		const $details = $grid.find(`[data-issueid="${issueId}"]`).filter("[data-type],[data-fixed-gain-input]");
+		(issState.dt || []).forEach((d, i) => {
+			if (d.t === "f") return; // fixe-detail d'un FG est structurellement coché+disabled
+			const detailId = $details.eq(i).attr("data-detailid");
+			if (!detailId) return;
+			$grid.find(`[data-fixedetail][data-issueid="${issueId}"][data-detailid="${detailId}"] input`).prop("checked", !!d.x);
+		});
+	});
+
+	// Total row : mise + dist (fixe déjà appliquée plus haut)
+	const $totalLabel = $grid.find(".total-label");
+	$totalLabel.nextAll("[data-stake]").first().find("input").first().val(t.s || "");
+	$totalLabel.nextAll(".cell").has(".check.dist").first().find(".check.dist").prop("checked", t.d !== 0);
+
+	// Recalc final (les .val() n'ont pas déclenché de recompute)
+	const api = $card.data("calc");
+	if (api) api.recomputeAll(true);
+}
+
+function applyStateFromUrl(state) {
+	if (!state || typeof state !== "object" || state.v !== URL_STATE_VERSION) return false;
+	if (!Array.isArray(state.c) || state.c.length === 0) return false;
+
+	applyGlobalsFromUrl(state.g || {});
+	$("#calculators-container").empty();
+	calcRegistry.length = 0;
+
+	for (const calcData of state.c) {
+		const $card = addNewCalc();
+		applyCalcFromUrl($card, calcData);
+	}
+	return true;
+}
+
+/* -------- Read/write URL -------- */
+
+let _urlSyncTimer = null;
+let _urlSyncEnabled = false;
+
+function scheduleUrlSync() {
+	if (!_urlSyncEnabled) return;
+	if (_urlSyncTimer) clearTimeout(_urlSyncTimer);
+	_urlSyncTimer = setTimeout(writeStateToUrl, 500);
+}
+
+function writeStateToUrl() {
+	_urlSyncTimer = null;
+	if (!window.LZString) return;
+	try {
+		const state = serializeStateForUrl();
+		const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(state));
+		const url = new URL(window.location);
+		url.searchParams.set(URL_PARAM, encoded);
+		history.replaceState(null, "", url);
+	} catch (_) { /* silent */ }
+}
+
+function tryLoadStateFromUrl() {
+	if (!window.LZString) return false;
+	try {
+		const params = new URLSearchParams(window.location.search);
+		const s = params.get(URL_PARAM);
+		if (!s) return false;
+		const json = LZString.decompressFromEncodedURIComponent(s);
+		if (!json) throw new Error("decompress");
+		const state = JSON.parse(json);
+		return applyStateFromUrl(state);
+	} catch (_) {
+		// Clean corrupted param silently
+		const url = new URL(window.location);
+		url.searchParams.delete(URL_PARAM);
+		history.replaceState(null, "", url);
+		return false;
+	}
+}
+
+function bindUrlSync() {
+	$(document).on("input", "input, [contenteditable]", scheduleUrlSync);
+	$(document).on("change", "input[type=checkbox], input[type=radio]", scheduleUrlSync);
+	// Click-based mutations : setTimeout 100ms pour laisser le DOM se stabiliser
+	// avant de sérialiser. scheduleUrlSync a son propre debounce 500ms.
+	$(document).on("click",
+		".js-add-row, .js-add-col, .js-del-issue, .js-del-col, .js-del-detail, "
+		+ ".js-add-detail, .js-add-fixed-gain, .js-duplicate-calc, .js-delete-calc, "
+		+ ".type-toggle, #add-calculator",
+		() => setTimeout(scheduleUrlSync, 100));
+	_urlSyncEnabled = true;
+}
+
 /* ---------- Initialisation ---------- */
 
 $(function () {
 	initGlobalSettings();
 
-	// Spawn the first calculator
-	addNewCalc();
+	// Try to restore from ?s=..., fall back to a fresh default calc
+	const loaded = tryLoadStateFromUrl();
+	if (!loaded) addNewCalc();
 
 	// Global "+ Ajouter un calculateur"
 	$("#add-calculator").on("click", function () {
@@ -2014,4 +2358,7 @@ $(function () {
 	});
 
 	if (window.lucide) lucide.createIcons();
+
+	// Auto-sync URL après que tout est stable
+	bindUrlSync();
 });
