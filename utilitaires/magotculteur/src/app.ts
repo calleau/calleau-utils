@@ -2,6 +2,7 @@ import EngineWorker from './worker.ts?worker';
 import { collectSites, eventDisplayName, formatDate, getBackOddsGross } from './engine';
 import bugOffUrl from '../../../assets/icons/bug-off.svg?url';
 import bugUrl from '../../../assets/icons/bug.svg?url';
+import LZString from 'lz-string';
 import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission } from './types';
 
 // ===== STATE =====
@@ -346,49 +347,131 @@ function extractCommissionPct(bet: BetDetail): number {
   return Math.max(0, Math.min(100, c * 100));
 }
 
-// Build a URL pointing to the couv-seq utility, pre-loaded with the principal
-// combiné as the placed bet and each cover (Back or Lay) pre-filled.
-// couv-seq accepts state via the URL hash: #s=URLENCODED({v:1, b, c, n}).
+// Format nombre au style français (virgule, 2 décimales) attendu par
+// calc-couverture / couv-seq côté inputs.
+function fmtNumFr(n: number, d = 2): string {
+  return n.toFixed(d).replace('.', ',');
+}
+
+// Build a URL pointing to the couv-seq utility, pré-rempli avec le principal
+// combiné comme placed bet et chaque cover (Back ou Lay) pré-remplie.
+// Format : ?s=<LZString.compressToEncodedURIComponent(JSON compact)>.
+// Cf. utilitaires/couv-seq/URL_STATE.md pour le schéma détaillé.
 function buildCouvSeqUrl(r: CoveringSetResult): string {
   const principal = r.bets.find(b => b.role === 'principal');
   if (!principal) return '';
   const covers = r.bets.filter(b => b.role === 'cover');
   if (!covers.length) return '';
 
-  const placedBet = {
-    id: 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-    type: principal.betType === 'fb' ? 'freebet' : 'cash',
-    amount: principal.stake,
-    oddsMode: 'individual',
-    totalOdd: null as number | null,
-    odds: principal.legs.map(l => getLegIndivOdds(l, principal.site) ?? null),
-  };
+  // Bet compact (omission des défauts : type="freebet", amount=50,
+  // oddsMode="individual", totalOdd=null, odds=[null,null]).
+  const bet: any = {};
+  if (principal.betType === 'cash') bet.t = 'cash';
+  if (principal.stake !== 50) bet.a = principal.stake;
+  const odds = principal.legs.map(l => getLegIndivOdds(l, principal.site) ?? null);
+  const isDefaultOdds = odds.length === 2 && odds.every(o => o == null);
+  if (!isDefaultOdds) bet.o = odds;
 
-  const coversArr = covers.map(c => {
+  // Covers compacts (omission : status="pending", backOdd=null, layOdd=null,
+  // commission=3, loss=null).
+  const cc = covers.map(c => {
     const isLay = c.legs[0]?.betType === 'Lay';
-    const commission = extractCommissionPct(c);
-    return {
-      status: 'pending',
-      backOdd: isLay ? null : c.odds,
-      layOdd: isLay ? c.odds : null,
-      commission,
-      loss: null as number | null,
-    };
+    const commPct = extractCommissionPct(c);
+    const cov: any = {};
+    if (isLay) cov.l = c.odds; else cov.b = c.odds;
+    if (commPct !== 3) cov.m = commPct;
+    return cov;
   });
 
-  const state = { v: 1, b: [placedBet], c: coversArr, n: covers.length };
-  return '../couv-seq/#s=' + encodeURIComponent(JSON.stringify(state));
+  const state: any = { v: 1 };
+  if (covers.length !== 2) state.n = covers.length;
+  state.b = [bet];
+  // On garde tous les covers (pas de trim du trailing) : la longueur porte
+  // l'info du nCovers voulu côté couv-seq via state.n.
+  if (cc.length > 0) state.c = cc;
+
+  const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(state));
+  return '../couv-seq/index.html?s=' + encoded;
+}
+
+// Build a URL pointing to calc-couverture, avec une issue par bet (principal
+// fixé + covers). Format : ?s=<LZString.compressToEncodedURIComponent(JSON)>.
+// Cf. utilitaires/calc-couverture/URL_STATE.md pour le schéma détaillé.
+//
+// Note : la mise en forme est un "best-effort" pour la vérification manuelle.
+// Le modèle "1 bet = 1 issue" reflète bien la couverture (chaque issue = un
+// scénario mutuellement exclusif). Pour un principal freebet, le return montré
+// dans calc-couverture sera surestimé du montant du stake (freebet ne retourne
+// pas la mise) — le user peut le lire via le label de l'issue.
+function buildCalcCouvUrl(r: CoveringSetResult): string {
+  const principal = r.bets.find(b => b.role === 'principal');
+  if (!principal) return '';
+  const covers = r.bets.filter(b => b.role === 'cover');
+
+  // Globaux : activer commissions, détails, sites, labels d'issue.
+  const g = { cm: 1, d: 1, ds: 1, il: 1 };
+
+  const issues: any[] = [];
+
+  // Issue 1 (fixée) : le principal (Back)
+  {
+    const commPct = extractCommissionPct(principal);
+    const iss: any = { f: 1 };
+    const typeLabel = principal.betType === 'fb' ? 'Freebet' : 'Cash';
+    iss.l = `Principal (${typeLabel}) — ${fmtNumFr(principal.stake)}€ @ ${fmtNumFr(principal.odds)}`;
+    const detail: any = {
+      w: principal.site,
+      o: [fmtNumFr(principal.odds)],
+      s: fmtNumFr(principal.stake),
+    };
+    if (commPct > 0) detail.m = [fmtNumFr(commPct)];
+    iss.dt = [detail];
+    issues.push(iss);
+  }
+
+  // Autres issues : les couvertures (Back ou Lay)
+  for (const c of covers) {
+    const isLay = c.legs[0]?.betType === 'Lay';
+    const commPct = extractCommissionPct(c);
+    const iss: any = {};
+    const typeLabel = isLay ? 'Lay' : 'Back opp.';
+    iss.l = `Couv. ${typeLabel} @ ${fmtNumFr(c.odds)}`;
+    const detail: any = {
+      w: c.site,
+      o: [fmtNumFr(c.odds)],
+    };
+    if (isLay) detail.t = 'l';
+    if (commPct > 0) detail.m = [fmtNumFr(commPct)];
+    iss.dt = [detail];
+    issues.push(iss);
+  }
+
+  const state = { v: 1, g, c: [{ i: issues }] };
+  const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(state));
+  return '../calc-couverture/index.html?s=' + encoded;
 }
 
 function buildDetailContent(r: CoveringSetResult): string {
   const rows = r.bets.map((b, i) => buildBetDetailRow(b, i)).join('');
-  let header = '';
+  const links: string[] = [];
+
+  // Calc-couverture : pour toutes les combinaisons
+  const calcUrl = buildCalcCouvUrl(r);
+  if (calcUrl) {
+    links.push(`<a class="ff-detail-action-link" href="${esc(calcUrl)}" target="_blank" rel="noopener">Ouvrir dans Calc-couverture ↗</a>`);
+  }
+
+  // Couv-seq : uniquement pour les couvertures séquentielles multi-matchs
   if (r.timing === 'seq' && r.nMatches >= 2) {
     const url = buildCouvSeqUrl(r);
     if (url) {
-      header = `<div class="ff-detail-actions"><a class="ff-detail-action-link" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir dans Couv-Seq ↗</a></div>`;
+      links.push(`<a class="ff-detail-action-link" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir dans Couv-Seq ↗</a>`);
     }
   }
+
+  const header = links.length
+    ? `<div class="ff-detail-actions">${links.join('')}</div>`
+    : '';
   return `${header}<div class="ff-betlist">${rows}</div>`;
 }
 

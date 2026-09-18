@@ -1,29 +1,150 @@
 /* ──────────────────────────────────────────────────────────
-   URL state sync — partage par lien + persistance miroir
+   URL state sync — partage par lien (?s=<lz-string>) + miroir localStorage.
+
+   Format compact aligné sur calc-couverture (voir URL_STATE.md) :
+   - JSON minifié avec clés courtes.
+   - Omission agressive de toutes les valeurs par défaut.
+   - Compression via LZString.compressToEncodedURIComponent → URL-safe.
+   - Sync auto debouncée (~500ms) via history.replaceState.
+   - Fallback silencieux si décodage échoue (param corrompu nettoyé).
    ────────────────────────────────────────────────────────── */
-// 1) Au chargement : si l'URL porte un état, on prime localStorage avant les loaders.
+
+const URL_PARAM = 's';
+const URL_STATE_VERSION = 1;
+
+/* ---- Bet (compact ⇄ localStorage shape) ----
+   Défauts localStorage : { type:"freebet", amount:50, oddsMode:"individual",
+                            totalOdd:null, odds:[null, null] }
+   Format URL :
+     t  = type       (défaut "freebet", omis pour freebet)
+     a  = amount     (défaut 50, omis si 50)
+     m  = oddsMode   (défaut "individual", omis pour individual)
+     to = totalOdd   (défaut null, omis si null)
+     o  = odds       (défaut [null,null], omis si tableau à 2 nulls)
+*/
+function serializeBetForUrl(bet){
+  const b = {};
+  if(bet.type && bet.type !== 'freebet')       b.t = bet.type;
+  if(bet.amount != null && bet.amount !== 50)  b.a = bet.amount;
+  if(bet.oddsMode && bet.oddsMode !== 'individual') b.m = bet.oddsMode;
+  if(bet.totalOdd != null)                     b.to = bet.totalOdd;
+  if(Array.isArray(bet.odds)){
+    const isDefaultOdds = bet.odds.length === 2 && bet.odds.every(o => o == null);
+    if(!isDefaultOdds) b.o = bet.odds;
+  }
+  return b;
+}
+function expandBetFromUrl(cb){
+  return {
+    id: (typeof newBetId === 'function') ? newBetId() : ('b' + Date.now().toString(36) + Math.random().toString(36).slice(2,5)),
+    type:     cb.t || 'freebet',
+    amount:   (cb.a != null) ? cb.a : 50,
+    oddsMode: cb.m || 'individual',
+    totalOdd: (cb.to != null) ? cb.to : null,
+    odds:     Array.isArray(cb.o) ? cb.o : [null, null]
+  };
+}
+
+/* ---- Cover (compact ⇄ localStorage shape) ----
+   Défauts localStorage : { status:"pending", backOdd:null, layOdd:null,
+                            commission:3, loss:null }
+   Format URL :
+     s = status     (défaut "pending", omis pour pending)
+     b = backOdd    (défaut null, omis si null)
+     l = layOdd     (défaut null, omis si null)
+     m = commission (défaut 3, omis si 3)
+     x = loss       (défaut null, omis si null)
+*/
+function serializeCoverForUrl(cover){
+  const c = {};
+  if(cover.status && cover.status !== 'pending') c.s = cover.status;
+  if(cover.backOdd != null) c.b = cover.backOdd;
+  if(cover.layOdd  != null) c.l = cover.layOdd;
+  if(cover.commission != null && cover.commission !== 3) c.m = cover.commission;
+  if(cover.loss != null) c.x = cover.loss;
+  return c;
+}
+function expandCoverFromUrl(cc){
+  return {
+    status:     cc.s || 'pending',
+    backOdd:    (cc.b != null) ? cc.b : null,
+    layOdd:     (cc.l != null) ? cc.l : null,
+    commission: (cc.m != null) ? cc.m : 3,
+    loss:       (cc.x != null) ? cc.x : null
+  };
+}
+
+/* ---- Root state ---- */
+function serializeStateForUrl(){
+  const state = { v: URL_STATE_VERSION };
+  if(typeof nCovers === 'number' && nCovers !== 2) state.n = nCovers;
+  if(Array.isArray(placedBets) && placedBets.length > 0){
+    state.b = placedBets.map(serializeBetForUrl);
+  }
+  if(Array.isArray(covers) && covers.length > 0){
+    // Compact + rogne les covers par défaut en fin de tableau (padding
+    // sera reconstitué par ensureCoversLength depuis nCovers).
+    const cc = covers.map(serializeCoverForUrl);
+    while(cc.length > 0 && Object.keys(cc[cc.length - 1]).length === 0) cc.pop();
+    if(cc.length > 0) state.c = cc;
+  }
+  return state;
+}
+
+/* ---- Boot : prime localStorage from URL BEFORE loaders run ----
+   Les loaders (loadPlacedBets/loadCovers) lisent localStorage juste après
+   ce bloc. On y injecte donc l'état URL au format localStorage attendu. */
 (function primeStorageFromURL(){
+  if(typeof LZString === 'undefined') return;
   try {
-    const m = location.hash.match(/[#&]s=([^&]+)/);
-    if(!m) return;
-    const s = JSON.parse(decodeURIComponent(m[1]));
-    if(!s || s.v !== 1) return;
-    if(Array.isArray(s.b))  localStorage.setItem('couvseq_bets',    JSON.stringify(s.b));
-    if(Array.isArray(s.c))  localStorage.setItem('couvseq_covers',  JSON.stringify(s.c));
-    if(typeof s.n === 'number' && s.n >= 2 && s.n <= 8) localStorage.setItem('couvseq_ncovers', String(s.n));
-  } catch(e){}
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get(URL_PARAM);
+    if(!s) return;
+    const json = LZString.decompressFromEncodedURIComponent(s);
+    if(!json) throw new Error('decompress');
+    const state = JSON.parse(json);
+    if(!state || state.v !== URL_STATE_VERSION) return;
+
+    if(Array.isArray(state.b)){
+      const expanded = state.b.map(expandBetFromUrl);
+      localStorage.setItem('couvseq_bets', JSON.stringify(expanded));
+    }
+    if(Array.isArray(state.c)){
+      const expanded = state.c.map(expandCoverFromUrl);
+      localStorage.setItem('couvseq_covers', JSON.stringify(expanded));
+    }
+    if(typeof state.n === 'number' && state.n >= 2 && state.n <= 8){
+      localStorage.setItem('couvseq_ncovers', String(state.n));
+    }
+  } catch(e){
+    // Param corrompu : nettoie silencieusement
+    try {
+      const url = new URL(window.location);
+      url.searchParams.delete(URL_PARAM);
+      history.replaceState(null, '', url);
+    } catch(_){}
+  }
 })();
 
-// 2) Push : on attend la fin du boot pour ne pas écraser pendant l'init.
+/* ---- Debounced write ---- */
 let __urlSyncReady = false;
+let __urlSyncTimer = null;
 function pushStateToURL(){
   if(!__urlSyncReady) return;
+  if(__urlSyncTimer) clearTimeout(__urlSyncTimer);
+  __urlSyncTimer = setTimeout(writeStateToURL, 500);
+}
+function writeStateToURL(){
+  __urlSyncTimer = null;
+  if(typeof LZString === 'undefined') return;
   try {
-    const s = { v:1, b:placedBets, c:covers, n:nCovers };
-    const enc = '#s=' + encodeURIComponent(JSON.stringify(s));
-    if(location.hash !== enc){
-      history.replaceState(null, '', location.pathname + location.search + enc);
-    }
+    const state = serializeStateForUrl();
+    const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(state));
+    const url = new URL(window.location);
+    url.searchParams.set(URL_PARAM, encoded);
+    // Nettoie l'ancien format à base de hash si présent (compat des anciens liens)
+    if(url.hash && /^#s=/.test(url.hash)) url.hash = '';
+    history.replaceState(null, '', url);
   } catch(e){}
 }
 

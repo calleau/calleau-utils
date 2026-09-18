@@ -876,7 +876,9 @@
 .ff-detail-actions {
 	display: flex;
 	justify-content: flex-end;
+	gap: 8px;
 	padding: 0 14px 10px;
+	flex-wrap: wrap;
 }
 
 .ff-detail-action-link {
