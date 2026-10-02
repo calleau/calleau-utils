@@ -27,6 +27,7 @@ let _simpleAmount = 10;
 let _simpleCashObjective: 'gagner' | 'miser' | 'perdre' = 'miser';
 let _simpleCoteMin = 0;
 let _simpleCoteMinSel = 0;
+let _simpleBoostPct = 0; // 0 = pas de boost ; sinon % de boost sur gain net d'une issue
 
 // Advanced mode — per site
 let _advSites: Record<string, {
@@ -60,6 +61,7 @@ function savePrefs() {
       simpleCashObjective: _simpleCashObjective,
       simpleCoteMin: _simpleCoteMin,
       simpleCoteMinSel: _simpleCoteMinSel,
+      simpleBoostPct: _simpleBoostPct,
       allowedNLegs: [..._allowedNLegs],
       allowSeq: _savedMethods ? _savedMethods.seq : _allowSeq,
       allowSimult: _savedMethods ? _savedMethods.simult : _allowSimult,
@@ -203,6 +205,8 @@ function buildEngineOpts(): EngineOpts {
     cashObjective: _simpleCashObjective,
     coteMin: _simpleCoteMin,
     coteMinParSelection: _simpleCoteMinSel,
+    boostPct: _betType === 'cash' ? _simpleBoostPct : 0,
+    boostSite: _betType === 'cash' && _simpleBoostPct > 0 ? _simpleSite : undefined,
     allowSeq: _allowSeq,
     allowSimult: _allowSimult,
     allowUni: _allowUni,
@@ -315,7 +319,10 @@ function buildBetDetailRow(bet: BetDetail, idx: number): string {
   const liabilityStr = isLay
     ? ` \u2022 <strong>Liability\u00a0${fmt(bet.liability!)}\u00a0\u20ac</strong>`
     : '';
-  const summaryLine = `${sitePill(bet.site, isLay)} \u2022 ${fmt(bet.odds)} \u2022 ${miseTag(bet.betType)} Mise <strong>${fmt(bet.stake)}\u00a0\u20ac</strong>${liabilityStr}`;
+  const oddsDisplay = bet.boosted && bet.oddsBase != null
+    ? `<strong>${fmt(bet.odds)}</strong> <span class="ff-boost-badge" title="Cote boost\u00e9e depuis ${fmt(bet.oddsBase)}">\u26a1 boost</span>`
+    : `${fmt(bet.odds)}`;
+  const summaryLine = `${sitePill(bet.site, isLay)} \u2022 ${oddsDisplay} \u2022 ${miseTag(bet.betType)} Mise <strong>${fmt(bet.stake)}\u00a0\u20ac</strong>${liabilityStr}`;
   const grossGain = fmt(bet.stake * bet.odds);
 
   return `
@@ -647,6 +654,10 @@ function buildTableRow(r: CoveringSetResult, idx: number): string {
   const isCash = _betType === 'cash';
   const rc = rateClass(r.rate, isCash);
   const cashStr = r.totalCash > 0 ? `${fmt(r.totalCash)}\u00a0\u20ac` : '\u2013';
+  const nb = r.profitNoBoost;
+  const noBoostCell = nb === undefined
+    ? `<div class="ff-td ff-td-mono ff-td-muted">\u2013</div>`
+    : `<div class="ff-td ff-td-mono ${nb >= 0 ? 'pos' : 'neg'}">${nb >= 0 ? '+' : '\u2212'}${fmt(Math.abs(nb))}\u00a0\u20ac</div>`;
   return `
     <button class="ff-row-expand" id="ff-expand-${idx}" onclick="toggleDetail(${idx})" aria-label="Détails"><span class="ff-expand-icon">&#9654;</span></button>
     <div class="ff-td ff-td-muted ff-method-cell">${esc(resultMethodLabel(r))}</div>
@@ -659,6 +670,7 @@ function buildTableRow(r: CoveringSetResult, idx: number): string {
     <div class="ff-td ff-td-mono">${esc(formatOddsRange(resultOddsFor(r, 'principal')))}</div>
     <div class="ff-td ff-td-mono">${esc(formatOddsRange(resultOddsFor(r, 'cover')))}</div>
     <div class="ff-td ff-td-mono ${profitCls}">${profitText}</div>
+    ${noBoostCell}
     <div class="ff-td ${rc} ff-td-bold">${fmt(r.rate * 100, 1)}\u00a0%</div>
     <div class="ff-tr-detail" id="ff-detail-${idx}" hidden>${buildDetailContent(r)}</div>`;
 }
@@ -733,6 +745,7 @@ function renderPage() {
     ${thFilter('coteOblig', 'Cotes oblig.', 'ff-th-center')}
     ${thFilter('coteAutres', 'Cotes autres', 'ff-th-center')}
     ${thFilter('result', 'Résultat')}
+    <div class="ff-th" title="Résultat équivalent sans le boost (même cover set)">Sans boost</div>
     ${thFilter('taux', 'Taux')}`;
 
   if (!visible.length) {
@@ -766,6 +779,8 @@ function setBetType(t: 'fb' | 'cash') {
   );
   const objField = document.getElementById('ff-objective-field');
   if (objField) (objField as any).hidden = t !== 'cash';
+  const boostField = document.getElementById('ff-boost-field');
+  if (boostField) (boostField as any).hidden = t !== 'cash';
   updateAmountLabel();
   if (_data) updateSiteSelect(collectSites(_data));
   resetResults();
@@ -835,6 +850,12 @@ function setMinOddsFilter(val: string) {
 
 function setMinOddsPerSelection(val: string) {
   _simpleCoteMinSel = parseFloat(val) || 0;
+  resetResults();
+  savePrefs();
+}
+
+function setBoostPct(val: string) {
+  _simpleBoostPct = Math.max(0, parseFloat(val) || 0);
   resetResults();
   savePrefs();
 }
@@ -1297,6 +1318,7 @@ window.setObjective = setObjective;
 window.setAmountMode = setAmountMode;
 window.setMinOddsFilter = setMinOddsFilter;
 window.setMinOddsPerSelection = setMinOddsPerSelection;
+window.setBoostPct = setBoostPct;
 window.toggleNLegs = toggleNLegs;
 window.setMethodToggle = setMethodToggle;
 window.setAdvancedMode = setAdvancedMode;
@@ -1351,6 +1373,7 @@ function downloadDebugJson() {
       simpleCashObjective: _simpleCashObjective,
       simpleCoteMin: _simpleCoteMin,
       simpleCoteMinSel: _simpleCoteMinSel,
+      simpleBoostPct: _simpleBoostPct,
       allowedNLegs: [..._allowedNLegs],
       allowSeq: _allowSeq,
       allowSimult: _allowSimult,
@@ -1391,6 +1414,7 @@ function downloadDebugStateJson() {
       simpleCashObjective: _simpleCashObjective,
       simpleCoteMin: _simpleCoteMin,
       simpleCoteMinSel: _simpleCoteMinSel,
+      simpleBoostPct: _simpleBoostPct,
       allowedNLegs: [..._allowedNLegs],
       allowSeq: _allowSeq,
       allowSimult: _allowSimult,
@@ -1459,6 +1483,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     _simpleCoteMinSel = prefs.simpleCoteMinSel;
     const i = document.getElementById('ff-min-odds-sel') as HTMLInputElement;
     if (i) i.value = String(prefs.simpleCoteMinSel);
+  }
+  if (prefs.simpleBoostPct > 0) {
+    _simpleBoostPct = prefs.simpleBoostPct;
+    const i = document.getElementById('ff-boost-pct') as HTMLInputElement;
+    if (i) i.value = String(prefs.simpleBoostPct);
   }
   // Method toggles from prefs
   if (prefs.allowSeq != null) {

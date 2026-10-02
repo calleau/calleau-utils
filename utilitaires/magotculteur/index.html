@@ -123,6 +123,21 @@
 							</div>
 						</div>
 
+						<!-- Boost cote (cash uniquement) : applique un boost sur le gain net d'UNE issue
+							placée sur le site principal. Vide = pas de boost. -->
+						<div class="ff-subfield" id="ff-boost-field" hidden>
+							<label class="ff-sublabel" for="ff-boost-pct">Boost cote (% sur gain net)</label>
+							<div class="numinput numinput--sm">
+								<input type="number" id="ff-boost-pct" value="" min="0" max="500" step="5" placeholder="—"
+									oninput="setBoostPct(this.value)" onclick="this.select()" />
+								<span class="unit">%</span>
+								<div class="nbtn-wrap">
+									<button class="nbtn" onclick="var i=document.getElementById('ff-boost-pct'); i.value=(parseFloat(i.value)||0)+5; setBoostPct(i.value)">▲</button>
+									<button class="nbtn" onclick="var i=document.getElementById('ff-boost-pct'); i.value=Math.max(0,(parseFloat(i.value)||0)-5); setBoostPct(i.value)">▼</button>
+								</div>
+							</div>
+						</div>
+
 					</div><!-- /ff-simple-mode -->
 
 					<!-- Mode avancé -->

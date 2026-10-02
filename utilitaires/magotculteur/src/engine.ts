@@ -713,17 +713,36 @@ function makeSimultResult(
   eventKeys: string[],
   symmetry: 'sym' | 'asym' | 'asym-light',
   sitePerGroup: string[],
-  opts: EngineOpts
+  opts: EngineOpts,
+  boostedIdx: number | null = null
 ): CoveringSetResult | null {
   const n = betsLegsArray.length;
   const groupInfos: LegGroupInfo[] = [];
-  const oddsPerGroup: number[] = []; // effective odds (for dutching math)
+  const oddsPerGroup: number[] = []; // effective odds (for dutching math, boostée si applicable)
+  const oddsPerGroupBase: number[] = []; // effective odds non boostées (pour calcul rateNoBoost)
+  const displayOddsBase: number[] = []; // display odds non boostées
+  const boostFactor = boostedIdx != null && opts.boostPct ? 1 + opts.boostPct / 100 : 1;
 
   for (let i = 0; i < n; i++) {
     const info = legGroupInfo(data, betsLegsArray[i], sitePerGroup[i], opts.coteMinParSelection);
     if (!info) return null;
     groupInfos.push(info);
-    oddsPerGroup.push(info.effOdds);
+    oddsPerGroupBase.push(info.effOdds);
+    displayOddsBase.push(info.displayOdds);
+    if (i === boostedIdx) {
+      // Boost sur gain net : o' = 1 + (o - 1) * (1 + boostPct/100)
+      const effBoosted = 1 + (info.effOdds - 1) * boostFactor;
+      oddsPerGroup.push(effBoosted);
+    } else {
+      oddsPerGroup.push(info.effOdds);
+    }
+  }
+
+  // Boost uniquement valide sur un pari placé sur le site de boost (= site principal).
+  if (boostedIdx != null) {
+    if (!opts.boostSite || sitePerGroup[boostedIdx] !== opts.boostSite) return null;
+    // Pas de boost sur un Lay (non pertinent pour l'offre de boost cote).
+    if (groupInfos[boostedIdx].isLay) return null;
   }
 
   // Apply coteMin to obligatory sites' bets
@@ -889,9 +908,11 @@ function makeSimultResult(
       if (sumP <= 0) return null;
       scale = opts.amount / sumP;
     } else if (opts.amountMode === 'mise_min_par_pari') {
-      const minP = Math.min(...constraintBase);
-      if (!isFinite(minP) || minP <= 0) return null;
-      scale = opts.amount / minP;
+      // En mode boost + mise_min_par_pari : la mise de référence est celle du pari boosté
+      // (le user veut "au moins opts.amount sur le pari boosté", les autres peuvent varier).
+      const anchor = (boostedIdx != null) ? baseStakes[boostedIdx] : Math.min(...constraintBase);
+      if (!isFinite(anchor) || anchor <= 0) return null;
+      scale = opts.amount / anchor;
     } else if (opts.amountMode === 'profit_brut') {
       // Gross gain quand le groupe "dutch" (= principal pour gagner, cover pour perdre,
       // tous pour miser) gagne, par unité totalStake.
@@ -920,13 +941,17 @@ function makeSimultResult(
     totalCash = stakes.reduce((s, v) => s + v, 0);
 
     for (let i = 0; i < n; i++) {
+      const dispBase = groupInfos[i].displayOdds;
+      const isBoosted = i === boostedIdx;
+      const dispOdds = isBoosted ? 1 + (dispBase - 1) * boostFactor : dispBase;
       bets.push({
         legs: betsLegsArray[i],
         site: sitePerGroup[i],
-        odds: groupInfos[i].displayOdds,
+        odds: dispOdds,
         stake: stakes[i],
         betType: 'cash',
         role: isObligGroup[i] ? 'principal' : 'cover',
+        ...(isBoosted ? { boosted: true, oddsBase: dispBase } : {}),
       });
     }
     patchLayBets(bets, groupInfos);
@@ -939,6 +964,15 @@ function makeSimultResult(
   const uniqueSites = new Set(sitePerGroup);
   const placement: 'uni' | 'multi' = uniqueSites.size === 1 ? 'uni' : 'multi';
 
+  // Comparatif "sans boost" : rejoue le même cover set sans boost pour avoir profit/rate
+  // de référence. Mêmes paramètres (sites, amount, mode) sauf boostedIdx=null.
+  let profitNoBoost: number | undefined;
+  let rateNoBoost: number | undefined;
+  if (boostedIdx != null) {
+    const ref = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, sitePerGroup, opts, null);
+    if (ref) { profitNoBoost = ref.profit; rateNoBoost = ref.rate; }
+  }
+
   return {
     timing: 'simult',
     placement,
@@ -950,6 +984,7 @@ function makeSimultResult(
     rate,
     totalCash,
     satisfiedMissions,
+    ...(profitNoBoost !== undefined ? { profitNoBoost, rateNoBoost } : {}),
   };
 }
 
@@ -959,7 +994,8 @@ function trySimult(
   betsLegsArray: LegRef[][],
   eventKeys: string[],
   symmetry: 'sym' | 'asym' | 'asym-light',
-  opts: EngineOpts
+  opts: EngineOpts,
+  boostedIdx: number | null = null
 ): CoveringSetResult[] {
   const results: CoveringSetResult[] = [];
   const obligSites = getObligatorySites(opts);
@@ -997,7 +1033,7 @@ function trySimult(
 
     for (const site of uniSites) {
       const sitePerGroup = betsLegsArray.map(() => site);
-      const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, sitePerGroup, opts);
+      const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, sitePerGroup, opts, boostedIdx);
       if (r) results.push(r);
     }
   }
@@ -1026,7 +1062,7 @@ function trySimult(
           if (!sitePerGroup.includes(os)) { obligOk = false; break; }
         }
         if (obligOk) {
-          const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, sitePerGroup, opts);
+          const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, sitePerGroup, opts, boostedIdx);
           if (r) results.push(r);
         }
       }
@@ -1058,13 +1094,35 @@ function trySimult(
           if (!valid) continue;
           if (new Set(assignment).size < 2) continue;
           if (obligSites.some(os => !assignment.includes(os))) continue;
-          const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, assignment, opts);
+          const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, assignment, opts, boostedIdx);
           if (r) results.push(r);
         }
       }
     }
   }
 
+  return results;
+}
+
+// Call trySimult once (no boost) OR, if boost active, iterate boost candidates
+// (eligible groups = ceux qui peuvent être placés sur boostSite). Quand boostPct > 0
+// on ne retourne QUE des résultats boostés (variantes sans boost ignorées).
+function trySimultWithBoost(
+  data: any,
+  betsLegsArray: LegRef[][],
+  eventKeys: string[],
+  symmetry: 'sym' | 'asym' | 'asym-light',
+  opts: EngineOpts
+): CoveringSetResult[] {
+  const boostActive = (opts.boostPct ?? 0) > 0 && !!opts.boostSite;
+  if (!boostActive) return trySimult(data, betsLegsArray, eventKeys, symmetry, opts, null);
+
+  const results: CoveringSetResult[] = [];
+  for (let i = 0; i < betsLegsArray.length; i++) {
+    // Groupe éligible : au moins une cote dispo sur boostSite (sinon makeSimultResult rejette).
+    if (legGroupOdds(data, betsLegsArray[i], opts.boostSite!, opts.coteMinParSelection) == null) continue;
+    results.push(...trySimult(data, betsLegsArray, eventKeys, symmetry, opts, i));
+  }
   return results;
 }
 
@@ -1118,7 +1176,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
 
         // Symmetric
         if (opts.allowSym) {
-          const symResults = trySimult(data, betsLegsArray, combo, 'sym', opts);
+          const symResults = trySimultWithBoost(data, betsLegsArray, combo, 'sym', opts);
           for (const r of symResults) {
             const sitesKey = r.bets.map(b => b.site).join('+');
             const key = comboKey + '|' + coverKey + '|sym|' + r.placement + '|' + sitesKey;
@@ -1155,7 +1213,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
                 const asymCoverKey = asymLegsArray
                   .map(group => group.map(l => l.marketName + ':' + l.outcomeName).sort().join('+'))
                   .sort().join('||');
-                const asymResults = trySimult(data, asymLegsArray, [ekS, ...ekCs], 'asym', opts);
+                const asymResults = trySimultWithBoost(data, asymLegsArray, [ekS, ...ekCs], 'asym', opts);
                 for (const r of asymResults) {
                   const sitesKey = r.bets.map(b => b.site).join('+');
                   const key = comboKey + '|asym|' + si + '|' + asymCoverKey + '|' + r.placement + '|' + sitesKey;
@@ -1185,7 +1243,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
           const alCoverKey = legs
             .map(group => group.map(l => l.marketName + ':' + l.outcomeName).sort().join('+'))
             .sort().join('||');
-          const alResults = trySimult(data, legs, orderedKeys, 'asym-light', opts);
+          const alResults = trySimultWithBoost(data, legs, orderedKeys, 'asym-light', opts);
           for (const r of alResults) {
             const sitesKey = r.bets.map(b => b.site).join('+');
             const key = comboKey + '|asym-light|' + s.anchorIdx + '|' + alCoverKey + '|' + r.placement + '|' + sitesKey;

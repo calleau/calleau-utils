@@ -60,6 +60,11 @@ export interface EngineOpts {
   allowSym: boolean;
   allowAsym: boolean;
   allowAsymLight: boolean;
+  // Boost (cash uniquement) : si boostPct > 0, le moteur ne produit que des cover sets
+  // avec UNE issue boostée. L'issue doit être placée sur boostSite. Formule :
+  // boostedOdds = 1 + (odds - 1) * (1 + boostPct/100) (boost sur le gain net).
+  boostPct?: number;
+  boostSite?: string;
 }
 
 // ===== STRUCTURES INTERNES (moteur) =====
@@ -118,13 +123,15 @@ export interface LegWithCover extends Leg {
 export interface BetDetail {
   legs: LegRef[];
   site: string;
-  odds: number;       // cote combinée si multi-legs
+  odds: number;       // cote combinée si multi-legs (boostée si boosted=true)
   stake: number;
   betType: BetType;
   role: 'principal' | 'cover';
   seqStep?: number;   // séquentiel uniquement : 0=toujours placé, 1+=conditionnel
   liability?: number; // lay uniquement
   satisfiedMissions?: string[]; // ids des missions que CE pari remplit à lui seul
+  boosted?: boolean;        // true si ce pari a reçu le boost
+  oddsBase?: number;        // cote avant boost (uniquement si boosted)
 }
 
 // ===== RESULTAT UNIFIE =====
@@ -140,6 +147,8 @@ export interface CoveringSetResult {
   rate: number;        // profit / mise principale (freebets ou cash selon betType)
   totalCash: number;   // total cash engagé (liability comprise)
   satisfiedMissions: string[]; // ids des missions satisfaites
+  profitNoBoost?: number; // profit équivalent sans le boost (mêmes mises) — pour comparaison
+  rateNoBoost?: number;   // idem en taux
 }
 
 export type AllResults = CoveringSetResult[];
