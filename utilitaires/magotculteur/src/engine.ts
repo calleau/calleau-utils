@@ -402,12 +402,16 @@ function buildAsymLightLegs(split: AsymLightSplit): LegRef[][] {
   return [...singleSides, ...combinedGroups];
 }
 
-// Cheap best-odds score for a legs array (uni-site approximation): rate = 1 / sum(1/oi)
-function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): number {
+// Cheap best-odds score for a legs array (uni-site approximation, dutching équilibré).
+// Higher = better; null = split unusable. In cash the score estimates profit/amount for
+// the active amountMode, so the pre-selection ranks splits like the final profit sort:
+// with mise_min_par_pari a lower rate can still lose less when odds are more balanced.
+function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): number | null {
   const sites = Object.keys(opts.sites).length > 0 ? Object.keys(opts.sites) : collectSites(data);
-  if (!sites.length) return 0;
+  if (!sites.length) return null;
   const obligSet = new Set(getObligatorySites(opts));
   let invSum = 0;
+  let maxO = 0;
   for (const legs of legsArray) {
     let bestO = 0;
     let bestOblig = 0;
@@ -422,16 +426,23 @@ function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): num
         hasNonOblig = true;
       }
     }
-    if (bestO <= 1) return 0;
+    if (bestO <= 1) return null;
     // Mirror makeSimultResult's coteMin check: it rejects groups placed on an obligatory
     // site whose displayOdds < coteMin. If no obligatory site meets coteMin AND no
     // non-obligatory site offers this group as a cover fallback, the split has no valid
     // placement — drop it so it doesn't waste MAX_ASYMLIGHT slots on unusable candidates.
-    if (opts.coteMin > 0 && obligSet.size > 0 && bestOblig < opts.coteMin && !hasNonOblig) return 0;
-    if (opts.coteMin > 0 && obligSet.size === 0 && bestO < opts.coteMin) return 0;
+    if (opts.coteMin > 0 && obligSet.size > 0 && bestOblig < opts.coteMin && !hasNonOblig) return null;
+    if (opts.coteMin > 0 && obligSet.size === 0 && bestO < opts.coteMin) return null;
     invSum += opts.betType === 'fb' ? 1 / (bestO - 1) : 1 / bestO;
+    if (bestO > maxO) maxO = bestO;
   }
-  return invSum > 0 ? 1 / invSum : 0;
+  if (invSum <= 0) return null;
+  const rate = 1 / invSum;
+  if (opts.betType === 'fb') return rate;
+  // Cash, stakes_i = rate/o_i par unité de mise totale → profit/amount selon amountMode.
+  if (opts.amountMode === 'mise_min_par_pari') return (rate - 1) * maxO / rate;
+  if (opts.amountMode === 'profit_brut') return (rate - 1) / rate;
+  return rate - 1; // mise_totale (profit_net_min : perte fixe, on départage au taux)
 }
 
 function getAsymSplits(data: any, eventKey: string, opts: EngineOpts) {
@@ -1181,7 +1192,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
             const sitesKey = r.bets.map(b => b.site).join('+');
             const key = comboKey + '|' + coverKey + '|sym|' + r.placement + '|' + sitesKey;
             const prev = bestPerCombo.get(key);
-            if (!prev || r.rate > prev.rate) bestPerCombo.set(key, r);
+            if (!prev || r.profit > prev.profit) bestPerCombo.set(key, r);
           }
         }
 
@@ -1218,7 +1229,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
                   const sitesKey = r.bets.map(b => b.site).join('+');
                   const key = comboKey + '|asym|' + si + '|' + asymCoverKey + '|' + r.placement + '|' + sitesKey;
                   const prev = bestPerCombo.get(key);
-                  if (!prev || r.rate > prev.rate) bestPerCombo.set(key, r);
+                  if (!prev || r.profit > prev.profit) bestPerCombo.set(key, r);
                 }
               });
             }
@@ -1234,7 +1245,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
         for (const s of allSplits) {
           const legs = buildAsymLightLegs(s);
           const score = scoreLegsArray(data, legs, opts);
-          if (score > 0) scored.push({ s, legs, score });
+          if (score !== null) scored.push({ s, legs, score });
         }
         scored.sort((a, b) => b.score - a.score);
         for (const { s, legs } of scored.slice(0, MAX_ASYMLIGHT)) {
@@ -1248,7 +1259,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
             const sitesKey = r.bets.map(b => b.site).join('+');
             const key = comboKey + '|asym-light|' + s.anchorIdx + '|' + alCoverKey + '|' + r.placement + '|' + sitesKey;
             const prev = bestPerCombo.get(key);
-            if (!prev || r.rate > prev.rate) bestPerCombo.set(key, r);
+            if (!prev || r.profit > prev.profit) bestPerCombo.set(key, r);
           }
         }
       }
