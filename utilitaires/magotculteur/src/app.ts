@@ -15,6 +15,7 @@ let _workers: Worker[] = [];
 let _visibleCount = 50;
 let _colFilters: Record<string, any> = {};
 let _cfpOpenCol: string | null = null;
+let _sort: { col: 'result' | 'date'; dir: 'asc' | 'desc' } = { col: 'result', dir: 'desc' };
 
 // Config state
 let _betType: 'fb' | 'cash' = 'fb';
@@ -236,6 +237,14 @@ function sortedEventKeys(r: CoveringSetResult): string[] {
     const nB = evB ? eventDisplayName(b, evB) : b;
     return nA.localeCompare(nB, 'fr', { sensitivity: 'base' });
   });
+}
+
+// [premier match, dernier match] en ms, ou null si aucun match n'a de date.
+function resultTimeRange(r: CoveringSetResult): [number, number] | null {
+  const ts = r.eventKeys
+    .map(ek => _data?.[ek]?.dateTime ? new Date(_data[ek].dateTime).getTime() : NaN)
+    .filter(t => !isNaN(t));
+  return ts.length ? [Math.min(...ts), Math.max(...ts)] : null;
 }
 
 function resultDatesHtml(r: CoveringSetResult): string {
@@ -505,6 +514,11 @@ const COL_FILTER_DEFS: Record<string, any> = {
     label: 'Matchs',
     getValue: (r: CoveringSetResult) => r.nMatches,
   },
+  date: {
+    type: 'date',
+    label: 'Date (tous les matchs)',
+    getValue: (r: CoveringSetResult) => resultTimeRange(r),
+  },
   paris: {
     type: 'num',
     label: 'Paris',
@@ -548,7 +562,16 @@ function isColFilterActive(col: string): boolean {
   if (!f) return false;
   if (f.type === 'num') return f.min !== null || f.max !== null || f.exact !== null;
   if (f.type === 'set') return f.values.size > 0 && f.values.size < COL_FILTER_DEFS[col]?.options?.length;
+  if (f.type === 'date') return f.from !== null || f.to !== null;
   return false;
+}
+
+// ms → valeur d'un <input type="datetime-local"> (heure locale, "YYYY-MM-DDTHH:mm")
+function toDatetimeLocal(ms: number | null | undefined): string {
+  if (ms == null) return '';
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 function passesColFilters(r: CoveringSetResult): boolean {
@@ -563,6 +586,10 @@ function passesColFilters(r: CoveringSetResult): boolean {
       if (f.exact === null && f.max !== null && val > f.max) return false;
     } else if (f.type === 'set') {
       if (!f.values.has(String(val))) return false;
+    } else if (f.type === 'date') {
+      const [first, last] = val as [number, number];
+      if (f.from !== null && first < f.from) return false;
+      if (f.to !== null && last > f.to) return false;
     }
   }
   return true;
@@ -582,6 +609,15 @@ function applyColFilterFromPopover(col: string) {
     const checked = new Set([...document.querySelectorAll('#ff-cfp-body input[type=checkbox]:checked')].map(cb => (cb as HTMLInputElement).value));
     if (checked.size === 0 || checked.size === def.options.length) delete _colFilters[col];
     else _colFilters[col] = { type: 'set', values: checked };
+  } else if (def.type === 'date') {
+    const parse = (id: string) => {
+      const v = (document.getElementById(id) as HTMLInputElement)?.value;
+      const t = v ? new Date(v).getTime() : NaN;
+      return isNaN(t) ? null : t;
+    };
+    const from = parse('ff-cfp-from'), to = parse('ff-cfp-to');
+    if (from === null && to === null) delete _colFilters[col];
+    else _colFilters[col] = { type: 'date', from, to };
   }
   closeColFilterPopover();
   renderPage();
@@ -606,6 +642,10 @@ function openColFilterPopover(col: string, anchorEl: HTMLElement) {
         <input type="checkbox" value="${esc(o.value)}" ${active.has(o.value) ? 'checked' : ''}/>
         ${esc(o.label)}
       </label>`).join('');
+  } else if (def.type === 'date') {
+    inner = `
+      <div class="ff-cfp-row"><label class="ff-cfp-lbl">Après</label><input id="ff-cfp-from" class="ff-cfp-input" type="datetime-local" value="${toDatetimeLocal(f?.from)}"/></div>
+      <div class="ff-cfp-row"><label class="ff-cfp-lbl">Avant</label><input id="ff-cfp-to" class="ff-cfp-input" type="datetime-local" value="${toDatetimeLocal(f?.to)}"/></div>`;
   }
   const popover = document.getElementById('ff-col-filter-popover')!;
   popover.innerHTML = `
@@ -639,12 +679,37 @@ function closeColFilterPopover() {
   if (p) (p as any).hidden = true;
 }
 
-function thFilter(col: string, label: string, extraClass = ''): string {
+function thFilter(col: string, label: string, extraClass = '', sortable = false): string {
   const active = isColFilterActive(col);
+  const sorted = sortable && _sort.col === col;
+  const labelHtml = sortable
+    ? `<button class="ff-th-sort-btn${sorted ? ' ff-th-sort-btn--active' : ''}" onclick="setSort('${col}')" title="Trier">${esc(label)}${sorted ? (_sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}</button>`
+    : `<span>${esc(label)}</span>`;
   return `<div class="ff-th${extraClass ? ' ' + extraClass : ''}">
-    <span>${esc(label)}</span>
+    ${labelHtml}
     <button class="ff-th-filter-btn${active ? ' ff-th-filter-btn--active' : ''}" onclick="event.stopPropagation(); openColFilterPopover('${col}', this)" title="Filtrer">&#9663;</button>
   </div>`;
+}
+
+// Re-clic sur la colonne déjà triée = inverse le sens. Défauts : date croissante, résultat décroissant.
+function setSort(col: 'result' | 'date') {
+  if (_sort.col === col) _sort = { col, dir: _sort.dir === 'asc' ? 'desc' : 'asc' };
+  else _sort = { col, dir: col === 'date' ? 'asc' : 'desc' };
+  renderPage();
+}
+
+function compareResults(a: CoveringSetResult, b: CoveringSetResult): number {
+  if (_sort.col === 'date') {
+    const ta = resultTimeRange(a)?.[0] ?? Infinity;
+    const tb = resultTimeRange(b)?.[0] ?? Infinity;
+    if (ta !== tb) {
+      if (ta === Infinity) return 1; // sans date : toujours en fin de liste
+      if (tb === Infinity) return -1;
+      return _sort.dir === 'asc' ? ta - tb : tb - ta;
+    }
+    return b.profit - a.profit;
+  }
+  return _sort.dir === 'asc' ? a.profit - b.profit : b.profit - a.profit;
 }
 
 // ===== TABLE ROW =====
@@ -723,7 +788,7 @@ function renderPage() {
   });
   _filteredResults = filtered;
 
-  filtered.sort((a, b) => b.profit - a.profit);
+  filtered.sort(compareResults);
   const visible = filtered.slice(0, _visibleCount);
 
   const summaryEl = document.getElementById('ff-summary');
@@ -737,14 +802,14 @@ function renderPage() {
     <div class="ff-th"></div>
     ${thFilter('method', 'Méthode')}
     ${thFilter('matches', 'Matchs', 'ff-th-center')}
-    <div class="ff-th">Date</div>
+    ${thFilter('date', 'Date', '', true)}
     <div class="ff-th">Événement(s)</div>
     <div class="ff-th">Marchés</div>
     ${thFilter('paris', 'Paris', 'ff-th-center')}
     ${thFilter('cash', 'Cash engagé')}
     ${thFilter('coteOblig', 'Cotes oblig.', 'ff-th-center')}
     ${thFilter('coteAutres', 'Cotes autres', 'ff-th-center')}
-    ${thFilter('result', 'Résultat')}
+    ${thFilter('result', 'Résultat', '', true)}
     <div class="ff-th" title="Résultat équivalent sans le boost (même cover set)">Sans boost</div>
     ${thFilter('taux', 'Taux')}`;
 
@@ -1337,6 +1402,7 @@ window.openColFilterPopover = openColFilterPopover;
 window.closeColFilterPopover = closeColFilterPopover;
 window.clearColFilter = clearColFilter;
 window.clearAllColFilters = clearAllColFilters;
+window.setSort = setSort;
 window.applyColFilterFromPopover = applyColFilterFromPopover;
 
 // ===== DEBUG =====
