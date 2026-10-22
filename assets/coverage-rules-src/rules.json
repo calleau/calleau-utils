@@ -1,0 +1,76 @@
+[
+	{ "sides": ["1", "X2"] },
+	{ "sides": ["X", "12"] },
+	{ "sides": ["2", "1X"] },
+	{ "sides": ["12|1", "12|2"] },
+	{ "sides": ["BTTS|Oui", "BTTS|Non"] },
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "/^Total \\w+$/", "issue": "/^([+-])(\\d+,\\d+)$/", "betType": "Back" },
+			{ "market": "$market", "issue": "$1~+-$2", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "$market", "issue": "$1$2", "betType": "Lay" },
+			{ "market": "$market", "issue": "$1~+-$2", "betType": "Back" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "Asian Handicap", "issue": "/^(1|2) \\(\\+(\\d+,\\d+)\\)$/", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "$1~12 (-$2)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Asian Handicap", "issue": "$1 (+$2)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "$1~12 (-$2)", "betType": "Back" }
+		]
+	},
+	{ "sides": ["Combat à son terme|Oui", "Combat à son terme|Non"] },
+	{ "sides": ["Les deux joueurs gagnent un set|Oui", "Les deux joueurs gagnent un set|Non"] },
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "/^(.+)$/", "issue": "/^(.+)$/", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "$market", "issue": "$1", "betType": "Lay" }
+		]
+	},
+	{ "sides": ["1", "X", "2"] },
+	{
+		"issues": 3,
+		"A": [
+			{ "market": "1X2", "issue": "1", "betType": "Lay" },
+			{ "market": "DC", "issue": "X2", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "1X2", "issue": "X", "betType": "Lay" },
+			{ "market": "DC", "issue": "12", "betType": "Back" }
+		],
+		"C": [
+			{ "market": "1X2", "issue": "2", "betType": "Lay" },
+			{ "market": "DC", "issue": "1X", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Back" }
+		]
+	},
+	{
+		"issues": 3,
+		"A": [
+			{ "market": "Écart de buts", "issue": "/^1 \\((\\d+):(\\d+)\\)$/", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "Écart de buts", "issue": "X ($1:$2)", "betType": "Back" }
+		],
+		"C": [
+			{ "market": "Écart de buts", "issue": "2 ($1:$2)", "betType": "Back" }
+		]
+	},
+	{ "sides": ["Écart de buts|1 (0:1)", "Écart de buts|X (0:1)", "X2"] },
+	{ "sides": ["1X", "Écart de buts|X (1:0)", "Écart de buts|2 (1:0)"] },
+	{ "sides": ["Écart de buts|1 (0:1)", "Écart de buts|X (0:1)", "X", "2"] },
+	{ "sides": ["1", "X", "Écart de buts|X (1:0)", "Écart de buts|2 (1:0)"] }
+]

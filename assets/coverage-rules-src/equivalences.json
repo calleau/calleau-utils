@@ -1,0 +1,26 @@
+{
+	"1": {
+		"complement": "X2",
+		"bets": ["1X2|1", "Asian Handicap|1 (-0,5)"]
+	},
+	"X": {
+		"complement": "12",
+		"bets": ["1X2|X"]
+	},
+	"2": {
+		"complement": "1X",
+		"bets": ["1X2|2", "Asian Handicap|2 (-0,5)"]
+	},
+	"1X": {
+		"complement": "2",
+		"bets": ["DC|1X", "Asian Handicap|1 (+0,5)", "Écart de buts|1 (1:0)"]
+	},
+	"12": {
+		"complement": "X",
+		"bets": ["DC|12"]
+	},
+	"X2": {
+		"complement": "1",
+		"bets": ["DC|X2", "Asian Handicap|2 (+0,5)", "Écart de buts|2 (0:1)"]
+	}
+}

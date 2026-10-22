@@ -133,7 +133,31 @@ function resolveIssueLabel(outcomeName: string, eventKey: string): string {
   if (k === '1') return esc(String(opp['1'] ?? outcomeName));
   if (k === '2') return esc(String(opp['2'] ?? outcomeName));
   if (k === 'X') return 'Nul';
+  const eh = goalDiffLabel(k, String(opp['1'] ?? '1'), String(opp['2'] ?? '2'));
+  if (eh) return esc(eh);
   return esc(outcomeName);
+}
+
+// Écart de buts au format Betxtractor "1 (0:2)" : avance domicile:extérieur. Avec
+// g = buts dom. − buts ext. et t = ext − dom : "1" ⇔ g > t, "X" ⇔ g = t, "2" ⇔ g < t.
+function goalDiffLabel(outcome: string, team1: string, team2: string): string | null {
+  const m = outcome.match(/^([12X]) \((\d+):(\d+)\)$/);
+  if (!m) return null;
+  const t = Number(m[3]) - Number(m[2]);
+  const buts = (n: number) => `${n} but${n > 1 ? 's' : ''}`;
+  // Phrase pour "team marque au moins n buts de plus que l'adversaire"
+  const atLeast = (team: string, n: number) =>
+    n >= 2 ? `${team} gagne de ${buts(n)} ou +`
+    : n === 1 ? `${team} gagne`
+    : n === 0 ? `${team} ne perd pas`
+    : `${team} ne perd pas ou perd de ${buts(-n)} max`;
+  let label: string;
+  if (m[1] === '1') label = atLeast(team1, t + 1);
+  else if (m[1] === '2') label = atLeast(team2, 1 - t);
+  else label = t > 0 ? `${team1} gagne de ${buts(t)} exactement`
+    : t < 0 ? `${team2} gagne de ${buts(-t)} exactement`
+    : 'Nul';
+  return `${label} (${m[2]}:${m[3]})`;
 }
 
 function getLegIndivOdds(leg: LegRef, site: string): number | null {

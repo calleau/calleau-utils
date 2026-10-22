@@ -8,6 +8,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT="${1:-_site}"
 
+# Règles de couverture (assets/coverage-rules-src/ → assets/coverage-rules.json)
+node scripts/build-coverage-rules.mjs
+
 # Build du Magotculteur (Vite)
 (cd utilitaires/magotculteur && npm ci && npm run build)
 
@@ -21,6 +24,7 @@ tar -cf - \
 	--exclude='./.claude' \
 	--exclude='./scripts' \
 	--exclude='./debug' \
+	--exclude='./assets/coverage-rules-src' \
 	--exclude='./Dockerfile' \
 	--exclude='./.dockerignore' \
 	--exclude='node_modules' \

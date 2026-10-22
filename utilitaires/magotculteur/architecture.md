@@ -164,7 +164,7 @@ Pour les exchanges (Betfair/Smarkets), les cotes peuvent être des objets `{ Bac
 
 ### 4.2 Règles de couverture (`coverage-rules.json`)
 
-Le fichier `assets/coverage-rules.json` définit quels paris se couvrent mutuellement. Chaque règle liste des **groupes** (A, B, C) représentant des issues mutuellement exclusives et exhaustives.
+Le fichier `assets/coverage-rules.json` définit quels paris se couvrent mutuellement. Chaque règle liste des **groupes** (A à E, soit 2 à 5 issues) représentant des issues mutuellement exclusives et exhaustives.
 
 ```json
 {
@@ -181,6 +181,19 @@ Le fichier `assets/coverage-rules.json` définit quels paris se couvrent mutuell
 ```
 
 Les marchés et issues supportent les **regex** (`"/^Total \\w+$/"`) et les **templates** (`"$1$2~+-"`) pour des règles génériques (Over/Under, Asian Handicap, etc.).
+
+**Ce fichier est généré** : ne pas l'éditer à la main. Les sources sont dans `assets/coverage-rules-src/`, et `node scripts/build-coverage-rules.mjs` le régénère (lancé aussi par `scripts/build-site.sh`). Le fichier généré reste commité pour le dev et les autres utilitaires qui le lisent (`welcome-bonus-json`).
+
+- `equivalences.json` : issues nommées, avec leurs paris **Back** équivalents et leur complément.
+  ```json
+  "1":  { "complement": "X2", "bets": ["1X2|1", "Asian Handicap|1 (-0,5)"] },
+  "X2": { "complement": "1",  "bets": ["DC|X2", "Asian Handicap|2 (+0,5)", "Écart de buts|2 (0:1)"] }
+  ```
+- `rules.json` : une entrée `{ "sides": [...] }` liste 2 à 5 issues mutuellement exclusives, chacune étant un nom d'issue ou un pari brut `"Marché|Issue"`. Toute autre entrée (regex, templates) est recopiée telle quelle.
+
+Développement d'un côté : Back de ses paris + Lay des paris de son complément (complément déclaré et, pour une règle à 2 issues, l'autre côté). Ex. `{ "sides": ["1", "X2"] }` → A = Back 1X2 1, Back AH 1 (−0,5), Lay DC X2, Lay AH 2 (+0,5), Lay EH 2 (0:1). Le script refuse une issue inconnue, un complément non réciproque ou une règle à 2 issues dont les côtés ne sont pas complémentaires.
+
+**Écart de buts** (handicap européen, format Betxtractor) : issues `1 (a:b)`, `X (a:b)`, `2 (a:b)` où `a:b` = buts d'avance donnés au domicile / à l'extérieur. Avec g = buts dom. − buts ext. et t = b − a : `1` ⇔ g > t, `X` ⇔ g = t, `2` ⇔ g < t. Chaque ligne forme une partition à 3 issues (règle générique par regex). Équivalences : `2 (0:1)` = X2, `1 (1:0)` = 1X. Partitions à 4 issues : `1 (0:1)` / `X (0:1)` / `X` / `2` et `1` / `X` / `X (1:0)` / `2 (1:0)`.
 
 ### 4.3 Les trois méthodes de calcul
 

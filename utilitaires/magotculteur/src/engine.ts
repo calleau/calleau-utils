@@ -286,7 +286,7 @@ function getCoverSets(data: any, eventKey: string, opts: EngineOpts): LegRef[][]
   const seen = new Set<string>();
 
   for (const rule of opts.coverageRules) {
-    const sideKeys = (['A', 'B', 'C'] as const).filter(k => rule[k]);
+    const sideKeys = (['A', 'B', 'C', 'D', 'E'] as const).filter(k => rule[k]);
     if (sideKeys.length < 2) continue;
 
     for (const anchorKey of sideKeys) {
@@ -1195,47 +1195,48 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
             if (!prev || r.profit > prev.profit) bestPerCombo.set(key, r);
           }
         }
+      });
 
-        // Asymmetric (only for multi-match)
-        if (opts.allowAsym && n > 1) {
-          for (let si = 0; si < combo.length; si++) {
-            const ekS = combo[si];
-            const ekCs = combo.filter((_, k) => k !== si);
-            const allSplits = getAsymSplits(data, ekS, opts);
-            // For n≥3: restrict to 2-sided splits to avoid generating impractically
-            // large asymLegsArrays (3-sided splits × 3-sided remaining events → up to 19 bets).
-            const splits = n >= 3
-              ? allSplits.filter(({ combinedGroups }) => combinedGroups.length <= 1)
-              : allSplits;
-            // For n≥3: also restrict remaining events' cover sets to 2-sided only.
-            const coverSetsCs = ekCs.map(ek => {
-              const css = getCoverSets(data, ek, opts);
-              return n >= 3 ? css.filter(cs => cs.length === 2) : css;
+      // Asymmetric (only for multi-match). Independent of the sym cover-set combo above:
+      // it enumerates its own splits, so it runs once per event combo.
+      if (opts.allowAsym && n > 1) {
+        for (let si = 0; si < combo.length; si++) {
+          const ekS = combo[si];
+          const ekCs = combo.filter((_, k) => k !== si);
+          const allSplits = getAsymSplits(data, ekS, opts);
+          // For n≥3: restrict to 2-sided splits to avoid generating impractically
+          // large asymLegsArrays (3-sided splits × 3-sided remaining events → up to 19 bets).
+          const splits = n >= 3
+            ? allSplits.filter(({ combinedGroups }) => combinedGroups.length <= 1)
+            : allSplits;
+          // For n≥3: also restrict remaining events' cover sets to 2-sided only.
+          const coverSetsCs = ekCs.map(ek => {
+            const css = getCoverSets(data, ek, opts);
+            return n >= 3 ? css.filter(cs => cs.length === 2) : css;
+          });
+          if (!splits.length || coverSetsCs.some(s => !s.length)) continue;
+
+          for (const { singleGroup, combinedGroups } of splits) {
+            forEachCoverSetCombo(coverSetsCs, chosenCs => {
+              const csLegs = generateCoveringBets(chosenCs);
+              const asymLegsArray = [
+                singleGroup,
+                ...combinedGroups.map(cg => csLegs.map(cl => [...cg, ...cl])).flat(),
+              ];
+              const asymCoverKey = asymLegsArray
+                .map(group => group.map(l => l.marketName + ':' + l.outcomeName).sort().join('+'))
+                .sort().join('||');
+              const asymResults = trySimultWithBoost(data, asymLegsArray, [ekS, ...ekCs], 'asym', opts);
+              for (const r of asymResults) {
+                const sitesKey = r.bets.map(b => b.site).join('+');
+                const key = comboKey + '|asym|' + si + '|' + asymCoverKey + '|' + r.placement + '|' + sitesKey;
+                const prev = bestPerCombo.get(key);
+                if (!prev || r.profit > prev.profit) bestPerCombo.set(key, r);
+              }
             });
-            if (!splits.length || coverSetsCs.some(s => !s.length)) continue;
-
-            for (const { singleGroup, combinedGroups } of splits) {
-              forEachCoverSetCombo(coverSetsCs, chosenCs => {
-                const csLegs = generateCoveringBets(chosenCs);
-                const asymLegsArray = [
-                  singleGroup,
-                  ...combinedGroups.map(cg => csLegs.map(cl => [...cg, ...cl])).flat(),
-                ];
-                const asymCoverKey = asymLegsArray
-                  .map(group => group.map(l => l.marketName + ':' + l.outcomeName).sort().join('+'))
-                  .sort().join('||');
-                const asymResults = trySimultWithBoost(data, asymLegsArray, [ekS, ...ekCs], 'asym', opts);
-                for (const r of asymResults) {
-                  const sitesKey = r.bets.map(b => b.site).join('+');
-                  const key = comboKey + '|asym|' + si + '|' + asymCoverKey + '|' + r.placement + '|' + sitesKey;
-                  const prev = bestPerCombo.get(key);
-                  if (!prev || r.profit > prev.profit) bestPerCombo.set(key, r);
-                }
-              });
-            }
           }
         }
-      });
+      }
 
       // Asym-light (only for multi-match): enumerate splits, score cheaply, keep top-M
       if (opts.allowAsymLight && n > 1) {

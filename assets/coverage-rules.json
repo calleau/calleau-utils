@@ -3,15 +3,17 @@
 		"issues": 2,
 		"A": [
 			{ "market": "1X2", "issue": "1", "betType": "Back" },
-			{ "market": "DC", "issue": "X2", "betType": "Lay" },
 			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Lay" }
+			{ "market": "DC", "issue": "X2", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Lay" },
+			{ "market": "Écart de buts", "issue": "2 (0:1)", "betType": "Lay" }
 		],
 		"B": [
-			{ "market": "1X2", "issue": "1", "betType": "Lay" },
 			{ "market": "DC", "issue": "X2", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Lay" },
-			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Back" }
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Back" },
+			{ "market": "Écart de buts", "issue": "2 (0:1)", "betType": "Back" },
+			{ "market": "1X2", "issue": "1", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Lay" }
 		]
 	},
 	{
@@ -21,23 +23,25 @@
 			{ "market": "DC", "issue": "12", "betType": "Lay" }
 		],
 		"B": [
-			{ "market": "1X2", "issue": "X", "betType": "Lay" },
-			{ "market": "DC", "issue": "12", "betType": "Back" }
+			{ "market": "DC", "issue": "12", "betType": "Back" },
+			{ "market": "1X2", "issue": "X", "betType": "Lay" }
 		]
 	},
 	{
 		"issues": 2,
 		"A": [
 			{ "market": "1X2", "issue": "2", "betType": "Back" },
-			{ "market": "DC", "issue": "1X", "betType": "Lay" },
 			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Lay" }
+			{ "market": "DC", "issue": "1X", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Lay" },
+			{ "market": "Écart de buts", "issue": "1 (1:0)", "betType": "Lay" }
 		],
 		"B": [
-			{ "market": "1X2", "issue": "2", "betType": "Lay" },
 			{ "market": "DC", "issue": "1X", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Lay" },
-			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Back" }
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Back" },
+			{ "market": "Écart de buts", "issue": "1 (1:0)", "betType": "Back" },
+			{ "market": "1X2", "issue": "2", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Lay" }
 		]
 	},
 	{
@@ -49,7 +53,6 @@
 		"B": [
 			{ "market": "12", "issue": "2", "betType": "Back" },
 			{ "market": "12", "issue": "1", "betType": "Lay" }
-		
 		]
 	},
 	{
@@ -59,8 +62,8 @@
 			{ "market": "BTTS", "issue": "Non", "betType": "Lay" }
 		],
 		"B": [
-			{ "market": "BTTS", "issue": "Oui", "betType": "Lay" },
-			{ "market": "BTTS", "issue": "Non", "betType": "Back" }
+			{ "market": "BTTS", "issue": "Non", "betType": "Back" },
+			{ "market": "BTTS", "issue": "Oui", "betType": "Lay" }
 		]
 	},
 	{
@@ -120,9 +123,10 @@
 		"issues": 3,
 		"A": [
 			{ "market": "1X2", "issue": "1", "betType": "Back" },
-			{ "market": "DC", "issue": "X2", "betType": "Lay" },
 			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Lay" }
+			{ "market": "DC", "issue": "X2", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Lay" },
+			{ "market": "Écart de buts", "issue": "2 (0:1)", "betType": "Lay" }
 		],
 		"B": [
 			{ "market": "1X2", "issue": "X", "betType": "Back" },
@@ -130,9 +134,10 @@
 		],
 		"C": [
 			{ "market": "1X2", "issue": "2", "betType": "Back" },
-			{ "market": "DC", "issue": "1X", "betType": "Lay" },
 			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Back" },
-			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Lay" }
+			{ "market": "DC", "issue": "1X", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Lay" },
+			{ "market": "Écart de buts", "issue": "1 (1:0)", "betType": "Lay" }
 		]
 	},
 	{
@@ -152,6 +157,90 @@
 			{ "market": "DC", "issue": "1X", "betType": "Back" },
 			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Lay" },
 			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Back" }
+		]
+	},
+	{
+		"issues": 3,
+		"A": [
+			{ "market": "Écart de buts", "issue": "/^1 \\((\\d+):(\\d+)\\)$/", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "Écart de buts", "issue": "X ($1:$2)", "betType": "Back" }
+		],
+		"C": [
+			{ "market": "Écart de buts", "issue": "2 ($1:$2)", "betType": "Back" }
+		]
+	},
+	{
+		"issues": 3,
+		"A": [
+			{ "market": "Écart de buts", "issue": "1 (0:1)", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "Écart de buts", "issue": "X (0:1)", "betType": "Back" }
+		],
+		"C": [
+			{ "market": "DC", "issue": "X2", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Back" },
+			{ "market": "Écart de buts", "issue": "2 (0:1)", "betType": "Back" },
+			{ "market": "1X2", "issue": "1", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 3,
+		"A": [
+			{ "market": "DC", "issue": "1X", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Back" },
+			{ "market": "Écart de buts", "issue": "1 (1:0)", "betType": "Back" },
+			{ "market": "1X2", "issue": "2", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "Écart de buts", "issue": "X (1:0)", "betType": "Back" }
+		],
+		"C": [
+			{ "market": "Écart de buts", "issue": "2 (1:0)", "betType": "Back" }
+		]
+	},
+	{
+		"issues": 4,
+		"A": [
+			{ "market": "Écart de buts", "issue": "1 (0:1)", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "Écart de buts", "issue": "X (0:1)", "betType": "Back" }
+		],
+		"C": [
+			{ "market": "1X2", "issue": "X", "betType": "Back" },
+			{ "market": "DC", "issue": "12", "betType": "Lay" }
+		],
+		"D": [
+			{ "market": "1X2", "issue": "2", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "2 (-0,5)", "betType": "Back" },
+			{ "market": "DC", "issue": "1X", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "1 (+0,5)", "betType": "Lay" },
+			{ "market": "Écart de buts", "issue": "1 (1:0)", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 4,
+		"A": [
+			{ "market": "1X2", "issue": "1", "betType": "Back" },
+			{ "market": "Asian Handicap", "issue": "1 (-0,5)", "betType": "Back" },
+			{ "market": "DC", "issue": "X2", "betType": "Lay" },
+			{ "market": "Asian Handicap", "issue": "2 (+0,5)", "betType": "Lay" },
+			{ "market": "Écart de buts", "issue": "2 (0:1)", "betType": "Lay" }
+		],
+		"B": [
+			{ "market": "1X2", "issue": "X", "betType": "Back" },
+			{ "market": "DC", "issue": "12", "betType": "Lay" }
+		],
+		"C": [
+			{ "market": "Écart de buts", "issue": "X (1:0)", "betType": "Back" }
+		],
+		"D": [
+			{ "market": "Écart de buts", "issue": "2 (1:0)", "betType": "Back" }
 		]
 	}
 ]
