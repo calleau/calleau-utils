@@ -30,7 +30,6 @@ Tout le traitement se fait **côté client** : aucune donnée n'est envoyée à 
 magotculteur/
 ├── index.html              # Point d'entrée HTML, handlers onclick en inline
 ├── magotculteur.css        # Styles de l'application
-├── magotculteur.js         # ⚠ Ancien fichier JS (conservé, non utilisé en dev/build)
 │
 ├── src/                    # Sources TypeScript
 │   ├── types.ts            # Interfaces partagées entre engine, worker et app
