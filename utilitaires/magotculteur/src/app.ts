@@ -126,16 +126,21 @@ function miseTag(type: 'fb' | 'cash'): string {
 }
 
 function resolveIssueLabel(outcomeName: string, eventKey: string): string {
+  return esc(issueLabelText(outcomeName, eventKey));
+}
+
+// Version texte brut (non échappée) de resolveIssueLabel.
+function issueLabelText(outcomeName: string, eventKey: string): string {
   const ev = _data?.[eventKey];
   const opp = ev?.opponents;
-  if (!opp) return esc(outcomeName);
+  if (!opp) return outcomeName;
   const k = outcomeName.trim();
-  if (k === '1') return esc(String(opp['1'] ?? outcomeName));
-  if (k === '2') return esc(String(opp['2'] ?? outcomeName));
+  if (k === '1') return String(opp['1'] ?? outcomeName);
+  if (k === '2') return String(opp['2'] ?? outcomeName);
   if (k === 'X') return 'Nul';
   const eh = goalDiffLabel(k, String(opp['1'] ?? '1'), String(opp['2'] ?? '2'));
-  if (eh) return esc(eh);
-  return esc(outcomeName);
+  if (eh) return eh;
+  return outcomeName;
 }
 
 // Écart de buts au format Betxtractor "1 (0:2)" : avance domicile:extérieur. Avec
@@ -434,57 +439,48 @@ function buildCouvSeqUrl(r: CoveringSetResult): string {
   return '../couv-seq/index.html?s=' + encoded;
 }
 
-// Build a URL pointing to calc-couverture, avec une issue par bet (principal
-// fixé + covers). Format : ?s=<LZString.compressToEncodedURIComponent(JSON)>.
+// Build a URL pointing to calc-couverture, avec une issue par bet, quel que
+// soit son rôle : un résultat peut contenir plusieurs principaux (freebets,
+// groupe obligatoire, ou tous les paris en cash simultané) et zéro cover.
+// Le premier principal est fixé à sa mise, la distribution recalcule les autres.
+// Format : ?s=<LZString.compressToEncodedURIComponent(JSON)>.
 // Cf. utilitaires/calc-couverture/URL_STATE.md pour le schéma détaillé.
 //
 // Note : la mise en forme est un "best-effort" pour la vérification manuelle.
 // Le modèle "1 bet = 1 issue" reflète bien la couverture (chaque issue = un
-// scénario mutuellement exclusif). Pour un principal freebet, le return montré
-// dans calc-couverture sera surestimé du montant du stake (freebet ne retourne
-// pas la mise) — le user peut le lire via le label de l'issue.
+// scénario mutuellement exclusif). Pour un pari freebet, la cote transmise est
+// diminuée de 1 pour que le retour affiché exclue la mise (non rendue).
 function buildCalcCouvUrl(r: CoveringSetResult): string {
-  const principal = r.bets.find(b => b.role === 'principal');
-  if (!principal) return '';
-  const covers = r.bets.filter(b => b.role === 'cover');
+  if (!r.bets.length) return '';
+  const fixedIdx = Math.max(0, r.bets.findIndex(b => b.role === 'principal'));
 
   // Globaux : activer commissions, détails, sites, labels d'issue.
   const g = { cm: 1, d: 1, ds: 1, il: 1 };
 
-  const issues: any[] = [];
-
-  // Issue 1 (fixée) : le principal (Back)
-  {
-    const commPct = extractCommissionPct(principal);
-    const iss: any = { f: 1 };
-    const typeLabel = principal.betType === 'fb' ? 'Freebet' : 'Cash';
-    iss.l = `Principal (${typeLabel}) — ${fmtNumFr(principal.stake)}€ @ ${fmtNumFr(principal.odds)}`;
+  const issues = r.bets.map((b, i) => {
+    const isLay = b.liability != null || b.legs[0]?.betType === 'Lay';
+    const commPct = extractCommissionPct(b);
+    const legsLabel = b.legs
+      .map(l => `${l.marketName} ${issueLabelText(l.outcomeName, l.eventKey)}`)
+      .join(' + ');
+    const typeLabel = isLay ? 'Lay' : b.betType === 'fb' ? 'Freebet' : 'Cash';
+    const realOdds = b.betType === 'fb' ? ` (cote réelle ${fmtNumFr(b.odds)})` : '';
+    const iss: any = { l: `${typeLabel} · ${legsLabel}${realOdds}` };
+    // Freebet : la mise n'est pas rendue, le retour vaut stake × (cote − 1).
+    const odds = b.betType === 'fb' ? b.odds - 1 : b.odds;
     const detail: any = {
-      w: principal.site,
-      o: [fmtNumFr(principal.odds)],
-      s: fmtNumFr(principal.stake),
-    };
-    if (commPct > 0) detail.m = [fmtNumFr(commPct)];
-    iss.dt = [detail];
-    issues.push(iss);
-  }
-
-  // Autres issues : les couvertures (Back ou Lay)
-  for (const c of covers) {
-    const isLay = c.legs[0]?.betType === 'Lay';
-    const commPct = extractCommissionPct(c);
-    const iss: any = {};
-    const typeLabel = isLay ? 'Lay' : 'Back opp.';
-    iss.l = `Couv. ${typeLabel} @ ${fmtNumFr(c.odds)}`;
-    const detail: any = {
-      w: c.site,
-      o: [fmtNumFr(c.odds)],
+      w: b.site,
+      o: [fmtNumFr(odds)],
     };
     if (isLay) detail.t = 'l';
     if (commPct > 0) detail.m = [fmtNumFr(commPct)];
+    if (i === fixedIdx) {
+      iss.f = 1;
+      detail.s = fmtNumFr(b.stake);
+    }
     iss.dt = [detail];
-    issues.push(iss);
-  }
+    return iss;
+  });
 
   const state = { v: 1, g, c: [{ i: issues }] };
   const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(state));
