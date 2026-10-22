@@ -53,6 +53,7 @@ Tous les champs sont **optionnels**. La présence d'une clé signifie « non-dé
 | `fg` | `1` | `0` | Bouton « + Gain fixe » visible |
 | `il` | `1` | `0` | Ligne d'intitulé au-dessus des issues activée |
 | `ds` | `1` | `0` | Colonne « Site » par détail activée |
+| `lk` | `1` | `0` | « Lier issues » activé (bouton de lien par mise + montant total des mises liées) |
 | `ld` | `1` | `0` | Répartition de la perte activée |
 | `lv` | string | `"50"` | Coefficient de répartition en % (0-100). Format français. |
 
@@ -63,6 +64,7 @@ Tous les champs sont **optionnels**. La présence d'une clé signifie « non-dé
 | `n` | number | `1` | Nombre de colonnes de cotes |
 | `t` | object (`Total`) | `{}` | État de la ligne Total (voir ci-dessous). Omis si tous les champs à défaut. |
 | `i` | array<Issue> | `[]` | Liste des issues. Minimum implicite = 2 à la reconstruction. |
+| `la` | string | `""` | « Lier issues » : total visé des mises liées (format français, ex. `"10"`). Omis si vide. |
 
 ### `t` — ligne Total
 
@@ -96,6 +98,7 @@ Trois types, discriminés par `t` :
 | `b` | array<string> | tous `""` | Boosts en % par colonne. Longueur = `c.n`. Omis si toutes vides. |
 | `s` | string | `""` | Mise (Back stake). Format français. L'engagement Lay est **dérivé** de la mise + cote — ne pas stocker. |
 | `x` | `1` | `0` | Fixe-détail coché. **Omis** quand l'issue est fixée (`i[k].f=1`) car auto-dérivé. |
+| `k` | `1` | `0` | Mise liée (« Lier issues »). |
 
 #### Type `"f"` (Gain fixe)
 

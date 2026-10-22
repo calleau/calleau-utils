@@ -197,6 +197,8 @@ function buildDelDetailCell(issueId, detailId) {
 	`);
 }
 
+const SVG_LINK = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>';
+
 function buildStakeCell(issueId, detailId, defaultStake = "") {
 	const $cell = $(`<div class='cell' data-stake data-issueid="${issueId}" data-detailid="${detailId}"></div>`);
 	const $sg = $("<div class='stake-input-group back-stake'><span class='stake-label'>Mise</span></div>")
@@ -204,7 +206,17 @@ function buildStakeCell(issueId, detailId, defaultStake = "") {
 	const $lg = $("<div class='stake-input-group liability'><span class='stake-label'>Engagement</span></div>")
 		.append(buildNumberField("", "", 0.01, "€"));
 	$cell.append($sg).append($lg);
+	// Bouton (pas un input : setStake écrit dans le 1er input de la cellule et
+	// "[data-stake] input" déclenche un recalcul de mise).
+	$cell.append(`<button type="button" class="link-toggle js-link-toggle" aria-pressed="false" title="Lier cette mise">${SVG_LINK}</button>`);
 	return $cell;
+}
+
+/* "Lier issues" : marque/démarque un détail comme lié (état porté par
+   data-linked sur la cellule Mise → survit à la duplication via outerHTML). */
+function setLinked($stakeCell, on) {
+	$stakeCell.attr("data-linked", on ? "1" : null);
+	$stakeCell.find(".js-link-toggle").attr("aria-pressed", on ? "true" : "false");
 }
 
 function buildFixeDetailCell(issueId, detailId) {
@@ -404,6 +416,11 @@ function buildCalcCardHTML(calcId) {
 			<button class="btn btn-primary js-add-row"><svg class="btn-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-560h560v-240H200v240Zm-80 400v-720h720v720H680v-80h80v-240H200v240h80v80H120ZM440-80v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80Z"/></svg>Issue</button>
 			<button class="btn btn-ghost js-duplicate-calc"><svg class="btn-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="15" x2="15" y1="12" y2="18"/><line x1="12" x2="18" y1="15" y2="15"/><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Dupliquer</button>
 			<button class="btn btn-ghost js-delete-calc"><svg class="btn-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer</button>
+		</div>
+		<div class="link-amount-row" hidden>
+			<span class="link-amount-label">${SVG_LINK}Total des mises liées</span>
+			<div class="link-amount-field"></div>
+			<span class="link-amount-info"></span>
 		</div>
 	</section>
 	`;
@@ -843,6 +860,7 @@ function initCalculator($card, opts = {}) {
 					stake: stakeVal, engagement: engagementVal,
 					fixedGainValue: 0,
 					isFixedDetail,
+					isLinked: $stakeCell.attr("data-linked") === "1",
 					$stakeCell, $oddsTotalCell, $profitCell,
 				});
 			});
@@ -878,6 +896,28 @@ function initCalculator($card, opts = {}) {
 
 			issues.push({ issueId, $label, $fixeRadio, $distCheck, $profitTotal, isFixed, isDist, details });
 		});
+
+		// "Lier issues" : la somme des mises des détails liés doit valoir (au
+		// moins) le montant saisi. Quand c'est actif, ce lien sert d'ancrage à la
+		// place de la ligne Fixe (issue ou Total), qui est ignorée.
+		const linkEnabled = $grid.hasClass("with-link");
+		const linkAmount = readNum($card.find(".link-amount-row .num input").first());
+		const linkedDetails = [];
+		for (const issue of issues) {
+			for (const d of issue.details) {
+				if (d.isLinked && d.hasValue && !d.isFixedGain) linkedDetails.push(d);
+			}
+		}
+		const linkActive = linkEnabled && linkAmount > 0 && linkedDetails.length > 0;
+		if (linkActive) {
+			for (const issue of issues) {
+				if (!issue.isFixed) continue;
+				issue.isFixed = false;
+				// Fixe-détails cochés d'office par la radio Fixe de l'issue : libérés.
+				for (const d of issue.details) if (!d.isFixedGain) d.isFixedDetail = false;
+			}
+		}
+		$grid.toggleClass("link-active", linkActive);
 
 		const fmtBrut = (v) => (v !== null && isFinite(v)) ? v.toFixed(2).replace(".", ",") : "—";
 		const fmtNet  = (v) => (v !== null && isFinite(v)) ? v.toFixed(3).replace(".", ",") : "—";
@@ -1081,7 +1121,91 @@ function initCalculator($card, opts = {}) {
 		let K = null, S = null;
 		let errorMsg = null;
 
-		if (fixedIssue) {
+		// Mises cibles des issues non fixées pour un ancrage (K, S), sans toucher
+		// au DOM. Utilisé par la redistribution et par la résolution du lien.
+		function planStakes(K, S) {
+			const plan = new Map();
+			// Répartition de la perte : on interpole entre K (profit concentré, p=0)
+			// et S (équilibrage des profits totaux, p=1). Si TOUTES les lignes sont
+			// distribuées (sigmaN = 0), la répartition n'a pas de sens (pas de ligne
+			// non-distribuée vers laquelle "déplacer" du profit) → on garde K.
+			const lossP = sigmaN > 0 ? getLossDistribution() : 0;
+			for (const it of eligibles) {
+				if (it.isFixed) continue;
+				const targetReturn = it.isDist ? ((1 - lossP) * K + lossP * S) : S;
+
+				if (it.details.length === 1) {
+					const d = it.details[0];
+					plan.set(d, d.isLay && d.layReturnFactor > 0
+						? targetReturn / d.layReturnFactor
+						: targetReturn / d.oddsTotalNet);
+					continue;
+				}
+				// Contribution "win return" de chaque détail FIXÉ :
+				//   - Gain fixe : sa valeur littérale
+				//   - Back fixe : stake × cote_net
+				//   - Lay  fixe : stake × layReturnFactor (= retour quand le Lay gagne)
+				let sumFixedReturn = 0;
+				const nonFixed = [];
+				for (const d of it.details) {
+					if (!d.hasValue) continue;
+					if (d.isFixedDetail) {
+						if (d.isFixedGain) sumFixedReturn += d.fixedGainValue;
+						else if (d.isLay) sumFixedReturn += d.stake * d.layReturnFactor;
+						else sumFixedReturn += d.stake * d.oddsTotalNet;
+					} else {
+						nonFixed.push(d);
+					}
+				}
+				// Les détails non-fixes (Back ET Lay) se partagent le retour restant.
+				const eligibleNonFixed = nonFixed.filter(d => !d.isFixedGain);
+				if (eligibleNonFixed.length === 0) continue;
+				const perDetail = (targetReturn - sumFixedReturn) / eligibleNonFixed.length;
+				for (const d of eligibleNonFixed) {
+					const denom = d.isLay ? d.layReturnFactor : d.oddsTotalNet;
+					plan.set(d, denom > 0 ? Math.max(0, perDetail / denom) : 0);
+				}
+			}
+			return plan;
+		}
+
+		if (linkActive) {
+			// Tout est affine en S (K, retours cibles, mises) : on évalue la somme
+			// des mises liées pour deux S d'essai et on résout linéairement.
+			if (sigmaD > 0) {
+				const kOf = (s) => (s * (1 - sigmaN) - constSum) / sigmaD;
+				const linkedStakes = (s) => {
+					const plan = planStakes(kOf(s), s);
+					return linkedDetails.map(d => (plan.has(d) ? plan.get(d) : d.stake));
+				};
+				const sum = (arr) => arr.reduce((a, v) => a + v, 0);
+				// Somme telle qu'affichée (mises arrondies au centime).
+				const roundedSum = (arr) => sum(arr.map(v => Math.round(v * 100) / 100));
+				const S1 = 100, S2 = 200;
+				const f1 = sum(linkedStakes(S1)), f2 = sum(linkedStakes(S2));
+				if (Math.abs(f2 - f1) < 1e-9) {
+					errorMsg = "Lier issues : les mises liées ne varient pas avec l'équilibrage (détails tous fixés ?).";
+				} else {
+					const sFor = (target) => S1 + (target - f1) * (S2 - S1) / (f2 - f1);
+					// Les mises affichées sont arrondies au centime : leur somme doit
+					// valoir AU MOINS le montant. Si l'arrondi tombe en dessous, on
+					// remonte la cible par pas de 0,05 centime (la somme arrondie est
+					// croissante) → plus petite somme ≥ montant.
+					let target = linkAmount;
+					for (let i = 0; i < 400 && roundedSum(linkedStakes(sFor(target))) < linkAmount - 1e-9; i++) {
+						target += 0.0005;
+					}
+					S = sFor(target);
+					K = kOf(S);
+					if (!(S > 0) || !isFinite(S)) {
+						errorMsg = "Lier issues : montant impossible à atteindre avec ces cotes.";
+						K = S = null;
+					}
+				}
+			} else if (eligibles.length > 0) {
+				errorMsg = "Aucune ligne en distribution — cochez au moins une ligne.";
+			}
+		} else if (fixedIssue) {
 			if (fixedIssue.isDist) {
 				K = fixedIssue.sumInvested * fixedIssue.effectiveOddsNet;
 				const denom = 1 - sigmaN;
@@ -1099,82 +1223,13 @@ function initCalculator($card, opts = {}) {
 		}
 
 		if (redistribute && !errorMsg && K !== null && S !== null) {
-			for (const it of eligibles) {
-				if (it.isFixed) continue;
-				// Répartition de la perte : on interpole entre K (profit concentré, p=0)
-				// et S (équilibrage des profits totaux, p=1). Si TOUTES les lignes sont
-				// distribuées (sigmaN = 0), la répartition n'a pas de sens (pas de ligne
-				// non-distribuée vers laquelle "déplacer" du profit) → on garde K.
-				const lossP = sigmaN > 0 ? getLossDistribution() : 0;
-				const targetReturn = it.isDist ? ((1 - lossP) * K + lossP * S) : S;
-
-				if (it.details.length === 1) {
-					const d = it.details[0];
-					const target = d.isLay && d.layReturnFactor > 0
-						? targetReturn / d.layReturnFactor
-						: targetReturn / d.oddsTotalNet;
-					setStake(d.$stakeCell, target);
-					if (d.isLay && d.oddsTotal > 1) {
-						const newEng = target * (d.oddsTotal - 1);
-						setLiability(d.$stakeCell, newEng);
-						d.engagement = newEng;
-						it.sumInvested = newEng;
-						it.returnIfIssueLoses = target * d.layNetWinFactor + newEng;
-					} else {
-						it.sumInvested = target;
-						it.returnIfIssueWins = target * d.oddsTotalNet;
-					}
-					d.stake = target;
-				} else {
-					// Contribution "win return" de chaque détail FIXÉ :
-					//   - Gain fixe : sa valeur littérale
-					//   - Back fixe : stake × cote_net
-					//   - Lay  fixe : stake × layReturnFactor (= retour quand le Lay gagne)
-					let sumFixedReturn = 0;
-					const nonFixed = [];
-					for (const d of it.details) {
-						if (!d.hasValue) continue;
-						if (d.isFixedDetail) {
-							if (d.isFixedGain) sumFixedReturn += d.fixedGainValue;
-							else if (d.isLay) sumFixedReturn += d.stake * d.layReturnFactor;
-							else sumFixedReturn += d.stake * d.oddsTotalNet;
-						} else {
-							nonFixed.push(d);
-						}
-					}
-					// Les détails non-fixes (Back ET Lay) se partagent le retour restant.
-					const eligibleNonFixed = nonFixed.filter(d => !d.isFixedGain);
-					if (eligibleNonFixed.length > 0) {
-						const remaining = targetReturn - sumFixedReturn;
-						const perDetail = remaining / eligibleNonFixed.length;
-						for (const d of eligibleNonFixed) {
-							const denom = d.isLay ? d.layReturnFactor : d.oddsTotalNet;
-							const stake = denom > 0 ? Math.max(0, perDetail / denom) : 0;
-							setStake(d.$stakeCell, stake);
-							d.stake = stake;
-						}
-					}
-
-					let nsi = 0, nrw = 0, nrl = 0;
-					for (const d of it.details) {
-						if (!d.hasValue) continue;
-						if (d.isFixedGain) {
-							nrw += d.fixedGainValue;
-						} else if (d.isLay) {
-							const liability = d.engagement || d.stake * Math.max(0, d.oddsTotal - 1);
-							nsi += liability;
-							nrl += d.stake + liability;
-						} else {
-							nsi += d.stake;
-							nrw += d.stake * d.oddsTotalNet;
-						}
-					}
-					it.sumInvested = nsi;
-					it.returnIfIssueWins = nrw;
-					it.returnIfIssueLoses = nrl;
-				}
+			// Les sommes par issue (sumInvested, retours, engagements Lay) sont
+			// recalculées juste après, à partir de d.stake.
+			for (const [d, stake] of planStakes(K, S)) {
+				setStake(d.$stakeCell, stake);
+				d.stake = stake;
 			}
-			if (!totalIsFixed) {
+			if (!totalIsFixed || linkActive) {
 				setStake($totalStake, S);
 			}
 		}
@@ -1307,6 +1362,15 @@ function initCalculator($card, opts = {}) {
 			else $totalProfitTotal.text("—");
 		}
 
+		if (linkEnabled) {
+			const n = linkedDetails.length;
+			const linkedTotal = linkedDetails.reduce((a, d) => a + Math.round((d.stake || 0) * 100) / 100, 0);
+			$card.find(".link-amount-info").text(n === 0
+				? "Cliquez sur l'icône de lien d'une mise pour la lier."
+				: `${n} mise${n > 1 ? "s" : ""} liée${n > 1 ? "s" : ""} · total ${linkedTotal.toFixed(DEC).replace(".", ",")} €`
+					+ (linkActive ? " · remplace la ligne Fixe" : ""));
+		}
+
 		if (errorMsg) { $err.text(errorMsg).prop("hidden", false); }
 		else { $err.prop("hidden", true).text(""); }
 
@@ -1414,6 +1478,14 @@ function initCalculator($card, opts = {}) {
 	// Card-level button bindings
 	$card.find(".js-add-col").on("click", addOddsColumn);
 	$card.find(".js-add-row").on("click", addIssue);
+
+	// Lier issues : bouton par mise + montant cible sous les boutons de la card
+	$grid.on("click", ".js-link-toggle", function () {
+		const $cell = $(this).closest("[data-stake]");
+		setLinked($cell, $cell.attr("data-linked") !== "1");
+		recomputeAll(true);
+	});
+	$card.on("input cote:changed", ".link-amount-row .num input", () => recomputeAll(true));
 
 	// Delegated handlers on the grid
 	$grid.on("click", ".js-del-issue", function () {
@@ -1561,6 +1633,7 @@ function initCalculator($card, opts = {}) {
 		// Instead, we rely on the fact that the original handlers were on .num elements via $el.on(...) — which clone() does NOT preserve.
 		// We need to re-bind. We do it by replacing every .num wrapper with a freshly built one carrying the current value.
 		rebindClonedNumberFields($grid);
+		rebindClonedNumberFields($card.find(".link-amount-row"));
 		bindOddsInputs();
 		refreshMultiDetailsClass();
 		refreshDeleteButtons();
@@ -1571,6 +1644,7 @@ function initCalculator($card, opts = {}) {
 		applyGridTemplate();
 		hydrate();
 		renumberColumnHeaders();
+		$card.find(".link-amount-field").append(buildNumberField("", "", 0.01, "€"));
 
 		addOddsColumn();
 		addIssue();
@@ -1587,6 +1661,10 @@ function initCalculator($card, opts = {}) {
 	$grid.toggleClass("with-fixed-gain", $("#fixed-gain-enabled").is(":checked"));
 	$grid.toggleClass("with-issue-labels", $("#issue-labels-enabled").is(":checked"));
 	$grid.toggleClass("with-detail-sites", $("#detail-sites-enabled").is(":checked"));
+	const linkOn = $("#link-enabled").is(":checked");
+	$grid.toggleClass("with-link", linkOn);
+	$card.find(".link-amount-row").prop("hidden", !linkOn);
+	if (linkOn) recomputeAll(false);
 
 	return api;
 }
@@ -1732,6 +1810,7 @@ function collectCalcState($card) {
 				mise: ($stakeCell.find(".back-stake input").first().val() || "").toString(),
 				engagement: ($stakeCell.find(".liability input").first().val() || "").toString(),
 				fixeDetail: $fixeDetailInput.is(":checked"),
+				linked: $stakeCell.attr("data-linked") === "1",
 				profit: ($profitCell.text() || "").trim(),
 			});
 		});
@@ -1761,6 +1840,7 @@ function collectCalcState($card) {
 			hasMultiDetails: $grid.hasClass("has-multi-details"),
 		},
 		issues,
+		linkAmount: ($card.find(".link-amount-row .num input").first().val() || "").toString(),
 		total: {
 			mise: ($totalStake.find("input").first().val() || "").toString(),
 			fixe: $totalFixe.is(":checked"),
@@ -1967,6 +2047,30 @@ function initGlobalSettings() {
 		});
 	})();
 
+	// Lier issues : bouton de lien par mise + montant total des mises liées par calc
+	(function () {
+		const KEY_ON = "calcCouv.linkEnabled";
+		const $enabled = $("#link-enabled");
+
+		function apply() {
+			const on = $enabled.is(":checked");
+			$(".calc-card").each(function () {
+				const calc = $(this).data("calc");
+				if (!calc) return;
+				$(this).find(".sb-grid").toggleClass("with-link", on);
+				$(this).find(".link-amount-row").prop("hidden", !on);
+				calc.recomputeAll(true);
+			});
+		}
+
+		$enabled.prop("checked", localStorage.getItem(KEY_ON) === "true");
+
+		$enabled.on("change", function () {
+			localStorage.setItem(KEY_ON, String($(this).is(":checked")));
+			apply();
+		});
+	})();
+
 	// Detail sites toggle (contenteditable column per detail)
 	(function () {
 		const KEY_ON = "calcCouv.detailSitesEnabled";
@@ -2023,6 +2127,7 @@ function serializeGlobalsForUrl() {
 	if ($("#fixed-gain-enabled").is(":checked")) g.fg = 1;
 	if ($("#issue-labels-enabled").is(":checked")) g.il = 1;
 	if ($("#detail-sites-enabled").is(":checked")) g.ds = 1;
+	if ($("#link-enabled").is(":checked")) g.lk = 1;
 	if ($("#loss-dist-enabled").is(":checked")) g.ld = 1;
 	const lv = ($("#loss-dist-default").val() || "").trim();
 	if (lv && lv !== "50") g.lv = lv;
@@ -2057,8 +2162,10 @@ function serializeDetailForUrl($grid, issueId, detailId, colIds, $primary, isIss
 	if (m.some(x => x !== "")) d.m = m;
 	if (b.some(x => x !== "")) d.b = b;
 
-	const stake = ($grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"] .back-stake input`).first().val() || "").trim();
+	const $stakeCell = $grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+	const stake = ($stakeCell.find(".back-stake input").first().val() || "").trim();
 	if (stake) d.s = stake;
+	if ($stakeCell.attr("data-linked") === "1") d.k = 1;
 
 	// x (fixed-detail) : redondant quand l'issue est fixée (auto-coché) → on omet.
 	if (!isIssueFixed) {
@@ -2113,6 +2220,9 @@ function serializeCalcForUrl($card) {
 	});
 	if (issues.length > 0) calc.i = issues;
 
+	const linkAmount = ($card.find(".link-amount-row .num input").first().val() || "").trim();
+	if (linkAmount) calc.la = linkAmount;
+
 	return calc;
 }
 
@@ -2139,6 +2249,7 @@ function applyGlobalsFromUrl(g) {
 	setToggle("fixed-gain-enabled", g.fg, "calcCouv.fixedGainEnabled");
 	setToggle("issue-labels-enabled", g.il, "calcCouv.issueLabelsEnabled");
 	setToggle("detail-sites-enabled", g.ds, "calcCouv.detailSitesEnabled");
+	setToggle("link-enabled", g.lk, "calcCouv.linkEnabled");
 	setToggle("loss-dist-enabled", g.ld, "calcCouv.lossDistEnabled");
 	if (g.cv) { $("#commission-default").val(g.cv); localStorage.setItem("calcCouv.commissionDefault", g.cv); }
 	if (g.lv) { $("#loss-dist-default").val(g.lv); localStorage.setItem("calcCouv.lossDistDefault", g.lv); }
@@ -2173,7 +2284,9 @@ function applyDetailFromUrl($grid, issueId, detailId, d) {
 		$cell.find(".boost-input").first().val((d.b && d.b[k]) || "");
 	}
 
-	$grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"] .back-stake input`).first().val(d.s || "");
+	const $stakeCell = $grid.find(`[data-stake][data-issueid="${issueId}"][data-detailid="${detailId}"]`);
+	$stakeCell.find(".back-stake input").first().val(d.s || "");
+	setLinked($stakeCell, !!d.k);
 	$grid.find(`[data-fixedetail][data-issueid="${issueId}"][data-detailid="${detailId}"] input`).prop("checked", !!d.x);
 }
 
@@ -2253,6 +2366,8 @@ function applyCalcFromUrl($card, calcData) {
 		});
 	});
 
+	$card.find(".link-amount-row .num input").first().val(calcData.la || "");
+
 	// Total row : mise + dist (fixe déjà appliquée plus haut)
 	const $totalLabel = $grid.find(".total-label");
 	$totalLabel.nextAll("[data-stake]").first().find("input").first().val(t.s || "");
@@ -2328,7 +2443,7 @@ function bindUrlSync() {
 	$(document).on("click",
 		".js-add-row, .js-add-col, .js-del-issue, .js-del-col, .js-del-detail, "
 		+ ".js-add-detail, .js-add-fixed-gain, .js-duplicate-calc, .js-delete-calc, "
-		+ ".type-toggle, #add-calculator",
+		+ ".type-toggle, .js-link-toggle, #add-calculator",
 		() => setTimeout(scheduleUrlSync, 100));
 	_urlSyncEnabled = true;
 }

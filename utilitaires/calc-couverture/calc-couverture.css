@@ -905,3 +905,56 @@
 .cc-debug-dl-btn:hover {
 	background: color-mix(in srgb, var(--color-pos, #16a34a) 10%, transparent);
 }
+/* ===== Lier issues ===== */
+/* Bouton de lien dans la cellule Mise : visible seulement si le paramètre
+   global est actif. Enfoncé (aria-pressed) = mise liée. */
+.link-toggle {
+	display: none;
+	align-self: flex-end;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	place-items: center;
+	border: 1px solid var(--color-divider);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-muted);
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sb-grid.with-link .link-toggle { display: grid; }
+.link-toggle:hover { border-color: var(--c-primary); color: var(--c-primary); }
+.link-toggle[aria-pressed="true"] {
+	background: var(--color-accent-100);
+	color: var(--color-accent-700);
+	border-color: var(--color-accent-600);
+}
+
+/* Montant cible des mises liées, sous la ligne de boutons de la card */
+.link-amount-row {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+	margin-top: 0.75rem;
+}
+.link-amount-row[hidden] { display: none; }
+.link-amount-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-muted);
+}
+.link-amount-field .num input { width: 6rem; }
+.link-amount-info {
+	flex-basis: 100%;
+	text-align: right;
+	font-size: 12px;
+	color: var(--color-muted);
+}
+
+/* Lien actif : la ligne Fixe est ignorée → radios Fixe atténuées */
+.sb-grid.link-active .radio.fixe { opacity: 0.35; }

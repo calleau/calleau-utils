@@ -109,7 +109,8 @@ Le calcul est monolithique, en passes successives sur le même tableau `issues` 
    - Si une issue est fixée et distribuée : `K = sumInvested × effOdds`, `S = K·σ_D / (1 − σ_N)`.
    - Si fixée et non-distribuée : `S = sumInvested × effOdds`, `K = S·(1 − σ_N) / σ_D`.
    - Sinon, fallback sur la mise du Total si la ligne Total est en mode fixe.
-8. **Redistribution** (si `redistribute === true`) : pour chaque issue éligible non-fixée, on calcule `targetReturn = (1−p)·K + p·S` (où `p` = paramètre global "Répartition de la perte") et on ajuste les mises :
+   - **Lier issues** (prioritaire quand actif : paramètre global + montant > 0 + au moins une mise liée) : la ligne Fixe est ignorée (issue « défixée », ses fixe-détails auto-cochés libérés). Les mises étant affines en `S`, on évalue la somme des mises liées pour `S = 100` et `S = 200` via `planStakes`, puis on résout `S` pour atteindre le montant. Les mises affichées étant arrondies au centime, on remonte ensuite la cible par pas de 0,0005 jusqu'à ce que la **somme arrondie** soit ≥ montant (plus petite somme au-dessus).
+8. **Redistribution** (si `redistribute === true`) : `planStakes(K, S)` (pur, sans DOM) calcule les mises puis on les écrit. Pour chaque issue éligible non-fixée, on calcule `targetReturn = (1−p)·K + p·S` (où `p` = paramètre global "Répartition de la perte") et on ajuste les mises :
    - Détail unique : `stake = targetReturn / denom` (denom = `layReturnFactor` ou `oddsTotalNet`).
    - Multi-détails : on soustrait la contribution des détails fixés (`isFixedDetail`) — Gain fixe = sa valeur littérale, Back fixe = `stake·oddsNet`, Lay fixe = `stake·layReturnFactor` — puis on partage le `remaining` à parts égales entre les détails non-fixes (Gain fixe exclu).
 9. **Engagement Lay** : `engagement = stake × (oddsTotal − 1)` sur tous les détails Lay.
@@ -139,6 +140,7 @@ Quatre toggles dans la section `.global-settings`, tous persistés en `localStor
 | `lossDistEnabled` / `lossDistDefault` | Active l'interpolation `target = (1−p)·K + p·S` (p ∈ [0,1]). |
 | `detailsEnabled` | Affiche/masque la décomposition Cote totale + Profit par détail. |
 | `fixedGainEnabled` | Affiche le bouton "+ Gain fixe" dans `addDetailCell`. |
+| `linkEnabled` | « Lier issues » : bouton de lien (`.js-link-toggle`, état `data-linked="1"` sur la cellule Mise) + ligne `.link-amount-row` (montant total des mises liées) sous les boutons de la card. Classe `with-link` sur `.sb-grid`, `link-active` quand le lien pilote le calcul. |
 
 Chaque toggle déclenche `recomputeAll(true)` sur tous les calculateurs du registry.
 
