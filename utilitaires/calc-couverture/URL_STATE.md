@@ -116,7 +116,7 @@ Trois types, discriminés par `t` :
 
 ## Exemples
 
-Chaque exemple inclut le JSON, sa taille brute vs compressée, et une URL directement testable pointant vers l'app en prod (`https://calleau.github.io/calleau-utils/calc-couverture/index.html`).
+Chaque exemple inclut le JSON, sa taille brute vs compressée, et une URL directement testable pointant vers l'app en prod (`https://utils.calleau.org/calc-couverture/index.html`).
 
 ### 1. Scaffold vide
 
@@ -132,7 +132,7 @@ Un calc totalement vide (aucune valeur saisie, 2 issues obligatoires) :
 
 JSON 32 chars → encodé 37 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QEsWgGZWgX1mDwF0S8g>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QEsWgGZWgX1mDwF0S8g>
 
 ### 2. Calc par défaut fraîchement bootstrappé
 
@@ -155,7 +155,7 @@ Ce que la calc écrit toute seule au premier chargement (2 issues, cotes 2,00 pr
 
 JSON 103 chars → encodé 89 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QBcqgM5RAVlgAZCQBfeASxVADMo4QATDSVEAexRACYiSBdeDkj4+ZfuVDNqHLr2IgJS0hKA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QBcqgM5RAVlgAZCQBfeASxVADMo4QATDSVEAexRACYiSBdeDkj4+ZfuVDNqHLr2IgJS0hKA>
 
 ### 3. Surebet Back/Lay simple
 
@@ -184,7 +184,7 @@ Deux issues, cote 2,10 Back (Unibet) contre cote 2,10 Lay (Piwix) avec 3% de com
 
 JSON 181 chars → encodé 170 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgMYFspxAEwM6YF94UoBtUAF2RH0hGgAZYGGQiQBLM0AM03mxVI5EAHcoIAK4A7DgCMAplXgB7MiABMsRiAC68WiACszVgV1FQg7iCEgANiHji6ABw6iOADycg1wzW1WfRAMAIBmUz0DCQAWWABOMwsUgiA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgMYFspxAEwM6YF94UoBtUAF2RH0hGgAZYGGQiQBLM0AM03mxVI5EAHcoIAK4A7DgCMAplXgB7MiABMsRiAC68WiACszVgV1FQg7iCEgANiHji6ABw6iOADycg1wzW1WfRAMAIBmUz0DCQAWWABOMwsUgiA>
 
 ### 4. Trois issues (1N2) sans commission
 
@@ -209,7 +209,7 @@ Un match nul possible, trois cotes de bookmakers différents. Aucune commission 
 
 JSON 236 chars → encodé 228 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgCZTiFBndBfeAxlANqgAuyIOkIAzAAyz30j4gCWJoAZuvChUikQAdyggArgDt2AIwCmFeAHsSIAExMWAXXjUQ0Rs1axQYmgrIEANuyIq1m+gFYQuquOdbW2-KkHCgiDWIPDmIAAO7CLsAB6hIKpCGrCGbvAAtmq03r55uL5AA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgCZTiFBndBfeAxlANqgAuyIOkIAzAAyz30j4gCWJoAZuvChUikQAdyggArgDt2AIwCmFeAHsSIAExMWAXXjUQ0Rs1axQYmgrIEANuyIq1m+gFYQuquOdbW2-KkHCgiDWIPDmIAAO7CLsAB6hIKpCGrCGbvAAtmq03r55uL5AA>
 
 ### 5. Combiné (parlay) — plusieurs colonnes de cotes
 
@@ -235,7 +235,7 @@ Cote totale combinée : `2,10 × 1,80 × 1,50 = 5,67`.
 
 JSON 174 chars → encodé 139 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QDsoGZ4BcqgGcoRoAGWU0kAX3gEsVQAzKOEAEz0lRAHsUQAJlhkQ8OAA4q42AFYqAXXhFIJcpRoLaoToxBcQAGzF8Bw0TKkm48kEpABbAdg3wX0kO7vUtv6kA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QDsoGZ4BcqgGcoRoAGWU0kAX3gEsVQAzKOEAEz0lRAHsUQAJlhkQ8OAA4q42AFYqAXXhFIJcpRoLaoToxBcQAGzF8Bw0TKkm48kEpABbAdg3wX0kO7vUtv6kA>
 
 ### 6. Gain fixe positif — bonus fidélité
 
@@ -265,7 +265,7 @@ Une issue Back avec un bonus fidélité de 5€ garanti si l'issue passe. La cou
 
 JSON 159 chars → encodé 131 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgGZJgX3gYygbVABdkQBnKEaAJlgAZaQsQBLfVKOEAE2MgJAD2+EDXogAuvHKQQANjoMsRCihDwIMgKwLG4pd179eIADZrBwmlQaSQAW2EBmHXtcY9QA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgGZJgX3gYygbVABdkQBnKEaAJlgAZaQsQBLfVKOEAE2MgJAD2+EDXogAuvHKQQANjoMsRCihDwIMgKwLG4pd179eIADZrBwmlQaSQAW2EBmHXtcY9QA>
 
 ### 7. Gain fixe négatif — pénalité freebet
 
@@ -295,7 +295,7 @@ Certains bookmakers imposent une pénalité si l'issue ne passe pas ; on la mod�
 
 JSON 184 chars → encodé 159 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgMYFspxAMyTAvvClANqgAuyIAzlCAEwAMsAHCyISAJamjabwAJpUhkQAe1INWjEAF14tSCACssRrPxzCoQVGYhhvECJAAbEPEmiQAZlhN58DDfsanNOgHYH9DrAo6fngIZQBaenVNbRj8IA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgMYFspxAMyTAvvClANqgAuyIAzlCAEwAMsAHCyISAJamjabwAJpUhkQAe1INWjEAF14tSCACssRrPxzCoQVGYhhvECJAAbEPEmiQAZlhN58DDfsanNOgHYH9DrAo6fngIZQBaenVNbRj8IA>
 
 ### 8. Boost bookmaker
 
@@ -323,7 +323,7 @@ Cote 1,50 Back avec un boost bookmaker de 20% (cote nette effective = 1 + 0,50 �
 
 JSON 138 chars → encodé 122 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgEZTiAxgW3QX3kygG1QBLE0AM3XgBMAXSkAexJDgFYAGEAXXhpIxEACZeAkAGcoHbrG688fAqEbMmkEABsQ8NsI6wAbBPi5DAZgUTldlUA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgEZTiAxgW3QX3kygG1QBLE0AM3XgBMAXSkAexJDgFYAGEAXXhpIxEACZeAkAGcoHbrG688fAqEbMmkEABsQ8NsI6wAbBPi5DAZgUTldlUA>
 
 ### 9. Multi-détails par issue (deux bookmakers sur la même issue)
 
@@ -355,7 +355,7 @@ Note : `x:1` sur le premier détail est **explicite** parce que l'issue est fix�
 
 JSON 210 chars → encodé 185 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgCZTiFBndBfeAxlANqgAuyIOkIAzAAyz30j4gCWJoAZuvChUikQAdyggArgDt2AIwCmFeAHsSIAExMWAXXjUQ0Rs1axQYmgrIEANuyIq1m+gFYQuquOdbW2-KkHCgiDWIPDmIAAO7CLsAB6hIKpCGrCGbvAAtmq03r55uL5AA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgCZTiFBndBfeAxlANqgAuyIOkIAzAAyz30j4gCWJoAZuvChUikQAdyggArgDt2AIwCmFeAHsSIAExMWAXXjUQ0Rs1axQYmgrIEANuyIq1m+gFYQuquOdbW2-KkHCgiDWIPDmIAAO7CLsAB6hIKpCGrCGbvAAtmq03r55uL5AA>
 
 ### 10. Répartition de la perte (loss distribution)
 
@@ -378,7 +378,7 @@ Interpolation entre concentration du profit (K) et équilibrage des profits tota
 
 JSON 138 chars → encodé 121 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgMYFspxAGwCafmwkhAGYAGEAX3hSgG1QBLB0AMwJFwBdWQB7BiABMscpQC68AM5QQ0cmMpUJNUDz68S2EPEGR6IsQFYQUkBgNklZlXdVA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgMYFspxAGwCafmwkhAGYAGEAX3hSgG1QBLB0AMwJFwBdWQB7BiABMscpQC68AM5QQ0cmMpUJNUDz68S2EPEGR6IsQFYQUkBgNklZlXdVA>
 
 ### 11. Total fixé — partir d'une bankroll cible
 
@@ -401,7 +401,7 @@ Au lieu de fixer une mise sur une issue, on fixe le total investi. `t.f:1` marqu
 
 JSON 93 chars → encodé 85 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QBcqgM5RAVgAZYCCR4AzKaAX3gEsVQATDSVEAexRACZZpSAXWrDYzVuy5te-ISPnCgA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QBcqgM5RAVgAZYCCR4AzKaAX3gEsVQATDSVEAexRACZZpSAXWrDYzVuy5te-ISPnCgA>
 
 ### 12. Issue non-distribuée
 
@@ -423,7 +423,7 @@ L'issue non-distribuée ne participe pas au partage du profit — elle sert just
 
 JSON 101 chars → encodé 91 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QEsWgGZTiAJgC6YgD2KIAzLAAw0gC68AzlCNDbfQL4Peyh8UTgWKRUIMSAA2IeOXFUujXqr5A>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QEsWgGZTiAJgC6YgD2KIAzLAAw0gC68AzlCNDbfQL4Peyh8UTgWKRUIMSAA2IeOXFUujXqr5A>
 
 ### 13. Intitulés d'issue (screenshot / partage)
 
@@ -453,7 +453,7 @@ Toggle `il:1` active la ligne d'intitulé au-dessus de chaque issue. Utile pour 
 
 JSON 223 chars → encodé 239 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgJYBspxAEwM6YF94BjKAbVXNA0hAAUBlAcQAIwViAXAexQCcApiwAUAI24A7AK64W0AAzyApCwBm-XJxaiBnAJQh4qzPGycqIAO5QQOzsTQdDIbuRBwAHAFYQAXXj4tABM8rCKIAS+RNQ2AMLcUmACfJxSgiwAMgCGAJ4sdCiWKAAezmYW5rQY8Na0AA6FJc6ukGTusACc8n7wALZuAMxh3VGjkQRAA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgJYBspxAEwM6YF94BjKAbVXNA0hAAUBlAcQAIwViAXAexQCcApiwAUAI24A7AK64W0AAzyApCwBm-XJxaiBnAJQh4qzPGycqIAO5QQOzsTQdDIbuRBwAHAFYQAXXj4tABM8rCKIAS+RNQ2AMLcUmACfJxSgiwAMgCGAJ4sdCiWKAAezmYW5rQY8Na0AA6FJc6ukGTusACc8n7wALZuAMxh3VGjkQRAA>
 
 ### 14. Plusieurs calcs sur la même page
 
@@ -488,7 +488,7 @@ Le format supporte nativement N calcs. Chaque `c[i]` est indépendant :
 
 JSON 323 chars → encodé 215 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QEsWgGZTiAJgC6YgD2KIATLAAw0gC68AzlCAKy30C+D3soIiWKQQAGxDxykZFS6N4AWwoBmeXw390JHDHhCZoabLjt6TEK1HQa83loIjUIEeMlkKp9gpDKZINTpGez4BEAA7KGoQDEMQXTwDZ2MQOAAOenhqGx8rALtQwSdQVwkpT1gATky5aG8LP1lAmubgzT4gA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IGMoG1QEsWgGZTiAJgC6YgD2KIATLAAw0gC68AzlCAKy30C+D3soIiWKQQAGxDxykZFS6N4AWwoBmeXw390JHDHhCZoabLjt6TEK1HQa83loIjUIEeMlkKp9gpDKZINTpGez4BEAA7KGoQDEMQXTwDZ2MQOAAOenhqGx8rALtQwSdQVwkpT1gATky5aG8LP1lAmubgzT4gA>
 
 ### 15. Cas complet — tous les toggles actifs, multi-détails, FG, boost, sites, intitulés
 
@@ -548,7 +548,7 @@ Points d'attention :
 
 JSON 530 chars → encodé 462 chars.
 
-<https://calleau.github.io/calleau-utils/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgMYFspxCikQBZYBWABhHgCNN4ATakAMyRngEsAbemgZ3vbpYh2uEACYiIAL7wUUANqgAdlFHwALshC88+IsTLSQreaE54ACgGUA4gAJASES2AsgEMATtwCmHdp9sAKFAB7NApWRQBL21FbNBc1FAALbgBKckYuDUgFEAB3KBAKTwT2Vll4IPkQOAAOCXhVaDIAXUoqpvSQVq0C0RJYEgNYUCyM+BEAZgGDZulTAoBhIIBXME83NWW3PwAZFwBPdIF+kBosnNHOeHy8AAdWXNYAD3TK7OrYAE56sVhoCW6GHeU0G6RBLXg2hAn1gfSkwxAowY6RuIHujxe4wKAFo4KQpLMEWYQBM-EFbmpWEFFAFgqt1pttrZbu5KZ52L40rRzqBUctFKwihoKlVCPj4F1Ib19OkXjA5nkCo9FC44piQG85ARYDUyBLZgbJLMgA>
+<https://utils.calleau.org/calc-couverture/index.html?s=N4IgbiBcCMA0IHMqgMYFspxCikQBZYBWABhHgCNN4ATakAMyRngEsAbemgZ3vbpYh2uEACYiIAL7wUUANqgAdlFHwALshC88+IsTLSQreaE54ACgGUA4gAJASES2AsgEMATtwCmHdp9sAKFAB7NApWRQBL21FbNBc1FAALbgBKckYuDUgFEAB3KBAKTwT2Vll4IPkQOAAOCXhVaDIAXUoqpvSQVq0C0RJYEgNYUCyM+BEAZgGDZulTAoBhIIBXME83NWW3PwAZFwBPdIF+kBosnNHOeHy8AAdWXNYAD3TK7OrYAE56sVhoCW6GHeU0G6RBLXg2hAn1gfSkwxAowY6RuIHujxe4wKAFo4KQpLMEWYQBM-EFbmpWEFFAFgqt1pttrZbu5KZ52L40rRzqBUctFKwihoKlVCPj4F1Ib19OkXjA5nkCo9FC44piQG85ARYDUyBLZgbJLMgA>
 
 ## Snippet — produire une URL depuis un autre utilitaire
 

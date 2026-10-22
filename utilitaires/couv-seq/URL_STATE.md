@@ -83,7 +83,7 @@ Aucun pari, 2 couvertures vides — la calc à son état de démarrage. La séri
 
 JSON 7 chars → encodé 13 chars.
 
-<https://calleau.github.io/calleau-utils/couv-seq/?s=N4IgbiBcCMC+Q>
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMC+Q>
 
 ### 2. Un freebet 100€ sur deux cotes individuelles
 
@@ -100,7 +100,7 @@ Un freebet simple, cotes 3,10 et 2,15 sur deux matchs :
 
 JSON 38 chars → encodé 48 chars.
 
-<https://calleau.github.io/calleau-utils/couv-seq/?s=N4IgbiBcCMA0ICMoG1QEMrQAxfgexQGYA6OAJlIFYBdAXzqA>
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0ICMoG1QEMrQAxfgexQGYA6OAJlIFYBdAXzqA>
 
 ### 3. Bonus cash au lieu de freebet
 
@@ -117,7 +117,7 @@ Pari cash 30€ (type "cash" au lieu de "freebet") :
 
 JSON 48 chars → encodé 68 chars.
 
-<https://calleau.github.io/calleau-utils/couv-seq/?s=N4IgbiBcCMA0ICMoG1QBcogMYEMDOAFiPDlAMwAM8A9igEwB0ArLAHYCuANpwLoC+-IA>
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0ICMoG1QBcogMYEMDOAFiPDlAMwAM8A9igEwB0ArLAHYCuANpwLoC+-IA>
 
 ### 4. Cote totale directe
 
@@ -134,7 +134,7 @@ Au lieu de saisir chaque cote individuelle, on donne directement la cote combin�
 
 JSON 44 chars → encodé 56 chars.
 
-<https://calleau.github.io/calleau-utils/couv-seq/?s=N4IgbiBcCMA0ICMoG1QEMrQAxfgWyhABcB7ItAGxHlKgFYA6OgXwF1mg>
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0ICMoG1QEMrQAxfgWyhABcB7ItAGxHlKgFYA6OgXwF1mg>
 
 ### 5. 4 couvertures séquentielles, deux réalisées
 
@@ -155,7 +155,7 @@ Les 2 covers trailing vides (à défaut) sont omis ; `ensureCoversLength` les re
 
 JSON 103 chars → encodé 107 chars.
 
-<https://calleau.github.io/calleau-utils/couv-seq/?s=N4IgbiBcCMA0IDsoBZ4GMoG1QGcogCcBTAQwBsBLALyIBMR4AjKAJgDoBWeM1zrkAB5QAzGxYBfWLnzFy1OgxDNI7OCB4q20fkM0dxAXXFA>
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0IDsoBZ4GMoG1QGcogCcBTAQwBsBLALyIBMR4AjKAJgDoBWeM1zrkAB5QAzGxYBfWLnzFy1OgxDNI7OCB4q20fkM0dxAXXFA>
 
 ### 6. Combiné 2 matchs avec plusieurs paris placés
 
@@ -174,7 +174,7 @@ Deux freebets sur des matchs différents : le premier avec cotes individuelles, 
 
 JSON 73 chars → encodé 83 chars.
 
-<https://calleau.github.io/calleau-utils/couv-seq/?s=N4IgbiBcCMA0IDsoGZ4CMoG1QEMoFYAGeAeywCYA6OZS8gXQF9ZcppDiQBbKEAFxJ8cAGxDwBUAGyV8jJkA>
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0IDsoGZ4CMoG1QEMoFYAGeAeywCYA6OZS8gXQF9ZcppDiQBbKEAFxJ8cAGxDwBUAGyV8jJkA>
 
 ### 7. Un placed bet vide + toutes couvertures pending
 
@@ -192,7 +192,7 @@ Utile comme scaffold à pré-remplir par l'utilisateur :
 
 JSON 22 chars → encodé 32 chars.
 
-<https://calleau.github.io/calleau-utils/couv-seq/?s=N4IgbiBcCMA0IDsoFZ4CMoG1gF8C6OQA>
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0IDsoFZ4CMoG1gF8C6OQA>
 
 ### 8. Kitchen sink — tous les cas exercés
 
@@ -222,7 +222,7 @@ Le dernier cover `{}` est omis à la sérialisation (trailing empty). `ensureCov
 
 JSON 289 chars → encodé 242 chars.
 
-<https://calleau.github.io/calleau-utils/couv-seq/?s=N4IgbiBcCMA0IDsoDZ4CMoG1QEMrQAYD4B7LAZgDo4AmagVgF0BfWUAFyhAGMcBnABYh4eSDXqks0SgA4J0gJwS60FmxCiaReAFsu7EuxwAbYSANQZlAOz1mjeNyyg+XAE4BTEwEsAXh4ATMwxIKgIJEFNQ6l0oOgiADygAFko7dVdIEE8ffyD0OJjIwuhEqHpKGlYXdy9jP0Dg-FkIqMVYyGT4JLFqapAQ+Pgo+PTQEPJ7ZiA>
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0IDsoDZ4CMoG1QEMrQAYD4B7LAZgDo4AmagVgF0BfWUAFyhAGMcBnABYh4eSDXqks0SgA4J0gJwS60FmxCiaReAFsu7EuxwAbYSANQZlAOz1mjeNyyg+XAE4BTEwEsAXh4ATMwxIKgIJEFNQ6l0oOgiADygAFko7dVdIEE8ffyD0OJjIwuhEqHpKGlYXdy9jP0Dg-FkIqMVYyGT4JLFqapAQ+Pgo+PTQEPJ7ZiA>
 
 ## Snippet — produire une URL depuis un autre utilitaire
 

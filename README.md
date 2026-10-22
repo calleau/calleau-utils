@@ -2,7 +2,7 @@
 
 Boîte à outils de calculateurs pour les paris sportifs (TRJ, couverture, freebets, bonus de bienvenue…).
 
-En ligne sur https://utils.calleau.org (et sur GitHub Pages : https://calleau.github.io/calleau-utils/)
+En ligne sur https://utils.calleau.org
 
 ## Lancer en local
 
