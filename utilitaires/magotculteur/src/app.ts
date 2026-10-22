@@ -398,6 +398,13 @@ function fmtNumFr(n: number, d = 2): string {
   return n.toFixed(d).replace('.', ',');
 }
 
+// Intitulé texte d'un pari : "marché issue" par leg, joints par " + ".
+function betLegsLabel(b: BetDetail): string {
+  return b.legs
+    .map(l => `${l.marketName} ${issueLabelText(l.outcomeName, l.eventKey)}`)
+    .join(' + ');
+}
+
 // Build a URL pointing to the couv-seq utility, pré-rempli avec le principal
 // combiné comme placed bet et chaque cover (Back ou Lay) pré-remplie.
 // Format : ?s=<LZString.compressToEncodedURIComponent(JSON compact)>.
@@ -416,15 +423,19 @@ function buildCouvSeqUrl(r: CoveringSetResult): string {
   const odds = principal.legs.map(l => getLegIndivOdds(l, principal.site) ?? null);
   const isDefaultOdds = odds.length === 2 && odds.every(o => o == null);
   if (!isDefaultOdds) bet.o = odds;
+  bet.w = principal.site;
+  bet.i = betLegsLabel(principal);
 
   // Covers compacts (omission : status="pending", backOdd=null, layOdd=null,
-  // commission=3, loss=null).
+  // backComm=3, layComm=3, loss=null). La commission va sur la cote utilisée.
   const cc = covers.map(c => {
     const isLay = c.legs[0]?.betType === 'Lay';
     const commPct = extractCommissionPct(c);
     const cov: any = {};
     if (isLay) cov.l = c.odds; else cov.b = c.odds;
-    if (commPct !== 3) cov.m = commPct;
+    if (commPct !== 3) cov[isLay ? 'ml' : 'mb'] = commPct;
+    cov.w = c.site;
+    cov.i = betLegsLabel(c);
     return cov;
   });
 
@@ -460,9 +471,7 @@ function buildCalcCouvUrl(r: CoveringSetResult): string {
   const issues = r.bets.map((b, i) => {
     const isLay = b.liability != null || b.legs[0]?.betType === 'Lay';
     const commPct = extractCommissionPct(b);
-    const legsLabel = b.legs
-      .map(l => `${l.marketName} ${issueLabelText(l.outcomeName, l.eventKey)}`)
-      .join(' + ');
+    const legsLabel = betLegsLabel(b);
     const typeLabel = isLay ? 'Lay' : b.betType === 'fb' ? 'Freebet' : 'Cash';
     const realOdds = b.betType === 'fb' ? ` (cote réelle ${fmtNumFr(b.odds)})` : '';
     const iss: any = { l: `${typeLabel} · ${legsLabel}${realOdds}` };
