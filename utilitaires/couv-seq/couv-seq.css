@@ -1018,3 +1018,64 @@
 	text-transform: uppercase;
 	padding: 0.6rem 0 0.3rem;
 }
+
+/* =========================================================
+   Site + Intitulé (paris placés et couvertures)
+   ========================================================= */
+.meta-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+}
+.meta-row .meta-site  { flex: 1 1 110px; min-width: 0; }
+.meta-row .meta-label { flex: 3 1 180px; min-width: 0; }
+.meta-row input { font-family: inherit; }
+
+/* Couleur du bookmaker reconnu (cf. KNOWN_SITES dans couv-seq.js) */
+.site-input[data-site-match] { font-weight: 600; border-color: transparent; }
+.site-input[data-site-match="bet365"]     { background: var(--site-bet365-bg);     color: var(--site-bet365-text); }
+.site-input[data-site-match="betclic"]    { background: var(--site-betclic-bg);    color: var(--site-betclic-text); }
+.site-input[data-site-match="betify"]     { background: var(--site-betify-bg);     color: var(--site-betify-text); }
+.site-input[data-site-match="betsson"]    { background: var(--site-betsson-bg);    color: var(--site-betsson-text); }
+.site-input[data-site-match="bwin"]       { background: var(--site-bwin-bg);       color: var(--site-bwin-text); }
+.site-input[data-site-match="daznbet"]    { background: var(--site-daznbet-bg);    color: var(--site-daznbet-text); }
+.site-input[data-site-match="feelingbet"] { background: var(--site-feelingbet-bg); color: var(--site-feelingbet-text); }
+.site-input[data-site-match="olybet"]     { background: var(--site-olybet-bg);     color: var(--site-olybet-text); }
+.site-input[data-site-match="piwix"]      { background: var(--site-piwix-bg);      color: var(--site-piwix-text); }
+.site-input[data-site-match="pmu"]        { background: var(--site-pmu-bg);        color: var(--site-pmu-text); }
+.site-input[data-site-match="pokerstars"] { background: var(--site-pokerstars-bg); color: var(--site-pokerstars-text); }
+.site-input[data-site-match="unibet"]     { background: var(--site-unibet-bg);     color: var(--site-unibet-text); }
+.site-input[data-site-match="vbet"]       { background: var(--site-vbet-bg);       color: var(--site-vbet-text); }
+.site-input[data-site-match="winamax"]    { background: var(--site-winamax-bg);    color: var(--site-winamax-text); }
+
+/* Commission par cote (même rendu que calc-couverture) :
+   label + icône directement à gauche d'un petit input. */
+.cell-commission {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 6px;
+}
+.cell-commission-label {
+	font-size: 11px;
+	color: var(--color-muted);
+	font-weight: 500;
+}
+.cell-commission-icon {
+	color: var(--color-muted);
+	width: 14px;
+	height: 14px;
+	display: inline-flex;
+	align-items: center;
+	margin-left: -2px;
+}
+.field .cell-commission input {
+	width: 3.5rem;
+	height: 28px;
+	font-size: 13px;
+	padding: 0 6px;
+}
+.cell-commission-suffix {
+	font-size: 12px;
+	color: var(--color-muted);
+}

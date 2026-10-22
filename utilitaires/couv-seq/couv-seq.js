@@ -11,16 +11,22 @@
 
 const URL_PARAM = 's';
 const URL_STATE_VERSION = 1;
+const URL_MAX_TEXT_LEN = 200;
+
+// Texte libre (site, intitulé) : trimmé + tronqué, '' si vide.
+function urlText(s){ return String(s || '').trim().slice(0, URL_MAX_TEXT_LEN); }
 
 /* ---- Bet (compact ⇄ localStorage shape) ----
    Défauts localStorage : { type:"freebet", amount:50, oddsMode:"individual",
-                            totalOdd:null, odds:[null, null] }
+                            totalOdd:null, odds:[null, null], site:"", label:"" }
    Format URL :
      t  = type       (défaut "freebet", omis pour freebet)
      a  = amount     (défaut 50, omis si 50)
      m  = oddsMode   (défaut "individual", omis pour individual)
      to = totalOdd   (défaut null, omis si null)
      o  = odds       (défaut [null,null], omis si tableau à 2 nulls)
+     w  = site       (défaut "", omis si vide)
+     i  = label      (défaut "", omis si vide)
 */
 function serializeBetForUrl(bet){
   const b = {};
@@ -32,6 +38,8 @@ function serializeBetForUrl(bet){
     const isDefaultOdds = bet.odds.length === 2 && bet.odds.every(o => o == null);
     if(!isDefaultOdds) b.o = bet.odds;
   }
+  if(urlText(bet.site))  b.w = urlText(bet.site);
+  if(urlText(bet.label)) b.i = urlText(bet.label);
   return b;
 }
 function expandBetFromUrl(cb){
@@ -41,27 +49,36 @@ function expandBetFromUrl(cb){
     amount:   (cb.a != null) ? cb.a : 50,
     oddsMode: cb.m || 'individual',
     totalOdd: (cb.to != null) ? cb.to : null,
-    odds:     Array.isArray(cb.o) ? cb.o : [null, null]
+    odds:     Array.isArray(cb.o) ? cb.o : [null, null],
+    site:     cb.w || '',
+    label:    cb.i || ''
   };
 }
 
 /* ---- Cover (compact ⇄ localStorage shape) ----
    Défauts localStorage : { status:"pending", backOdd:null, layOdd:null,
-                            commission:3, loss:null }
+                            backComm:3, layComm:3, loss:null, site:"", label:"" }
    Format URL :
      s = status     (défaut "pending", omis pour pending)
      b = backOdd    (défaut null, omis si null)
      l = layOdd     (défaut null, omis si null)
-     m = commission (défaut 3, omis si 3)
+     mb = backComm  (défaut 3, omis si 3) — commission sur la cote Back opp.
+     ml = layComm   (défaut 3, omis si 3) — commission sur la cote Lay
+     m  = (ancien format) commission unique, lue en repli pour mb et ml
      x = loss       (défaut null, omis si null)
+     w = site       (défaut "", omis si vide)
+     i = label      (défaut "", omis si vide)
 */
 function serializeCoverForUrl(cover){
   const c = {};
   if(cover.status && cover.status !== 'pending') c.s = cover.status;
   if(cover.backOdd != null) c.b = cover.backOdd;
   if(cover.layOdd  != null) c.l = cover.layOdd;
-  if(cover.commission != null && cover.commission !== 3) c.m = cover.commission;
+  if(cover.backComm != null && cover.backComm !== 3) c.mb = cover.backComm;
+  if(cover.layComm  != null && cover.layComm  !== 3) c.ml = cover.layComm;
   if(cover.loss != null) c.x = cover.loss;
+  if(urlText(cover.site))  c.w = urlText(cover.site);
+  if(urlText(cover.label)) c.i = urlText(cover.label);
   return c;
 }
 function expandCoverFromUrl(cc){
@@ -69,8 +86,11 @@ function expandCoverFromUrl(cc){
     status:     cc.s || 'pending',
     backOdd:    (cc.b != null) ? cc.b : null,
     layOdd:     (cc.l != null) ? cc.l : null,
-    commission: (cc.m != null) ? cc.m : 3,
-    loss:       (cc.x != null) ? cc.x : null
+    backComm:   (cc.mb != null) ? cc.mb : (cc.m != null) ? cc.m : 3,
+    layComm:    (cc.ml != null) ? cc.ml : (cc.m != null) ? cc.m : 3,
+    loss:       (cc.x != null) ? cc.x : null,
+    site:       cc.w || '',
+    label:      cc.i || ''
   };
 }
 
@@ -536,10 +556,47 @@ let placedBets = [];
 const SVG_X = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 const SVG_TRASH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
+const SVG_HAND_COINS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"/><path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/><path d="m2 16 6 6"/><circle cx="16" cy="9" r="2.9"/><circle cx="6" cy="5" r="3"/></svg>';
+
+/* Sites connus (miroir de calc-couverture / .ff-site-pill du theme.css).
+   Détection par substring insensible à la casse, le premier match gagne. */
+const KNOWN_SITES = [
+  'bet365', 'betclic', 'betify', 'betsson', 'bwin', 'daznbet', 'feelingbet',
+  'olybet', 'piwix', 'pmu', 'pokerstars', 'unibet', 'vbet', 'winamax',
+];
+function detectSiteFromText(text){
+  const t = String(text || '').toLowerCase();
+  if(!t) return null;
+  for(const s of KNOWN_SITES) if(t.includes(s)) return s;
+  return null;
+}
+function applySiteDetection(input){
+  const site = detectSiteFromText(input.value);
+  if(site) input.setAttribute('data-site-match', site);
+  else input.removeAttribute('data-site-match');
+}
+
+// Ligne "Site + Intitulé" commune aux paris placés et aux couvertures.
+// onInput : nom de la fonction appelée avec (key, field, input).
+function renderMetaFields(onInput, key, obj){
+  const site = obj.site || '';
+  const siteMatch = detectSiteFromText(site);
+  return ''
+    + '<div class="meta-row">'
+    +   '<div class="field meta-site"><label>Site</label>'
+    +     '<input type="text" class="site-input" placeholder="Site…" spellcheck="false" value="' + escapeHtml(site) + '"'
+    +     (siteMatch ? ' data-site-match="' + siteMatch + '"' : '')
+    +     ' oninput="' + onInput + '(' + key + ',\'site\',this)"></div>'
+    +   '<div class="field meta-label"><label>Intitulé</label>'
+    +     '<input type="text" placeholder="Intitulé…" value="' + escapeHtml(obj.label || '') + '"'
+    +     ' oninput="' + onInput + '(' + key + ',\'label\',this)"></div>'
+    + '</div>';
+}
+
 function newBetId(){ return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
 
 function createBet(){
-  return { id:newBetId(), type:'freebet', amount:50, oddsMode:'individual', totalOdd:null, odds:[null,null] };
+  return { id:newBetId(), type:'freebet', amount:50, oddsMode:'individual', totalOdd:null, odds:[null,null], site:'', label:'' };
 }
 
 function loadPlacedBets(){
@@ -582,6 +639,12 @@ function onBetAmount(id, value){
   const b = placedBets.find(b => b.id === id); if(!b) return;
   b.amount = parseFloat(value) || 0; savePlacedBets();
 }
+function onBetText(id, field, input){
+  const b = placedBets.find(b => b.id === id); if(!b) return;
+  b[field] = input.value;
+  if(field === 'site') applySiteDetection(input);
+  savePlacedBets();
+}
 function onBetTotalOdd(id, value){
   const b = placedBets.find(b => b.id === id); if(!b) return;
   b.totalOdd = parseFloat(value) || null; savePlacedBets();
@@ -619,6 +682,7 @@ function renderBetCard(bet, idx){
     +     '<span class="placed-bet-title">Pari #' + (idx+1) + '</span>'
     +     '<button class="bet-remove-btn" title="Retirer ce pari" onclick="removePlacedBet(\''+bet.id+'\')">' + SVG_TRASH + '</button>'
     +   '</div>'
+    +   renderMetaFields('onBetText', '\''+bet.id+'\'', bet)
     +   '<div class="bet-row">'
     +     '<div class="bet-row-item">'
     +       '<div class="bet-section-label">Type de mise</div>'
@@ -710,10 +774,20 @@ const COVERS_KEY = 'couvseq_covers';
 let covers = [];
 
 function defaultCover(){
-  return { status:'pending', backOdd:null, layOdd:null, commission:3, loss:null };
+  return { status:'pending', backOdd:null, layOdd:null, backComm:3, layComm:3, loss:null, site:'', label:'' };
+}
+// Migration : ancien champ 'commission' unique → backComm + layComm.
+function migrateCover(c){
+  if(c && c.commission !== undefined){
+    const m = c.commission ?? 3;
+    if(c.backComm == null) c.backComm = m;
+    if(c.layComm  == null) c.layComm  = m;
+    delete c.commission;
+  }
+  return c;
 }
 function loadCovers(){
-  try { const raw = localStorage.getItem(COVERS_KEY); if(raw) covers = JSON.parse(raw) || []; } catch(e){}
+  try { const raw = localStorage.getItem(COVERS_KEY); if(raw) covers = (JSON.parse(raw) || []).map(migrateCover); } catch(e){}
 }
 function saveCovers(){
   try { localStorage.setItem(COVERS_KEY, JSON.stringify(covers)); } catch(e){}
@@ -746,9 +820,34 @@ function setCoverStatus(idx, status){
 }
 function setCoverField(idx, field, value){
   if(!covers[idx]) return;
-  const numeric = new Set(['backOdd','layOdd','commission','loss']);
-  covers[idx][field] = numeric.has(field) ? (parseFloat(value) || null) : value;
+  const numeric = new Set(['backOdd','layOdd','loss']);
+  const commissions = new Set(['backComm','layComm']);
+  if(commissions.has(field)){
+    const v = parseFloat(value);
+    covers[idx][field] = isNaN(v) ? 0 : v; // champ vidé = 0 %
+  } else {
+    covers[idx][field] = numeric.has(field) ? (parseFloat(value) || null) : value;
+  }
   saveCovers();
+}
+
+function onCoverText(idx, field, input){
+  if(!covers[idx]) return;
+  covers[idx][field] = input.value;
+  if(field === 'site') applySiteDetection(input);
+  saveCovers();
+}
+
+// Commission d'une cote (même rendu que calc-couverture : label + icône à gauche).
+function renderCommissionField(idx, field, value){
+  return ''
+    + '<div class="cell-commission">'
+    +   '<span class="cell-commission-label">Com.</span>'
+    +   '<span class="cell-commission-icon">' + SVG_HAND_COINS + '</span>'
+    +   '<input type="number" step="0.5" min="0" value="' + (value ?? 3) + '" '
+    +   'oninput="setCoverField('+idx+',\''+field+'\',this.value)">'
+    +   '<span class="cell-commission-suffix">%</span>'
+    + '</div>';
 }
 
 function renderCoverCard(c, idx){
@@ -769,13 +868,14 @@ function renderCoverCard(c, idx){
     : '<div class="row-wrap">'
       +   '<div class="field"><label>Cote Back opposé</label>'
       +     '<input type="number" step="0.01" min="1" placeholder="—" value="' + (c.backOdd ?? '') + '" '
-      +     'oninput="setCoverField('+idx+',\'backOdd\',this.value)"></div>'
+      +     'oninput="setCoverField('+idx+',\'backOdd\',this.value)">'
+      +     renderCommissionField(idx, 'backComm', c.backComm)
+      +   '</div>'
       +   '<div class="field"><label>Cote Lay</label>'
       +     '<input type="number" step="0.01" min="1" placeholder="—" value="' + (c.layOdd ?? '') + '" '
-      +     'oninput="setCoverField('+idx+',\'layOdd\',this.value)"></div>'
-      +   '<div class="field"><label>Commission (%)</label>'
-      +     '<input type="number" step="0.5" min="0" value="' + (c.commission ?? 3) + '" '
-      +     'oninput="setCoverField('+idx+',\'commission\',this.value)"></div>'
+      +     'oninput="setCoverField('+idx+',\'layOdd\',this.value)">'
+      +     renderCommissionField(idx, 'layComm', c.layComm)
+      +   '</div>'
       + '</div>';
 
   return ''
@@ -784,6 +884,7 @@ function renderCoverCard(c, idx){
     +     '<span class="cover-card-title">Couverture ' + (idx+1) + '</span>'
     +     selectorHtml
     +   '</div>'
+    +   renderMetaFields('onCoverText', idx, c)
     +   bodyHtml
     +   '<div class="cover-result"></div>'
     + '</div>';
@@ -803,12 +904,13 @@ function renderCovers(){
    ────────────────────────────────────────────────────────── */
 // Options de couverture (Lay et/ou Back opp.) en fonction des cotes saisies.
 function getCoverFactorsOptions(cov){
-  const comm = (cov.commission || 0) / 100;
   const opts = [];
   if(cov.layOdd && cov.layOdd > 1){
+    const comm = (cov.layComm ?? 3) / 100;
     opts.push({ mode:'lay', odd:cov.layOdd, comm, gain:1-comm, loss:cov.layOdd-1 });
   }
   if(cov.backOdd && cov.backOdd > 1){
+    const comm = (cov.backComm ?? 3) / 100;
     opts.push({ mode:'back', odd:cov.backOdd, comm, gain:(cov.backOdd-1)*(1-comm), loss:1 });
   }
   return opts;
@@ -1023,7 +1125,7 @@ function loadSavedConfig(id){
   if(!conf || !conf.state) return;
   const s = deepClone(conf.state);
   if(Array.isArray(s.b)) placedBets = s.b;
-  if(Array.isArray(s.c)) covers = s.c;
+  if(Array.isArray(s.c)) covers = s.c.map(migrateCover);
   if(typeof s.n === 'number' && s.n >= 2 && s.n <= 8) nCovers = s.n;
   // écritures directes (savePlacedBets/saveCovers déclencheraient recompute avant que tout soit aligné)
   try { localStorage.setItem(PLACED_BETS_KEY, JSON.stringify(placedBets)); } catch(e){}

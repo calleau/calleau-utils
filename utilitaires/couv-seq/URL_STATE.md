@@ -49,6 +49,8 @@ url.searchParams.set('s', encoded);
 | `m` | `"total"` | `"individual"` | Mode d'entrée des cotes : cote combinée totale vs cotes individuelles. Omis pour individual. |
 | `to` | number | `null` | Cote totale (utilisée uniquement quand `m:"total"`). Omis si `null`. |
 | `o` | array<number\|null> | `[null, null]` | Cotes individuelles par match/leg. Longueur libre (1+). Omis si exactement `[null, null]`. |
+| `w` | string | `""` | Site du pari (texte libre, tronqué à 200 chars). La couleur du bookmaker est détectée côté app (substring insensible à la casse). Omis si vide. |
+| `i` | string | `""` | Intitulé du pari (texte libre, tronqué à 200 chars). Omis si vide. |
 
 Le champ `id` (utilisé côté DOM pour identifier une carte) n'est **pas** sérialisé — il est régénéré à chaque décodage.
 
@@ -59,8 +61,12 @@ Le champ `id` (utilisé côté DOM pour identifier une carte) n'est **pas** sér
 | `s` | `"realized"` | `"pending"` | Statut de la couverture. Contrainte : dès qu'un `pending` apparaît, tous les suivants doivent l'être aussi (verrou séquentiel appliqué au load par `ensureCoversLength`). |
 | `b` | number | `null` | Cote Back placée. Omis si null. |
 | `l` | number | `null` | Cote Lay placée. Omis si null. |
-| `m` | number | `3` | Commission Lay en % (défaut Piwi Exchange 3%). Omis si `3`. |
+| `mb` | number | `3` | Commission en % appliquée à la cote Back opposé (défaut Piwi Exchange 3 %, mettre `0` pour un bookmaker classique). Omis si `3`. |
+| `ml` | number | `3` | Commission en % appliquée à la cote Lay. Omis si `3`. |
+| `m` | number | — | **Ancien format** (commission unique). N'est plus écrit ; s'il est présent, sert de valeur de repli pour `mb` et `ml`. |
 | `x` | number | `null` | Perte enregistrée sur cette couverture (mode "réalisé"). Omis si null. |
+| `w` | string | `""` | Site de la couverture (même règle que `b[k].w`). Omis si vide. |
+| `i` | string | `""` | Intitulé de la couverture (même règle que `b[k].i`). Omis si vide. |
 
 ## Règles de sérialisation
 
