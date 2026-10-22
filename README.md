@@ -2,7 +2,7 @@
 
 Boîte à outils de calculateurs pour les paris sportifs (TRJ, couverture, freebets, bonus de bienvenue…).
 
-Publié sur GitHub Pages : https://calleau.github.io/calleau-utils/
+En ligne sur https://utils.calleau.org (et sur GitHub Pages : https://calleau.github.io/calleau-utils/)
 
 ## Lancer en local
 
@@ -29,4 +29,9 @@ npm run dev
 - `assets/` : données JSON partagées (sites, règles de couverture, exemples) et icônes
 - `utilitaires/<outil>/` : un dossier par outil, avec ses versions archivées dans `vX.Y.Z/`
 
-Au déploiement, `.github/workflows/deploy.yml` builde le Magotculteur et remonte `utilitaires/*` à la racine du site.
+## Déploiement
+
+`scripts/build-site.sh` construit le site publiable : il builde le Magotculteur, remonte `utilitaires/*` à la racine et corrige les chemins relatifs.
+
+- **utils.calleau.org** : Coolify construit le `Dockerfile` (script ci-dessus + Nginx) à chaque push sur `main`.
+- **GitHub Pages** : `.github/workflows/deploy.yml` utilise le même script.
