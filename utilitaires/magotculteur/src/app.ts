@@ -450,6 +450,28 @@ function buildCouvSeqUrl(r: CoveringSetResult): string {
   return '../couv-seq/index.html?s=' + encoded;
 }
 
+// Ce que calc-couverture doit garder fixe pour retrouver les mises du résultat :
+// la référence du calcul du moteur. En simultané, mise totale → le Total (mises
+// Back + engagements Lay, comme le Total de calc-couverture) ; mise min. par pari →
+// le pari mis au montant minimum (le pari boosté s'il y en a un, sinon la plus
+// petite mise principale). Autres cas : le premier principal.
+function calcCouvAnchor(r: CoveringSetResult): { fixedIdx: number | null; fixedTotal: number | null } {
+  const firstPrincipal = Math.max(0, r.bets.findIndex(b => b.role === 'principal'));
+  if (r.timing !== 'simult') return { fixedIdx: firstPrincipal, fixedTotal: null };
+  if (_simpleAmountMode === 'mise_totale') {
+    return { fixedIdx: null, fixedTotal: r.bets.reduce((s, b) => s + (b.liability ?? b.stake), 0) };
+  }
+  if (_simpleAmountMode === 'mise_min_par_pari') {
+    const boosted = r.bets.findIndex(b => b.boosted);
+    if (boosted >= 0) return { fixedIdx: boosted, fixedTotal: null };
+    const principals = r.bets.map((b, i) => i).filter(i => r.bets[i].role === 'principal');
+    const pool = principals.length ? principals : r.bets.map((_, i) => i);
+    const minIdx = pool.reduce((best, i) => (r.bets[i].stake < r.bets[best].stake ? i : best), pool[0]);
+    return { fixedIdx: minIdx, fixedTotal: null };
+  }
+  return { fixedIdx: firstPrincipal, fixedTotal: null };
+}
+
 // Build a URL pointing to calc-couverture, avec une issue par bet, quel que
 // soit son rôle : un résultat peut contenir plusieurs principaux (freebets,
 // groupe obligatoire, ou tous les paris en cash simultané) et zéro cover.
@@ -461,9 +483,17 @@ function buildCouvSeqUrl(r: CoveringSetResult): string {
 // Le modèle "1 bet = 1 issue" reflète bien la couverture (chaque issue = un
 // scénario mutuellement exclusif). Pour un pari freebet, la cote transmise est
 // diminuée de 1 pour que le retour affiché exclue la mise (non rendue).
+//
+// Une colonne de cotes par match (ordre chronologique) : chaque sélection va dans
+// la colonne de son match, calc-couverture multipliant les colonnes et ignorant
+// les cases vides. Freebet et pari boosté gardent leur cote totale dans une seule
+// colonne : leur cote n'est pas le produit des cotes individuelles.
 function buildCalcCouvUrl(r: CoveringSetResult): string {
   if (!r.bets.length) return '';
-  const fixedIdx = Math.max(0, r.bets.findIndex(b => b.role === 'principal'));
+  const { fixedIdx, fixedTotal } = calcCouvAnchor(r);
+  const eventCols = sortedEventKeys(r);
+  const nCols = Math.max(1, eventCols.length);
+  const colOf = (ek: string) => Math.max(0, eventCols.indexOf(ek));
 
   // Globaux : activer commissions, détails, sites, labels d'issue.
   const g = { cm: 1, d: 1, ds: 1, il: 1 };
@@ -475,14 +505,25 @@ function buildCalcCouvUrl(r: CoveringSetResult): string {
     const typeLabel = isLay ? 'Lay' : b.betType === 'fb' ? 'Freebet' : 'Cash';
     const realOdds = b.betType === 'fb' ? ` (cote réelle ${fmtNumFr(b.odds)})` : '';
     const iss: any = { l: `${typeLabel} · ${legsLabel}${realOdds}` };
-    // Freebet : la mise n'est pas rendue, le retour vaut stake × (cote − 1).
-    const odds = b.betType === 'fb' ? b.odds - 1 : b.odds;
-    const detail: any = {
-      w: b.site,
-      o: [fmtNumFr(odds)],
-    };
+
+    const o: string[] = Array(nCols).fill('');
+    const m: string[] = Array(nCols).fill('');
+    const firstCol = colOf(b.legs[0]?.eventKey ?? '');
+    const legOdds = b.legs.map(l => (b.legs.length === 1 ? b.odds : getLegIndivOdds(l, b.site)));
+    if (b.betType === 'fb' || b.boosted || legOdds.some(x => x == null)) {
+      // Freebet : la mise n'est pas rendue, le retour vaut stake × (cote − 1).
+      o[firstCol] = fmtNumFr(b.betType === 'fb' ? b.odds - 1 : b.odds);
+    } else {
+      // Deux sélections du même match (cas théorique) : produit dans sa colonne.
+      const byCol = new Map<number, number>();
+      b.legs.forEach((l, k) => byCol.set(colOf(l.eventKey), (byCol.get(colOf(l.eventKey)) ?? 1) * legOdds[k]!));
+      for (const [col, val] of byCol) o[col] = fmtNumFr(val);
+    }
+    if (commPct > 0) m[firstCol] = fmtNumFr(commPct);
+
+    const detail: any = { w: b.site, o };
     if (isLay) detail.t = 'l';
-    if (commPct > 0) detail.m = [fmtNumFr(commPct)];
+    if (m.some(x => x !== '')) detail.m = m;
     if (i === fixedIdx) {
       iss.f = 1;
       detail.s = fmtNumFr(b.stake);
@@ -491,7 +532,10 @@ function buildCalcCouvUrl(r: CoveringSetResult): string {
     return iss;
   });
 
-  const state = { v: 1, g, c: [{ i: issues }] };
+  const calc: any = { i: issues };
+  if (nCols > 1) calc.n = nCols;
+  if (fixedTotal !== null) calc.t = { s: fmtNumFr(fixedTotal), f: 1 };
+  const state = { v: 1, g, c: [calc] };
   const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(state));
   return '../calc-couverture/index.html?s=' + encoded;
 }
