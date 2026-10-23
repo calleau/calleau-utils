@@ -3,7 +3,8 @@
 //   - equivalences.json : issues nommées ("1", "X2"…) → paris Back équivalents + complément
 //   - rules.json        : règles. Une entrée { "sides": [...] } est développée ; toute autre
 //                         entrée (regex, templates…) est recopiée telle quelle.
-// Un côté est soit un nom d'issue, soit un pari brut "Marché|Issue".
+// Un côté est soit un nom d'issue, soit un pari brut "Marché|Issue" ; préfixé de "~",
+// il désigne le contraire ("~1" = X2, "~HT/FT 1/1" = tout sauf 1/1, jouable en Lay).
 // Alternatives d'un côté = Back de ses paris + Lay des paris de son complément
 // (complément déclaré, et en 2 issues l'autre côté).
 //
@@ -18,7 +19,7 @@ const outFile = resolve(root, 'assets/coverage-rules.json');
 
 const equivalences = JSON.parse(readFileSync(resolve(srcDir, 'equivalences.json'), 'utf8'));
 const rules = JSON.parse(readFileSync(resolve(srcDir, 'rules.json'), 'utf8'));
-const SIDE_KEYS = ['A', 'B', 'C', 'D', 'E'];
+const SIDE_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
 
 const fail = msg => { throw new Error(`coverage-rules : ${msg}`); };
 
@@ -40,13 +41,28 @@ for (const [name, eq] of Object.entries(equivalences)) {
 	}
 }
 
-const isNamed = side => !side.includes('|');
+const isNegated = side => side.startsWith('~');
+const isNamed = side => !isNegated(side) && !side.includes('|');
 
+function lookup(name) {
+	const eq = equivalences[name];
+	if (!eq) fail(`issue "${name}" inconnue (ni dans equivalences.json, ni au format "Marché|Issue")`);
+	return eq;
+}
+
+// Paris qui gagnent quand le côté se réalise (joués en Back).
 function backBets(side) {
+	if (isNegated(side)) return complementBets(side.slice(1));
 	if (!isNamed(side)) return [parseBet(side)];
-	const eq = equivalences[side];
-	if (!eq) fail(`issue "${side}" inconnue (ni dans equivalences.json, ni au format "Marché|Issue")`);
-	return eq.bets.map(parseBet);
+	return lookup(side).bets.map(parseBet);
+}
+
+// Paris qui gagnent quand le côté ne se réalise PAS (joués en Lay pour couvrir le côté).
+function complementBets(side) {
+	if (isNegated(side)) return backBets(side.slice(1));
+	if (!isNamed(side)) return [];
+	const c = lookup(side).complement;
+	return c === undefined ? [] : backBets(c);
 }
 
 function expand(rule, idx) {
@@ -55,12 +71,11 @@ function expand(rule, idx) {
 		fail(`règle n°${idx} : "sides" doit contenir 2 à ${SIDE_KEYS.length} issues`);
 	const out = { issues: sides.length };
 	sides.forEach((side, i) => {
-		const declared = isNamed(side) ? equivalences[side]?.complement : undefined;
-		const complement = [];
-		if (declared !== undefined) complement.push(...backBets(declared));
+		const complement = complementBets(side);
 		if (sides.length === 2) {
 			const other = sides[1 - i];
 			const otherBets = backBets(other);
+			const declared = isNamed(side) ? equivalences[side].complement : undefined;
 			if (declared !== undefined && isNamed(other) && other !== declared)
 				fail(`règle n°${idx} : "${side}" a pour complément "${declared}", pas "${other}"`);
 			complement.push(...otherBets);
@@ -73,6 +88,7 @@ function expand(rule, idx) {
 			const k = `${b.betType}|${b.market}|${b.issue}`;
 			return !seen.has(k) && seen.add(k);
 		});
+		if (!out[SIDE_KEYS[i]].length) fail(`règle n°${idx} : le côté "${side}" n'a aucun pari`);
 	});
 	return out;
 }

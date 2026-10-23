@@ -135,9 +135,11 @@ function issueLabelText(outcomeName: string, eventKey: string): string {
   const opp = ev?.opponents;
   if (!opp) return outcomeName;
   const k = outcomeName.trim();
-  if (k === '1') return String(opp['1'] ?? outcomeName);
-  if (k === '2') return String(opp['2'] ?? outcomeName);
-  if (k === 'X') return 'Nul';
+  const side = (s: string) => s === '1' ? String(opp['1'] ?? s) : s === '2' ? String(opp['2'] ?? s) : 'Nul';
+  if (k === '1' || k === '2' || k === 'X') return side(k);
+  // Mi-temps / fin de match ("1/X") : résultat à la mi-temps / en fin de match
+  const htft = k.match(/^([12X])\/([12X])$/);
+  if (htft) return `${side(htft[1])} / ${side(htft[2])}`;
   const eh = goalDiffLabel(k, String(opp['1'] ?? '1'), String(opp['2'] ?? '2'));
   if (eh) return eh;
   return outcomeName;

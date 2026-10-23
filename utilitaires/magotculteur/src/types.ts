@@ -13,6 +13,10 @@ export interface CoverageRule {
   C?: BetSpec[];
   D?: BetSpec[];
   E?: BetSpec[];
+  F?: BetSpec[];
+  G?: BetSpec[];
+  H?: BetSpec[];
+  I?: BetSpec[];
 }
 
 // ===== SITE CONFIGURATION =====

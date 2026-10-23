@@ -164,7 +164,7 @@ Pour les exchanges (Betfair/Smarkets), les cotes peuvent être des objets `{ Bac
 
 ### 4.2 Règles de couverture (`coverage-rules.json`)
 
-Le fichier `assets/coverage-rules.json` définit quels paris se couvrent mutuellement. Chaque règle liste des **groupes** (A à E, soit 2 à 5 issues) représentant des issues mutuellement exclusives et exhaustives.
+Le fichier `assets/coverage-rules.json` définit quels paris se couvrent mutuellement. Chaque règle liste des **groupes** (A à I, soit 2 à 9 issues) représentant des issues mutuellement exclusives et exhaustives.
 
 ```json
 {
@@ -189,9 +189,15 @@ Les marchés et issues supportent les **regex** (`"/^Total \\w+$/"`) et les **te
   "1":  { "complement": "X2", "bets": ["1X2|1", "Asian Handicap|1 (-0,5)"] },
   "X2": { "complement": "1",  "bets": ["DC|X2", "Asian Handicap|2 (+0,5)", "Écart de buts|2 (0:1)"] }
   ```
-- `rules.json` : une entrée `{ "sides": [...] }` liste 2 à 5 issues mutuellement exclusives, chacune étant un nom d'issue ou un pari brut `"Marché|Issue"`. Toute autre entrée (regex, templates) est recopiée telle quelle.
+- `rules.json` : une entrée `{ "sides": [...] }` liste 2 à 9 issues mutuellement exclusives, chacune étant un nom d'issue ou un pari brut `"Marché|Issue"`. Préfixé de `~`, un côté désigne le contraire de l'issue (`"~1"` = X2) ; `{ "sides": ["HT/FT 1/1", "~HT/FT 1/1"] }` décrit ainsi un Back contre le Lay de la même issue. Toute autre entrée (regex, templates) est recopiée telle quelle.
 
-Développement d'un côté : Back de ses paris + Lay des paris de son complément (complément déclaré et, pour une règle à 2 issues, l'autre côté). Ex. `{ "sides": ["1", "X2"] }` → A = Back 1X2 1, Back AH 1 (−0,5), Lay DC X2, Lay AH 2 (+0,5), Lay EH 2 (0:1). Le script refuse une issue inconnue, un complément non réciproque ou une règle à 2 issues dont les côtés ne sont pas complémentaires.
+Développement d'un côté : Back de ses paris + Lay des paris de son complément (complément déclaré et, pour une règle à 2 issues, l'autre côté). Ex. `{ "sides": ["1", "X2"] }` → A = Back 1X2 1, Back AH 1 (−0,5), Lay DC X2, Lay AH 2 (+0,5), Lay EH 2 (0:1). Le script refuse une issue inconnue, un complément non réciproque, une règle à 2 issues dont les côtés ne sont pas complémentaires ou un côté sans aucun pari.
+
+Côté moteur (`getCoverSets`) :
+- les alternatives d'un même côté sont des façons équivalentes de jouer la même issue ; celles battues partout (une autre alternative du même type, cotée sur chacun de leurs sites à une cote ≥) sont écartées. Sans perte, et cela évite l'explosion du produit cartésien (HT/FT : 2 marchés × 9 issues = 512 cover sets sinon) ;
+- les cover sets de plus de 4 issues (`MAX_SIDES_IN_COMBO`) ne servent qu'en simple match, pas en combiné.
+
+**Mi-temps / fin de match** : marchés `HT/FT` et `Combi_HT/FT` (myCombi Betclic), issues `1/1` … `2/2` (mi-temps / fin de match), équivalents issue par issue. Partition à 9 issues, et chaque issue contre son Lay.
 
 **Écart de buts** (handicap européen, format Betxtractor) : issues `1 (a:b)`, `X (a:b)`, `2 (a:b)` où `a:b` = buts d'avance donnés au domicile / à l'extérieur. Avec g = buts dom. − buts ext. et t = b − a : `1` ⇔ g > t, `X` ⇔ g = t, `2` ⇔ g < t. Chaque ligne forme une partition à 3 issues (règle générique par regex). Équivalences : `2 (0:1)` = X2, `1 (1:0)` = 1X. Partitions à 4 issues : `1 (0:1)` / `X (0:1)` / `X` / `2` et `1` / `X` / `X (1:0)` / `2 (1:0)`.
 

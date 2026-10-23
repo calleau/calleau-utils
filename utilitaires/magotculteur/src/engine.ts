@@ -271,6 +271,31 @@ function collectLegsForSite(data: any, site: string, opts: EngineOpts): Leg[] {
 
 // ===== COVER SET GENERATORS =====
 
+// The alternatives of a rule side are equivalent ways to bet the same outcome. Drop
+// those beaten everywhere: another alternative of the same bet type is priced on each
+// of their sites at odds at least as high. Lossless (same site, odds ≥, so coteMin and
+// missions pass too) and keeps the cartesian product of sides small — e.g. 9-sided
+// HT/FT with two equivalent markets on one bookmaker would otherwise yield 2^9 sets.
+function pruneDominatedAlts(event: any, alts: LegRef[]): LegRef[] {
+  if (alts.length < 2) return alts;
+  const prices = alts.map(l => {
+    const m = new Map<string, number>();
+    for (const [site, val] of Object.entries(event.markets?.[l.marketName]?.[l.outcomeName] || {})) {
+      let o: number | null;
+      if (l.betType === 'Lay') {
+        const lay = getLayInfo(val);
+        o = lay && lay.lGross > 1 ? (lay.lGross - lay.c) / (lay.lGross - 1) : null;
+      } else o = getBackOdds(val);
+      if (o && o > 1) m.set(site, o);
+    }
+    return m;
+  });
+  const dominates = (j: number, i: number) => alts[j].betType === alts[i].betType
+    && [...prices[i]].every(([site, o]) => (prices[j].get(site) ?? 0) >= o);
+  // Equal everywhere (mutual dominance): keep the first one.
+  return alts.filter((_, i) => !alts.some((_, j) => j !== i && dominates(j, i) && !(dominates(i, j) && i < j)));
+}
+
 // Build covering sets for an event, supporting both literal rules (rule#1..#5)
 // and template/regex rules (rule#6..#7, wildcard). Strategy: try each side as
 // "anchor". An anchor opt with a directly-matchable spec is matched against
@@ -286,7 +311,7 @@ function getCoverSets(data: any, eventKey: string, opts: EngineOpts): LegRef[][]
   const seen = new Set<string>();
 
   for (const rule of opts.coverageRules) {
-    const sideKeys = (['A', 'B', 'C', 'D', 'E'] as const).filter(k => rule[k]);
+    const sideKeys = (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'] as const).filter(k => rule[k]);
     if (sideKeys.length < 2) continue;
 
     for (const anchorKey of sideKeys) {
@@ -327,7 +352,7 @@ function getCoverSets(data: any, eventKey: string, opts: EngineOpts): LegRef[][]
                 pushLeg(mEntry[0], oEntry[0], resolved.betType);
               }
               if (!alts.length) { valid = false; break; }
-              sideAlts.push(alts);
+              sideAlts.push(pruneDominatedAlts(event, alts));
             }
             if (!valid) continue;
 
@@ -362,9 +387,18 @@ export interface AsymLightSplit {
   otherCoverSets: LegRef[][][]; // aligned with eventKeys excluding anchorIdx
 }
 
+// Cover sets with many sides (e.g. 9-sided HT/FT) are only used for single-match covers:
+// combined with another match they give 10+ bets with long-shot odds, and asym-light
+// would enumerate 2^k splits per set.
+const MAX_SIDES_IN_COMBO = 4;
+
+function getComboCoverSets(data: any, eventKey: string, opts: EngineOpts): LegRef[][][] {
+  return getCoverSets(data, eventKey, opts).filter(cs => cs.length <= MAX_SIDES_IN_COMBO);
+}
+
 function getAsymLightSplits(data: any, eventKeys: string[], opts: EngineOpts): AsymLightSplit[] {
   const out: AsymLightSplit[] = [];
-  const csPerEvent = eventKeys.map(ek => getCoverSets(data, ek, opts));
+  const csPerEvent = eventKeys.map(ek => getComboCoverSets(data, ek, opts));
   if (csPerEvent.some(s => !s.length)) return out;
 
   for (let anchorIdx = 0; anchorIdx < eventKeys.length; anchorIdx++) {
@@ -449,7 +483,7 @@ function getAsymSplits(data: any, eventKey: string, opts: EngineOpts) {
   const splits: Array<{ singleGroup: LegRef[]; combinedGroups: LegRef[][] }> = [];
   const seen = new Set<string>();
   // Use simple cover sets (no cross-products) to keep asymmetric computation tractable
-  for (const coverSet of getCoverSets(data, eventKey, opts)) {
+  for (const coverSet of getComboCoverSets(data, eventKey, opts)) {
     for (let si = 0; si < coverSet.length; si++) {
       const singleGroup = coverSet[si];
       const combinedGroups = coverSet.filter((_, i) => i !== si);
@@ -1174,7 +1208,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
         onProgress?.(detail, doneCombos, totalCombos);
       }
       const comboKey = combo.slice().sort().join('|');
-      const coverSetsPerEvent = combo.map(ek => getCoverSets(data, ek, opts));
+      const coverSetsPerEvent = combo.map(ek => n === 1 ? getCoverSets(data, ek, opts) : getComboCoverSets(data, ek, opts));
       if (coverSetsPerEvent.some(s => !s.length)) return;
 
       forEachCoverSetCombo(coverSetsPerEvent, chosen => {
@@ -1211,7 +1245,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
             : allSplits;
           // For n≥3: also restrict remaining events' cover sets to 2-sided only.
           const coverSetsCs = ekCs.map(ek => {
-            const css = getCoverSets(data, ek, opts);
+            const css = getComboCoverSets(data, ek, opts);
             return n >= 3 ? css.filter(cs => cs.length === 2) : css;
           });
           if (!splits.length || coverSetsCs.some(s => !s.length)) continue;

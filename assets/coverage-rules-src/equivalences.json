@@ -22,5 +22,14 @@
 	"X2": {
 		"complement": "1",
 		"bets": ["DC|X2", "Asian Handicap|2 (+0,5)", "Écart de buts|2 (0:1)"]
-	}
+	},
+	"HT/FT 1/1": { "bets": ["HT/FT|1/1", "Combi_HT/FT|1/1"] },
+	"HT/FT 1/X": { "bets": ["HT/FT|1/X", "Combi_HT/FT|1/X"] },
+	"HT/FT 1/2": { "bets": ["HT/FT|1/2", "Combi_HT/FT|1/2"] },
+	"HT/FT X/1": { "bets": ["HT/FT|X/1", "Combi_HT/FT|X/1"] },
+	"HT/FT X/X": { "bets": ["HT/FT|X/X", "Combi_HT/FT|X/X"] },
+	"HT/FT X/2": { "bets": ["HT/FT|X/2", "Combi_HT/FT|X/2"] },
+	"HT/FT 2/1": { "bets": ["HT/FT|2/1", "Combi_HT/FT|2/1"] },
+	"HT/FT 2/X": { "bets": ["HT/FT|2/X", "Combi_HT/FT|2/X"] },
+	"HT/FT 2/2": { "bets": ["HT/FT|2/2", "Combi_HT/FT|2/2"] }
 }

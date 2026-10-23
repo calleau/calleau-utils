@@ -242,5 +242,143 @@
 		"D": [
 			{ "market": "Écart de buts", "issue": "2 (1:0)", "betType": "Back" }
 		]
+	},
+	{
+		"issues": 9,
+		"A": [
+			{ "market": "HT/FT", "issue": "1/1", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "1/1", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "1/X", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "1/X", "betType": "Back" }
+		],
+		"C": [
+			{ "market": "HT/FT", "issue": "1/2", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "1/2", "betType": "Back" }
+		],
+		"D": [
+			{ "market": "HT/FT", "issue": "X/1", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "X/1", "betType": "Back" }
+		],
+		"E": [
+			{ "market": "HT/FT", "issue": "X/X", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "X/X", "betType": "Back" }
+		],
+		"F": [
+			{ "market": "HT/FT", "issue": "X/2", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "X/2", "betType": "Back" }
+		],
+		"G": [
+			{ "market": "HT/FT", "issue": "2/1", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "2/1", "betType": "Back" }
+		],
+		"H": [
+			{ "market": "HT/FT", "issue": "2/X", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "2/X", "betType": "Back" }
+		],
+		"I": [
+			{ "market": "HT/FT", "issue": "2/2", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "2/2", "betType": "Back" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "1/1", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "1/1", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "1/1", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "1/1", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "1/X", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "1/X", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "1/X", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "1/X", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "1/2", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "1/2", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "1/2", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "1/2", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "X/1", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "X/1", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "X/1", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "X/1", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "X/X", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "X/X", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "X/X", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "X/X", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "X/2", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "X/2", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "X/2", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "X/2", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "2/1", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "2/1", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "2/1", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "2/1", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "2/X", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "2/X", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "2/X", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "2/X", "betType": "Lay" }
+		]
+	},
+	{
+		"issues": 2,
+		"A": [
+			{ "market": "HT/FT", "issue": "2/2", "betType": "Back" },
+			{ "market": "Combi_HT/FT", "issue": "2/2", "betType": "Back" }
+		],
+		"B": [
+			{ "market": "HT/FT", "issue": "2/2", "betType": "Lay" },
+			{ "market": "Combi_HT/FT", "issue": "2/2", "betType": "Lay" }
+		]
 	}
 ]

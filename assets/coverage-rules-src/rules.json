@@ -72,5 +72,15 @@
 	{ "sides": ["Écart de buts|1 (0:1)", "Écart de buts|X (0:1)", "X2"] },
 	{ "sides": ["1X", "Écart de buts|X (1:0)", "Écart de buts|2 (1:0)"] },
 	{ "sides": ["Écart de buts|1 (0:1)", "Écart de buts|X (0:1)", "X", "2"] },
-	{ "sides": ["1", "X", "Écart de buts|X (1:0)", "Écart de buts|2 (1:0)"] }
+	{ "sides": ["1", "X", "Écart de buts|X (1:0)", "Écart de buts|2 (1:0)"] },
+	{ "sides": ["HT/FT 1/1", "HT/FT 1/X", "HT/FT 1/2", "HT/FT X/1", "HT/FT X/X", "HT/FT X/2", "HT/FT 2/1", "HT/FT 2/X", "HT/FT 2/2"] },
+	{ "sides": ["HT/FT 1/1", "~HT/FT 1/1"] },
+	{ "sides": ["HT/FT 1/X", "~HT/FT 1/X"] },
+	{ "sides": ["HT/FT 1/2", "~HT/FT 1/2"] },
+	{ "sides": ["HT/FT X/1", "~HT/FT X/1"] },
+	{ "sides": ["HT/FT X/X", "~HT/FT X/X"] },
+	{ "sides": ["HT/FT X/2", "~HT/FT X/2"] },
+	{ "sides": ["HT/FT 2/1", "~HT/FT 2/1"] },
+	{ "sides": ["HT/FT 2/X", "~HT/FT 2/X"] },
+	{ "sides": ["HT/FT 2/2", "~HT/FT 2/2"] }
 ]
