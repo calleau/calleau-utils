@@ -894,6 +894,15 @@ function initCalculator($card, opts = {}) {
 				});
 			});
 
+			// Issue non fixée à détail unique : le fixe-détail n'a pas de sens (colonne
+			// masquée, et planStakes redistribue toujours ce détail). Il peut rester
+			// coché d'une ancienne radio Fixe (syncFixeIssueToDetails ne décoche pas)
+			// → on l'ignore, sinon la mise est comptée comme constante dans σ/a/b
+			// (issue vue comme non distribuée → « Aucune ligne en distribution »).
+			if (!isFixed && details.length === 1 && !details[0].isFixedGain) {
+				details[0].isFixedDetail = false;
+			}
+
 			issues.push({ issueId, $label, $fixeRadio, $distCheck, $profitTotal, isFixed, isDist, details });
 		});
 
