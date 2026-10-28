@@ -35,7 +35,13 @@ magotculteur/
 │   ├── types.ts            # Interfaces partagées entre engine, worker et app
 │   ├── engine.ts           # Fonctions de calcul pures (pas de DOM)
 │   ├── worker.ts           # Web Worker : orchestre les étapes de calcul
+│   ├── links.ts            # Libellés d'issues + liens calc-couverture / couv-seq (sans DOM, partagé avec l'API)
 │   └── app.ts              # État, rendu, gestion du Worker, exposition window.*
+│
+├── api/                    # API HTTP interne (Cotorico) : même moteur, cf. api/README.md
+│   ├── server.mjs          # GET /health, POST /compute (worker_threads par part de calcul)
+│   ├── build.mjs           # Bundle esbuild → api/dist/server.mjs (`npm run build:api`)
+│   └── Dockerfile          # Image de l'app Coolify `magotculteur-api`
 │
 ├── vite.config.ts          # Config Vite (root, outDir, worker format ES)
 ├── tsconfig.json           # Config TypeScript
