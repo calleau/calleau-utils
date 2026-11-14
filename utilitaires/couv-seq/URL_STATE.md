@@ -67,6 +67,18 @@ Le champ `id` (utilisé côté DOM pour identifier une carte) n'est **pas** sér
 | `x` | number | `null` | Perte enregistrée sur cette couverture (mode "réalisé"). Omis si null. |
 | `w` | string | `""` | Site de la couverture (même règle que `b[k].w`). Omis si vide. |
 | `i` | string | `""` | Intitulé de la couverture (même règle que `b[k].i`). Omis si vide. |
+| `f` | array<Fill> | `[]` | Mises déjà validées sur l'exchange pour cette couverture (placement partiel, cote qui a bougé pendant la validation). Omis si vide. |
+
+### `c[i].f[j]` — une mise validée
+
+| Clé | Type | Défaut | Description |
+|-----|------|--------|-------------|
+| `t` | `"back"` | `"lay"` | Type de la mise validée (`"back"` = Back opposé). Omis pour lay. |
+| `o` | number | `null` | Cote à laquelle la mise a été validée. Omis si null. |
+| `s` | number | `null` | Montant validé (€). Omis si null. |
+| `m` | number | `3` | Commission en %. Omis si `3`. |
+
+Une mise validée sans cote > 1 ou sans montant > 0 est conservée mais ignorée par le calcul.
 
 ## Règles de sérialisation
 
@@ -229,6 +241,28 @@ Le dernier cover `{}` est omis à la sérialisation (trailing empty). `ensureCov
 JSON 289 chars → encodé 242 chars.
 
 <https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0IDsoDZ4CMoG1QEMrQAYD4B7LAZgDo4AmagVgF0BfWUAFyhAGMcBnABYh4eSDXqks0SgA4J0gJwS60FmxCiaReAFsu7EuxwAbYSANQZlAOz1mjeNyyg+XAE4BTEwEsAXh4ATMwxIKgIJEFNQ6l0oOgiADygAFko7dVdIEE8ffyD0OJjIwuhEqHpKGlYXdy9jP0Dg-FkIqMVYyGT4JLFqapAQ+Pgo+PTQEPJ7ZiA>
+
+### 9. Placement partiel — mise validée puis cotes qui bougent
+
+Sur la couverture 1, seuls 522,32 € ont été validés en Back opposé @ 1,16 (au lieu des 598,48 € conseillés). Entre-temps les cotes sont passées à 1,15 (Back) et 7,6 (Lay). L'app calcule le complément à placer (Lay 11,62 € @ 7,6) et rééquilibre le profit (92,34 €) :
+
+```json
+{
+  "v": 1,
+  "b": [
+    { "a": 100, "o": [7.4, 5.5], "w": "Unibet", "i": "1X2 Nul + 1X2 Danemark" }
+  ],
+  "c": [
+    { "b": 1.15, "l": 7.6, "w": "PIWIx", "i": "1X2 Nul",
+      "f": [ { "t": "back", "o": 1.16, "s": 522.32 } ] },
+    { "l": 5.6, "w": "PIWIx", "i": "1X2 Danemark" }
+  ]
+}
+```
+
+JSON 210 chars → encodé 221 chars.
+
+<https://utils.calleau.org/couv-seq/?s=N4IgbiBcCMA0ICMoG1QEMrQAxfgexQHYA6AFlgFZiKBdeAdyhAFUA7ASwQFMAXEedk2gANAEwACAHIBXADbiA1OJESAImlZcAtmgBOAaxABfOiADGKUEhjFoFeLKgkAbAyYAFAJIB1TwA9+EEFIEBUpOUCAM0sQPhCENDNDfExbVxAAZygKUVFiAGZREyNYUEdIKnTGEK9fAIEhMXF1TR0DYxojIA>
 
 ## Snippet — produire une URL depuis un autre utilitaire
 
