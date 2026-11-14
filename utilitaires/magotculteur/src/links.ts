@@ -92,6 +92,17 @@ function betLegsLabel(data: any, b: BetDetail): string {
     .join(' + ');
 }
 
+// Intitulé préfixé du match : "Estonie vs Danemark - 1X2 Estonie", par leg.
+function betLegsLabelWithEvent(data: any, b: BetDetail): string {
+  return b.legs
+    .map(l => {
+      const ev = data?.[l.eventKey];
+      const name = ev ? eventDisplayName(l.eventKey, ev) : l.eventKey;
+      return `${name} - ${l.marketName} ${issueLabelText(data, l.outcomeName, l.eventKey)}`;
+    })
+    .join(' + ');
+}
+
 // Build a URL pointing to the couv-seq utility, pré-rempli avec le principal
 // combiné comme placed bet et chaque cover (Back ou Lay) pré-remplie.
 // Format : ?s=<LZString.compressToEncodedURIComponent(JSON compact)>.
@@ -122,7 +133,7 @@ export function buildCouvSeqUrl(r: CoveringSetResult, ctx: LinkContext): string 
     if (isLay) cov.l = c.odds; else cov.b = c.odds;
     if (commPct !== 3) cov[isLay ? 'ml' : 'mb'] = commPct;
     cov.w = c.site;
-    cov.i = betLegsLabel(ctx.data, c);
+    cov.i = betLegsLabelWithEvent(ctx.data, c).slice(0, 200);
     return cov;
   });
 
