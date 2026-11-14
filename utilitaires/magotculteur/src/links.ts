@@ -170,7 +170,8 @@ function calcCouvAnchor(r: CoveringSetResult, amountMode: AmountMode): { fixedId
 // scénario mutuellement exclusif). Pour un pari freebet, la cote transmise est
 // diminuée de 1 pour que le retour affiché exclue la mise (non rendue).
 //
-// Une colonne de cotes par match (ordre chronologique) : chaque sélection va dans
+// Une colonne de cotes par match (ordre chronologique), intitulée du nom du match
+// (option « Intitulés » de calc-couverture) : chaque sélection va dans
 // la colonne de son match, calc-couverture multipliant les colonnes et ignorant
 // les cases vides. Freebet et pari boosté gardent leur cote totale dans une seule
 // colonne : leur cote n'est pas le produit des cotes individuelles.
@@ -220,6 +221,9 @@ export function buildCalcCouvUrl(r: CoveringSetResult, ctx: LinkContext): string
 
   const calc: any = { i: issues };
   if (nCols > 1) calc.n = nCols;
+  // Intitulé de chaque colonne de cotes : le nom de son match.
+  const colLabels = eventCols.map(ek => (ctx.data?.[ek] ? eventDisplayName(ek, ctx.data[ek]) : ek).slice(0, 200));
+  if (colLabels.length === nCols) calc.cl = colLabels;
   if (fixedTotal !== null) calc.t = { s: fmtNumFr(fixedTotal), f: 1 };
   const state = { v: 1, g, c: [calc] };
   const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(state));
