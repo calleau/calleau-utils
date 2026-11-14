@@ -328,6 +328,43 @@
 	transform: translateY(-50%);
 }
 
+/* Intitulé de colonne éditable : remplace la lettre quand l'option
+   « Intitulés » est active (classe with-issue-labels sur la grille). */
+.colhead .col-title {
+	display: none;
+	padding: 4px 6px;
+	line-height: 1.2;
+	border: 1px dashed transparent;
+	border-radius: 4px;
+	outline: none;
+	cursor: text;
+	white-space: nowrap;
+}
+.sb-grid.with-issue-labels .colhead {
+	/* Laisse la place à la corbeille positionnée en absolu à droite. */
+	padding-right: 30px;
+}
+.sb-grid.with-issue-labels .colhead .col-label {
+	display: none;
+}
+.sb-grid.with-issue-labels .colhead .col-title {
+	display: inline-block;
+}
+.sb-grid.with-issue-labels .colhead .col-title:hover {
+	border-color: var(--color-divider);
+}
+.sb-grid.with-issue-labels .colhead .col-title:focus {
+	border-color: var(--c-primary);
+	border-style: solid;
+	box-shadow: 0 0 0 3px rgba(92, 137, 157, 0.15);
+}
+.sb-grid.with-issue-labels .colhead .col-title:empty::before {
+	content: attr(data-placeholder);
+	color: var(--color-muted);
+	font-style: italic;
+	pointer-events: none;
+}
+
 /* Empilage vertical de la cote + commission dans chaque cellule [data-odds] */
 .odds-input-stack {
 	display: flex;

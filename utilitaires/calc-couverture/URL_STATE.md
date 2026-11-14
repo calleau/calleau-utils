@@ -51,7 +51,7 @@ Tous les champs sont **optionnels**. La présence d'une clé signifie « non-dé
 | `b` | `1` | `0` | Boost activé |
 | `d` | `1` | `0` | Détails issues activés (affichage colonne Cote totale détaillée + profit par détail) |
 | `fg` | `1` | `0` | Bouton « + Gain fixe » visible |
-| `il` | `1` | `0` | Ligne d'intitulé au-dessus des issues activée |
+| `il` | `1` | `0` | Option « Intitulés » activée : ligne d'intitulé au-dessus des issues + en-têtes de colonnes éditables |
 | `ds` | `1` | `0` | Colonne « Site » par détail activée |
 | `lk` | `1` | `0` | « Lier issues » activé (bouton de lien par mise + montant total des mises liées) |
 | `ld` | `1` | `0` | Répartition de la perte activée |
@@ -62,6 +62,7 @@ Tous les champs sont **optionnels**. La présence d'une clé signifie « non-dé
 | Clé | Type | Défaut | Description |
 |-----|------|--------|-------------|
 | `n` | number | `1` | Nombre de colonnes de cotes |
+| `cl` | array<string> | tous `""` | Intitulés des colonnes de cotes (option « Intitulés »). Longueur = `n`. `""` = intitulé par défaut (lettre A, B…). Tronqués à 200 chars. Omis si tous par défaut. |
 | `t` | object (`Total`) | `{}` | État de la ligne Total (voir ci-dessous). Omis si tous les champs à défaut. |
 | `i` | array<Issue> | `[]` | Liste des issues. Minimum implicite = 2 à la reconstruction. |
 | `la` | string | `""` | « Lier issues » : total visé des mises liées (format français, ex. `"10"`). Omis si vide. |

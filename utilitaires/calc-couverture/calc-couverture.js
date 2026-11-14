@@ -464,8 +464,16 @@ function initCalculator($card, opts = {}) {
 	function renumberColumnHeaders() {
 		$grid.find("[data-oddshead]").each(function (i) {
 			const idx = i + 1;
+			const newLetter = letterFor(idx);
+			const $label = $(this).find(".col-label");
+			const $title = $(this).find(".col-title");
+			// Intitulé de colonne : s'il est encore à sa valeur par défaut (l'ancienne
+			// lettre) ou vide, il suit la renumérotation ; sinon on garde le texte saisi.
+			const title = $title.text().trim();
+			if (title === "" || title === $label.text()) $title.text(newLetter);
+			$title.attr("data-placeholder", newLetter);
 			$(this).attr("data-col", String(idx));
-			$(this).find(".col-label").text(letterFor(idx));
+			$label.text(newLetter);
 		});
 	}
 
@@ -505,6 +513,7 @@ function initCalculator($card, opts = {}) {
 		const $newHead = $(`
 			<div class="cell head colhead" data-oddshead data-col="${next}" data-colid="${colId}">
 				<span class="col-label">${letterFor(next)}</span>
+				<span class="col-title" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off" data-placeholder="${letterFor(next)}">${letterFor(next)}</span>
 				<button class="btn-icon btn btn-danger js-del-col" title="Supprimer cette colonne">
 					<i data-lucide="trash-2" class="icon"></i>
 				</button>
@@ -1510,6 +1519,19 @@ function initCalculator($card, opts = {}) {
 		removeOddsColumnAt(idx);
 	});
 
+	// Intitulé de colonne (option « Intitulés ») : une seule ligne → Entrée valide ;
+	// vidé → on remet la lettre par défaut.
+	$grid.on("keydown", ".col-title", function (e) {
+		if (e.key === "Enter") { e.preventDefault(); this.blur(); }
+	});
+	$grid.on("blur", ".col-title", function () {
+		const $title = $(this);
+		if ($title.text().trim() === "") {
+			$title.text($title.closest("[data-oddshead]").find(".col-label").text());
+			scheduleUrlSync();
+		}
+	});
+
 	$grid.on("click", ".js-add-detail", function () {
 		const issueId = $(this).closest("[data-issueid]").attr("data-issueid");
 		if (!issueId) return;
@@ -1781,6 +1803,7 @@ function collectCalcState($card) {
 		colsOrdered.push({
 			colId: $h.attr("data-colid"),
 			label: $h.find(".col-label").text(),
+			title: $h.find(".col-title").text().trim(),
 			index: Number($h.attr("data-col")),
 		});
 	});
@@ -2213,6 +2236,13 @@ function serializeCalcForUrl($card) {
 	const colIds = $grid.find("[data-oddshead]").map((_, el) => $(el).attr("data-colid")).get();
 	if (colIds.length !== 1) calc.n = colIds.length;
 
+	// Intitulés de colonnes : "" quand l'intitulé vaut la lettre par défaut.
+	const cl = $grid.find("[data-oddshead]").map((_, el) => {
+		const title = ($(el).find(".col-title").text() || "").trim().slice(0, URL_MAX_TEXT_LEN);
+		return title === $(el).find(".col-label").text() ? "" : title;
+	}).get();
+	if (cl.some(x => x !== "")) calc.cl = cl;
+
 	const $totalLabel = $grid.find(".total-label");
 	const totalStake = ($totalLabel.nextAll("[data-stake]").first().find("input").first().val() || "").trim();
 	const totalFixe = $totalLabel.nextAll(".cell").has(".radio.fixe").first().find(".radio.fixe").is(":checked");
@@ -2330,6 +2360,10 @@ function applyCalcFromUrl($card, calcData) {
 	while (Number($grid.attr("data-odds-cols")) < desiredCols) {
 		$card.find(".js-add-col").trigger("click");
 	}
+	$grid.find("[data-oddshead]").each(function (k) {
+		const custom = calcData.cl && calcData.cl[k];
+		$(this).find(".col-title").text(custom || $(this).find(".col-label").text());
+	});
 
 	// Adjust issue count (minimum 2 via addNewCalc, on ajoute les extras)
 	const desiredIssues = (calcData.i || []).length || 2;

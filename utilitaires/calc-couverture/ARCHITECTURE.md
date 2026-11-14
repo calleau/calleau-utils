@@ -2,6 +2,8 @@
 
 Calculateur de couverture (surebet) supportant Back/Lay, commissions, gain fixe, multi-détails par issue et plusieurs calculateurs simultanés sur la même page.
 
+> Guide fonctionnel (utilisation, logique de calcul vulgarisée) : [FONCTIONNEMENT.md](FONCTIONNEMENT.md).
+
 ## Stack
 
 - HTML + CSS + jQuery 3.7 (pas de bundler, pas de build).
@@ -127,6 +129,7 @@ Garde-fou `recomputing` : booléen qui empêche les ré-entrées causées par le
   - `with-commission` — montre les inputs Com. dans les cellules de cote.
   - `with-details` — montre les colonnes Cote totale détaillée + Profit par détail.
   - `with-fixed-gain` — montre le bouton "+ Gain fixe".
+  - `with-issue-labels` — montre les intitulés d'issue (`.issue-label-cell`) et remplace la lettre de chaque en-tête de colonne (`.col-label`) par un intitulé éditable (`.col-title`, contenteditable, défaut = la lettre). `renumberColumnHeaders` ne réécrit un `.col-title` que s'il vaut encore l'ancienne lettre.
   - `has-multi-details` — calculé en JS (`refreshMultiDetailsClass`), insère la colonne "Fixe détail" entre "Suppr détail" et "Fixe".
 - `.issue-avg-cote { grid-column: calc(3 + var(--nb-cotes)) / span 1 }` et `.issue-sum-profit { grid-column: calc(5 + var(--nb-cotes)) / span 1 }` — placement explicite pour la ligne "+ Détail" car l'auto-flow ne suffit pas (cellules issue-level adjacentes).
 
