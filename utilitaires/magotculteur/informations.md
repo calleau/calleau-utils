@@ -11,7 +11,7 @@ Chaque règle de coverage contient deux informations primordiales :
 ## Lexique
 Voici le lexique à utiliser dans tout le calculateur : 
 - Leg : Une séléction individuelle. Un event + une issue.
-- Marché : Type de pari proposé sur un match. Ex : 1X2, Double Chance, BTTS, Asian Handicap, Total Buts.
+- Marché : Type de pari proposé sur un match. Ex : 1X2, Double Chance, BTTS, Asian Handicap, Total Buts, Mi-temps / Fin de match (HT/FT), 1X2 d'une mi-temps seule (1X2 MT1, 1X2 MT2).
 - Issue : Résultat possible dans un marché. Ex : 1, X, 2, 1X, Oui, Non, Over 2,5.
 - Pari : Un pari à une mise, une cote, et au moins un leg.
     - Simple : Un pari placé sur un seul leg.

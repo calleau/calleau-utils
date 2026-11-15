@@ -205,6 +205,8 @@ Côté moteur (`getCoverSets`) :
 
 **Mi-temps / fin de match** : marchés `HT/FT` et `Combi_HT/FT` (myCombi Betclic), issues `1/1` … `2/2` (mi-temps / fin de match), équivalents issue par issue. Partition à 9 issues, et chaque issue contre son Lay.
 
+**Résultat d'une mi-temps** (Betclic) : marchés `1X2 MT1` (1ère mi-temps seule) et `1X2 MT2` (2ème mi-temps seule), issues `1` / `X` / `2`. Chacun forme une partition à 3 issues (Lay : règle générique Back/Lay). `1X2 MT1` est aussi relié au marché `HT/FT` : une issue `1X2 MT1` vaut les 3 issues `HT/FT` de même résultat à la mi-temps (`1X2 MT1|1` = `1/1` + `1/X` + `1/2`). D'où 6 partitions mixtes (remplacer 1 ou 2 des 3 blocs `HT/FT` par l'issue `1X2 MT1` correspondante), à 5 ou 7 issues donc en simple match uniquement. `1X2 MT2` n'a pas d'équivalent (le résultat de la 2ème mi-temps seule ne se déduit pas du `HT/FT`).
+
 **Écart de buts** (handicap européen, format Betxtractor) : issues `1 (a:b)`, `X (a:b)`, `2 (a:b)` où `a:b` = buts d'avance donnés au domicile / à l'extérieur. Avec g = buts dom. − buts ext. et t = b − a : `1` ⇔ g > t, `X` ⇔ g = t, `2` ⇔ g < t. Chaque ligne forme une partition à 3 issues (règle générique par regex). Équivalences : `2 (0:1)` = X2, `1 (1:0)` = 1X. Partitions à 4 issues : `1 (0:1)` / `X (0:1)` / `X` / `2` et `1` / `X` / `X (1:0)` / `2 (1:0)`.
 
 ### 4.3 Les trois méthodes de calcul
