@@ -52,6 +52,7 @@ Réponse :
 ```
 
 - `total` : nombre de résultats trouvés, avant `minProfit` et `limit`.
+- `links.calcCouverture` : une colonne de cotes par match, chaque sélection dans la colonne de son match. Pour un freebet ou un pari boosté combiné sur plusieurs matchs, une dernière colonne « Freebet : mise non rendue » / « Boost +X % sur le combiné » porte, sur sa seule ligne, le coefficient qui ramène le produit des colonnes à la cote à utiliser (cote − 1 pour un freebet, cote boostée).
 - `links.couvSeq` : seulement pour les couvertures séquentielles multi-matchs (comme dans l'interface).
 
 Erreurs : `{ "error": "…" }` avec le code 400 (requête invalide), 401 (jeton), 404, 413 (corps trop gros) ou 500.

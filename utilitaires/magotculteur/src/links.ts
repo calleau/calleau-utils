@@ -170,6 +170,17 @@ function calcCouvAnchor(r: CoveringSetResult, amountMode: AmountMode): { fixedId
   return { fixedIdx: firstPrincipal, fixedTotal: null };
 }
 
+// Intitulé de la colonne d'ajustement de calc-couverture selon les paris concernés.
+function adjustColLabel(bets: BetDetail[]): string {
+  const fb = bets.some(b => b.betType === 'fb');
+  const boosted = bets.filter(b => b.boosted);
+  const pcts = [...new Set(boosted.map(b =>
+    b.oddsBase && b.oddsBase > 1 ? Math.round(((b.odds - 1) / (b.oddsBase - 1) - 1) * 100) : null))];
+  const boostLabel = pcts.length === 1 && pcts[0] != null ? `Boost +${pcts[0]} % sur le combiné` : 'Boost sur le combiné';
+  if (fb && boosted.length) return `Ajustement : freebet (mise non rendue) / ${boostLabel.toLowerCase()}`;
+  return fb ? 'Freebet : mise non rendue' : boostLabel;
+}
+
 // Build a URL pointing to calc-couverture, avec une issue par bet, quel que
 // soit son rôle : un résultat peut contenir plusieurs principaux (freebets,
 // groupe obligatoire, ou tous les paris en cash simultané) et zéro cover.
@@ -184,17 +195,46 @@ function calcCouvAnchor(r: CoveringSetResult, amountMode: AmountMode): { fixedId
 // Une colonne de cotes par match (ordre chronologique), intitulée du nom du match
 // (option « Intitulés » de calc-couverture) : chaque sélection va dans
 // la colonne de son match, calc-couverture multipliant les colonnes et ignorant
-// les cases vides. Freebet et pari boosté gardent leur cote totale dans une seule
-// colonne : leur cote n'est pas le produit des cotes individuelles.
+// les cases vides. Freebet et pari boosté combinés sur plusieurs matchs : leur
+// cote n'est pas le produit des cotes individuelles (mise freebet non rendue,
+// boost sur le gain du combiné entier), d'où une colonne d'ajustement en dernier,
+// remplie seulement sur leur ligne, avec le coefficient (4 décimales) qui ramène
+// le produit des colonnes à la cote à utiliser. Sur un seul match, la cote à
+// utiliser va directement dans sa colonne.
 export function buildCalcCouvUrl(r: CoveringSetResult, ctx: LinkContext): string {
   if (!r.bets.length) return '';
   const { fixedIdx, fixedTotal } = calcCouvAnchor(r, ctx.amountMode);
   const eventCols = sortedEventKeys(ctx.data, r);
-  const nCols = Math.max(1, eventCols.length);
+  const nEventCols = Math.max(1, eventCols.length);
   const colOf = (ek: string) => Math.max(0, eventCols.indexOf(ek));
 
   // Globaux : activer commissions, détails, sites, labels d'issue.
   const g = { cm: 1, d: 1, ds: 1, il: 1 };
+
+  // Cotes par colonne de match de chaque pari, et coefficient d'ajustement éventuel.
+  const plans = r.bets.map(b => {
+    const cols = new Map<number, string>();
+    // Freebet : la mise n'est pas rendue, le retour vaut stake × (cote − 1).
+    const target = b.betType === 'fb' ? b.odds - 1 : b.odds;
+    const needsAdj = b.betType === 'fb' || !!b.boosted;
+    const firstCol = colOf(b.legs[0]?.eventKey ?? '');
+    const legOdds = b.legs.map(l => (b.legs.length === 1 ? b.odds : getLegIndivOdds(ctx.data, l, b.site)));
+    // Deux sélections du même match (cas théorique) : produit dans sa colonne.
+    const byCol = new Map<number, number>();
+    b.legs.forEach((l, k) => byCol.set(colOf(l.eventKey), (byCol.get(colOf(l.eventKey)) ?? 1) * (legOdds[k] ?? NaN)));
+    if (legOdds.some(x => x == null) || (needsAdj && byCol.size <= 1)) {
+      cols.set(firstCol, fmtNumFr(target));
+      return { cols, adj: null as number | null, firstCol };
+    }
+    for (const [col, val] of byCol) cols.set(col, fmtNumFr(val));
+    if (!needsAdj) return { cols, adj: null, firstCol };
+    // Produit des cotes telles qu'écrites (2 décimales), pour retomber pile sur la cible.
+    const product = [...cols.values()].reduce((p, s) => p * Number(s.replace(',', '.')), 1);
+    return { cols, adj: product > 0 ? target / product : null, firstCol };
+  });
+  const adjBets = r.bets.filter((_, i) => plans[i].adj != null);
+  const adjCol = adjBets.length ? nEventCols : -1;
+  const nCols = nEventCols + (adjBets.length ? 1 : 0);
 
   const issues = r.bets.map((b, i) => {
     const isLay = b.liability != null || b.legs[0]?.betType === 'Lay';
@@ -206,17 +246,9 @@ export function buildCalcCouvUrl(r: CoveringSetResult, ctx: LinkContext): string
 
     const o: string[] = Array(nCols).fill('');
     const m: string[] = Array(nCols).fill('');
-    const firstCol = colOf(b.legs[0]?.eventKey ?? '');
-    const legOdds = b.legs.map(l => (b.legs.length === 1 ? b.odds : getLegIndivOdds(ctx.data, l, b.site)));
-    if (b.betType === 'fb' || b.boosted || legOdds.some(x => x == null)) {
-      // Freebet : la mise n'est pas rendue, le retour vaut stake × (cote − 1).
-      o[firstCol] = fmtNumFr(b.betType === 'fb' ? b.odds - 1 : b.odds);
-    } else {
-      // Deux sélections du même match (cas théorique) : produit dans sa colonne.
-      const byCol = new Map<number, number>();
-      b.legs.forEach((l, k) => byCol.set(colOf(l.eventKey), (byCol.get(colOf(l.eventKey)) ?? 1) * legOdds[k]!));
-      for (const [col, val] of byCol) o[col] = fmtNumFr(val);
-    }
+    const { cols, adj, firstCol } = plans[i];
+    for (const [col, val] of cols) o[col] = val;
+    if (adj != null) o[adjCol] = fmtNumFr(adj, 4);
     if (commPct > 0) m[firstCol] = fmtNumFr(commPct);
 
     const detail: any = { w: b.site, o };
@@ -232,8 +264,9 @@ export function buildCalcCouvUrl(r: CoveringSetResult, ctx: LinkContext): string
 
   const calc: any = { i: issues };
   if (nCols > 1) calc.n = nCols;
-  // Intitulé de chaque colonne de cotes : le nom de son match.
+  // Intitulé de chaque colonne de cotes : le nom de son match, puis l'ajustement.
   const colLabels = eventCols.map(ek => (ctx.data?.[ek] ? eventDisplayName(ek, ctx.data[ek]) : ek).slice(0, 200));
+  if (adjBets.length) colLabels.push(adjustColLabel(adjBets));
   if (colLabels.length === nCols) calc.cl = colLabels;
   if (fixedTotal !== null) calc.t = { s: fmtNumFr(fixedTotal), f: 1 };
   const state = { v: 1, g, c: [calc] };
