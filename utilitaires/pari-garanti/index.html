@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Pari garanti</title>
+	<link rel="stylesheet" href="../../theme.css" />
+	<link rel="stylesheet" href="pari-garanti.css" />
+	<script src="../../theme-toggle.js"></script>
+	<script src="versions.js"></script>
+	<script src="../../versions-widget.js"></script>
+</head>
+
+<body>
+	<div class="wrap">
+
+		<header class="toolbar">
+			<a href="../../index.html" class="back-link">calleau's <em>utils</em></a>
+			<h1 class="title">Pari garanti</h1>
+			<p class="subtitle">Pari personnalisé bet365 remboursé en freebet si perdu, couvert en Lay sur PIWIx</p>
+		</header>
+
+		<section class="card pg-params">
+			<div class="pg-field">
+				<label class="pg-label" for="pg-stake">Mise bet365</label>
+				<div class="numinput">
+					<input type="text" inputmode="decimal" id="pg-stake" value="10" />
+					<span class="unit">€</span>
+				</div>
+			</div>
+			<div class="pg-field">
+				<label class="pg-label" for="pg-fb">Freebet si perdu</label>
+				<div class="numinput">
+					<input type="text" inputmode="decimal" id="pg-fb" value="10" />
+					<span class="unit">€</span>
+				</div>
+			</div>
+			<div class="pg-field">
+				<label class="pg-label" for="pg-conv">Valeur du FB</label>
+				<div class="numinput">
+					<input type="text" inputmode="decimal" id="pg-conv" value="80" />
+					<span class="unit">%</span>
+				</div>
+			</div>
+			<div class="pg-field">
+				<label class="pg-label" for="pg-com">Commission PIWIx</label>
+				<div class="numinput">
+					<input type="text" inputmode="decimal" id="pg-com" value="3" />
+					<span class="unit">%</span>
+				</div>
+			</div>
+			<div class="pg-field">
+				<label class="pg-label" for="pg-min">Cote min. bet365</label>
+				<div class="numinput">
+					<input type="text" inputmode="decimal" id="pg-min" value="2" />
+				</div>
+			</div>
+			<div class="pg-field pg-field--mode">
+				<span class="pg-label">Mode</span>
+				<div class="pg-seg" role="radiogroup" aria-label="Mode de calcul">
+					<button type="button" class="pg-seg-btn" data-mode="balanced" role="radio">Équilibré</button>
+					<button type="button" class="pg-seg-btn" data-mode="allin" role="radio">Tout ou rien</button>
+				</div>
+			</div>
+			<p class="tip pg-mode-tip" id="pg-mode-tip"></p>
+		</section>
+
+		<section class="card pg-import">
+			<div class="pg-import-head">
+				<span class="pg-label">Export PIWIx (JSON Betxtractor)</span>
+				<div class="pg-import-actions">
+					<button type="button" class="btn btn-primary" id="pg-load">Charger</button>
+					<button type="button" class="btn btn-ghost" id="pg-clear-odds">Effacer les cotes bet365</button>
+					<button type="button" class="btn btn-ghost" id="pg-reset">Tout vider</button>
+				</div>
+			</div>
+			<textarea id="pg-json" class="pg-json" spellcheck="false"
+				placeholder="Colle ici l'export JSON des marchés « Match Odds and Both teams to Score », « Match Odds and Over/Under 2.5 Goals » et « 3.5 Goals »"></textarea>
+			<div id="pg-error" class="error-box" hidden></div>
+		</section>
+
+		<section id="pg-best" class="pg-best" hidden></section>
+
+		<section id="pg-events" class="pg-events"></section>
+
+		<footer class="page-footer">
+			<span class="footer-version" id="footer-version"></span>
+		</footer>
+	</div>
+
+	<div id="floating-actions"></div>
+
+	<script src="pari-garanti.js"></script>
+</body>
+
+</html>

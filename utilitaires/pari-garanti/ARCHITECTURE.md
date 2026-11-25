@@ -1,0 +1,86 @@
+# Architecture — Pari garanti
+
+Outil pour la mission bet365 **« Pari garanti »** : bet365 rend un freebet (5 ou 10 €) si un pari est perdu. Ce pari doit être un **pari personnalisé** (combiné d'au moins 2 sélections) d'une cote d'au moins 2. La meilleure option est presque toujours **résultat du match (1X2) + BTTS ou plus/moins de 2,5 / 3,5 buts**, couvert par un **Lay** du marché combiné équivalent sur PIWIx.
+
+Version actuelle : voir [`versions.js`](versions.js) (`CURRENT_VERSION`).
+
+## Utilisation
+
+1. Sur PIWIx, extraire avec Betxtractor les marchés « Match Odds and Both teams to Score », « Match Odds and Over/Under 2.5 Goals » et « … 3.5 Goals » du match (pages de détail), puis exporter le JSON.
+2. Coller le JSON : un tableau par match, 6 issues par marché (1 / X / 2 × Oui / Non ou plus / moins).
+3. Recopier, une par une, les cotes bet365 du pari personnalisé correspondant (pas d'API côté bet365). Entrée ou ↓ passe à la ligne suivante.
+4. La meilleure option est mise en avant (carte verte + ligne surlignée), les suivantes sont classées (#2, #3…).
+
+Les paramètres, le JSON et les cotes saisies sont gardés dans le navigateur (`localStorage`, clé `pari-garanti:v1`). Les cotes sont rangées par match et par issue : recoller un nouvel export du même match conserve les cotes bet365 déjà saisies.
+
+## Formats lus
+
+| Format | Repère | Cote Lay |
+|---|---|---|
+| Export du tableau de bord Betxtractor (`{ "<match>_<date>": { nom_event, opponents, markets } }`) | `markets[marché][issue][site]` | `PIWIx.Lay.odds` (sinon le 1er site avec un Lay), disponible `Lay.amount` |
+| Extraction brute (`{ extraction: { events } }` de Betxtractor-3000, ou `{ site, events }` de l'extension) | `events[].odds[]` | `lay.value`, disponible `lay.amount` |
+
+Marchés reconnus (même règles que `mappings/combo-normalizer.js` de l'extension) :
+
+| Marché | Noms acceptés | Issues |
+|---|---|---|
+| Résultat & BTTS | `1X2 & BTTS`, `Match Odds and Both teams to Score` | `1 & Oui`, ou `Paris St-G/Yes`, `Draw/No`… |
+| Résultat & total de buts | `1X2 & Total buts`, `Match Odds and Over/Under 2.5 Goals` (toute ligne) | `X & -2.5`, ou `Roma/Under 2.5 Goals`… |
+
+Les équipes viennent de `opponents` ; à défaut (anciens exports PIWIx, opposants vides), du nom du match découpé sur ` v ` / ` vs ` / ` - `. Les autres marchés sont ignorés.
+
+## Le calcul
+
+Notations : `S` mise bet365 (cash), `B` cote bet365, `L` cote Lay PIWIx, `c` commission PIWIx (3 %), `F` freebet, `r` valeur d'un euro de freebet en cash (80 %), `m` mise Lay.
+
+Le Lay porte sur exactement la même issue que le pari bet365 : il n'y a que deux cas.
+
+| Cas | Résultat |
+|---|---|
+| bet365 gagne (le Lay perd) | `S·(B−1) − m·(L−1)` |
+| bet365 perd (le Lay gagne) | `−S + m·(1−c)` en cash, **plus le freebet `F`** |
+
+### Mode équilibré
+
+Même résultat dans les deux cas, le freebet étant compté `r·F` :
+
+- `m = (S·B − r·F) / (L − c)`
+- résultat garanti `P = S·(B−1) − m·(L−1)` = `−S + m·(1−c) + r·F`
+- classement : `P` décroissant.
+
+### Mode tout ou rien
+
+Le Lay rembourse exactement la mise si bet365 gagne (0 €) ; si bet365 perd, la perte en cash est compensée par le freebet entier :
+
+- `m = S·(B−1) / (L−1)`
+- résultat : `0` si bet365 gagne, `−S + m·(1−c)` en cash + `F` en freebet sinon
+- classement : perte en cash (cas « bet365 perd ») la plus petite.
+
+Les deux modes ne classent pas forcément les issues dans le même ordre.
+
+La mise Lay est arrondie au centime et les résultats affichés sont calculés avec cette mise arrondie (ce qui explique un écart d'un centime entre les deux cas en mode équilibré).
+
+### Cote à viser
+
+Pour chaque autre issue, la colonne « Cote à viser » donne la cote bet365 à partir de laquelle elle égalerait la meilleure option actuelle : elle sert à savoir quelles combinaisons valent la peine d'être vérifiées sur bet365. Sans aucune cote saisie, elle donne la cote d'équilibre (résultat 0 €) en mode équilibré, et rien en mode tout ou rien. Toujours au moins la cote minimale.
+
+- équilibré : `P(B) = B·S·(1−c)/(L−c) − S + r·F·(L−1)/(L−c)` → `B = (P* + S − r·F·(L−1)/(L−c)) · (L−c) / (S·(1−c))`
+- tout ou rien : `B = 1 + (P* + S)·(L−1) / (S·(1−c))`
+
+### Contrôles
+
+- Cote bet365 inférieure à la cote minimale (2 par défaut) : ligne grisée « cote < 2,00 », exclue du classement.
+- Mise Lay supérieure au disponible PIWIx (`Lay.amount`) : avertissement « dispo N € » sous la mise (la ligne reste classée).
+
+## Fichiers
+
+| Fichier | Rôle |
+|---|---|
+| `index.html` | Page : paramètres, import, meilleure option, tableaux |
+| `pari-garanti.js` | Lecture des marchés, calcul, rendu, sauvegarde locale |
+| `pari-garanti.css` | Styles propres à l'outil (préfixe `pg-`) |
+| `versions.js` | Nom et version pour `versions-widget.js` |
+
+## Historique
+
+- **v1.0.0** (2026-11-25) : première version.
