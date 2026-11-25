@@ -29,6 +29,24 @@
 
 .pg-field .numinput input { width: 4.5rem; }
 
+.pg-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	height: 36px;
+	font-size: 0.9rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.pg-proposed {
+	font-weight: 700;
+	color: var(--c-tertiary);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	font-size: 0.62rem;
+}
+
 .pg-mode-tip {
 	flex-basis: 100%;
 	margin: 0;

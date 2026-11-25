@@ -17,8 +17,8 @@ Les paramètres, le JSON et les cotes saisies sont gardés dans le navigateur (`
 
 | Format | Repère | Cote Lay |
 |---|---|---|
-| Export du tableau de bord Betxtractor (`{ "<match>_<date>": { nom_event, opponents, markets } }`) | `markets[marché][issue][site]` | `PIWIx.Lay.odds` (sinon le 1er site avec un Lay), disponible `Lay.amount` |
-| Extraction brute (`{ extraction: { events } }` de Betxtractor-3000, ou `{ site, events }` de l'extension) | `events[].odds[]` | `lay.value`, disponible `lay.amount` |
+| Export du tableau de bord Betxtractor (`{ "<match>_<date>": { nom_event, opponents, markets } }`) | `markets[marché][issue][site]` | `PIWIx.Lay.odds` (sinon le 1er site avec un Lay), disponible `Lay.amount`, Back `Back.odds` (meilleure proposition en Lay) |
+| Extraction brute (`{ extraction: { events } }` de Betxtractor-3000, ou `{ site, events }` de l'extension) | `events[].odds[]` | `lay.value`, disponible `lay.amount`, Back `back.value` |
 
 Marchés reconnus (même règles que `mappings/combo-normalizer.js` de l'extension) :
 
@@ -78,6 +78,17 @@ Chaque ligne calculée (colonne Résultat), la carte « Meilleure option » et l
 
 calc-couverture retrouve les mises Lay de l'outil (à l'arrondi près : il ne les arrondit pas au centime). En tout ou rien, le profit de l'issue 2 inclut le freebet entier : perte en cash + `F`. Le lien est construit par `calcCouvUrl()` avec `lz-string` 1.5.0 (CDN jsDelivr, comme les autres outils).
 
+### Meilleure proposition en Lay (option)
+
+Case « Meilleure proposition en Lay » : au lieu de prendre le Lay affiché (apparié tout de suite), on calcule avec la meilleure cote qu'on peut **proposer** sur PIWIx, c'est-à-dire la cote juste en dessous du Lay actuel (`proposedLay()`) :
+
+- Back et Lay **consécutifs** sur le barème (1,20 / 1,21 ; 9,6 / 9,8) : pas de place entre les deux → Lay actuel ;
+- sinon : la cote précédant le Lay sur le barème (Back 1,20 / Lay 1,25 → 1,24 ; Back 9 / Lay 9,8 → 9,6). Sans Back affiché, idem.
+
+Barème des cotes de l'exchange (pas par tranche) : 0,01 jusqu'à 2 ; 0,02 jusqu'à 3 ; 0,05 jusqu'à 4 ; 0,1 jusqu'à 6 ; 0,2 jusqu'à 10 ; 0,5 jusqu'à 20 ; 1 jusqu'à 30 ; 2 jusqu'à 50 ; 5 jusqu'à 100 ; 10 au-delà. La cote précédente utilise le pas de la tranche **inférieure** (`tickBelow()`) : Lay 10 → 9,8, Lay 2,02 → 2,00, Lay 3,10 → 3,05.
+
+Avec l'option, la colonne Lay affiche la cote proposée (« proposé », avec le Lay et le Back actuels en dessous) ou « consécutifs » ; mises, résultats, cote à viser, carte de la meilleure option et liens calc-couverture utilisent la cote proposée. Une proposition n'est appariée que si un parieur la prend : l'avertissement de disponible ne s'applique qu'au Lay actuel.
+
 ### Contrôles
 
 - Cote bet365 inférieure à la cote minimale (2 par défaut) : ligne grisée « cote < 2,00 », exclue du classement.
@@ -96,3 +107,4 @@ calc-couverture retrouve les mises Lay de l'outil (à l'arrondi près : il ne le
 
 - **v1.0.0** (2026-11-25) : première version.
 - **v1.1.0** (2026-11-25) : liens vers calc-couverture (deux calculateurs : Équilibré et Tout ou rien) sur chaque option calculée.
+- **v1.2.0** (2026-11-25) : option « Meilleure proposition en Lay » (cote juste sous le Lay actuel, sauf Back / Lay consécutifs).

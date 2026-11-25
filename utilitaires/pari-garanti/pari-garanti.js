@@ -10,6 +10,7 @@ const state = {
 	events: [],        // [{ key, name, opp1, opp2, date, groups: [{ title, rows: [...] }] }]
 	odds: {},          // clé de ligne → cote bet365 saisie (texte)
 	mode: 'balanced',  // 'balanced' | 'allin'
+	bestLay: false,    // calculer avec la meilleure proposition en Lay (cote juste sous le Lay)
 	json: '',
 };
 
@@ -87,11 +88,42 @@ function comboIssue(label, market, opp1, opp2) {
 	return null;
 }
 
-/** Cote Lay d'une issue au format Betxtractor : PIWIx en priorité, sinon le 1er site avec un Lay. */
+/** Cotes Lay (et Back) d'une issue au format Betxtractor : PIWIx en priorité, sinon le 1er site avec un Lay. */
 function layOf(sites) {
 	if (!sites || typeof sites !== 'object') return null;
-	const pick = s => (s && s.Lay && num(s.Lay.odds) > 1 ? { odds: num(s.Lay.odds), amount: num(s.Lay.amount) } : null);
+	const pick = s => (s && s.Lay && num(s.Lay.odds) > 1
+		? { odds: num(s.Lay.odds), amount: num(s.Lay.amount), back: num(s.Back?.odds) }
+		: null);
 	return pick(sites.PIWIx) || Object.values(sites).map(pick).find(Boolean) || null;
+}
+
+// ── Meilleure proposition en Lay ────────────────────────
+// Barème des cotes de l'exchange (Betfair) : pas de cotation par tranche.
+function tickBelow(odds) {
+	// Pas de la tranche juste en dessous de `odds` (10 → 9,80 : pas de la tranche 6–10)
+	const v = odds - 1e-9;
+	if (v < 2) return 0.01;
+	if (v < 3) return 0.02;
+	if (v < 4) return 0.05;
+	if (v < 6) return 0.1;
+	if (v < 10) return 0.2;
+	if (v < 20) return 0.5;
+	if (v < 30) return 1;
+	if (v < 50) return 2;
+	if (v < 100) return 5;
+	return 10;
+}
+
+/**
+ * Cote Lay à proposer : la cote juste en dessous du Lay actuel, sauf si elle atteint
+ * le Back (Back et Lay consécutifs : 1,20 / 1,21 ou 9,6 / 9,8) → Lay actuel.
+ * Ex. Back 1,20 / Lay 1,25 → 1,24 ; Back 9 / Lay 9,8 → 9,6.
+ */
+function proposedLay(back, lay) {
+	const below = round2(lay - tickBelow(lay));
+	if (below <= 1) return lay;
+	if (back != null && below <= back + 1e-9) return lay;
+	return below;
 }
 
 /** Texte JSON → liste d'événements { name, opp1, opp2, date, items: [{ result, second, lay, amount }] }. */
@@ -106,7 +138,7 @@ function parseInput(text) {
 			const name = ev.event?.fullName || [ev.event?.opponent1, ev.event?.opponent2].filter(Boolean).join(' vs ');
 			const odds = (ev.odds || []).map(o => ({
 				market: o.market, issue: o.betType,
-				lay: num(o.lay?.value), amount: num(o.lay?.amount),
+				lay: num(o.lay?.value), amount: num(o.lay?.amount), back: num(o.back?.value),
 			}));
 			raw.push({ name, opp1: ev.event?.opponent1, opp2: ev.event?.opponent2, date: ev.metadata?.datetime, odds });
 		}
@@ -118,7 +150,7 @@ function parseInput(text) {
 			for (const [market, issues] of Object.entries(ev.markets)) {
 				for (const [issue, sites] of Object.entries(issues || {})) {
 					const l = layOf(sites);
-					odds.push({ market, issue, lay: l?.odds ?? null, amount: l?.amount ?? null });
+					odds.push({ market, issue, lay: l?.odds ?? null, amount: l?.amount ?? null, back: l?.back ?? null });
 				}
 			}
 			raw.push({ name: ev.nom_event, opp1: ev.opponents?.['1'], opp2: ev.opponents?.['2'], date: ev.dateTime, odds });
@@ -142,7 +174,7 @@ function parseInput(text) {
 			const id = `${c.result} & ${c.second}`;
 			if (seen.has(id)) continue;
 			seen.add(id);
-			items.push({ ...c, lay: o.lay, amount: o.amount });
+			items.push({ ...c, lay: o.lay, amount: o.amount, back: o.back > 1 ? o.back : null });
 		}
 		if (items.length) events.push({ name: ev.name || `${opp1} vs ${opp2}`, opp1, opp2, date: ev.date, items });
 	}
@@ -241,7 +273,7 @@ function calcCouvUrl(ev, row, p) {
 				{
 					l: `${tag} · bet365 perd · Lay PIWIx + ${fbText}`,
 					dt: [
-						{ t: 'l', w: 'PIWIx', o: [fr(row.lay)], m: [fr(p.c * 100)] },
+						{ t: 'l', w: row.proposed ? 'PIWIx (proposé)' : 'PIWIx', o: [fr(row.L)], m: [fr(p.c * 100)] },
 						{ t: 'f', w: 'bet365', v: fr(allin ? p.F : p.r * p.F) },
 					],
 				},
@@ -291,7 +323,7 @@ function renderEvents() {
 					${g.rows.map((row, ri) => `
 					<tr class="pg-row" data-key="${esc(row.key)}">
 						<td class="pg-combo"><span class="pg-combo-res">${esc(row.label.res)}</span><span class="pg-combo-sec">${esc(row.label.second)}</span></td>
-						<td class="pg-lay"><span class="pg-lay-odds">${fmtNum(row.lay)}</span>${row.amount != null ? `<span class="pg-sub">dispo ${fmtNum(row.amount, 0)} €</span>` : ''}</td>
+						<td class="pg-lay" data-cell="lay"></td>
 						<td class="pg-365"><div class="numinput pg-odds-input"><input type="text" inputmode="decimal" placeholder="—"
 							data-key="${esc(row.key)}" id="pg-in-${ei}-${esc(g.line)}-${ri}" value="${esc(state.odds[row.key] || '')}" /></div></td>
 						<td class="pg-target" data-cell="target"></td>
@@ -321,9 +353,12 @@ function update() {
 		const B = num(state.odds[row.key]);
 		row.B = B;
 		row.res = null;
+		// Cote Lay retenue : Lay actuel, ou meilleure proposition (option)
+		row.L = state.bestLay ? proposedLay(row.back, row.lay) : row.lay;
+		row.proposed = row.L !== row.lay;
 		row.status = B == null ? 'empty' : B < p.minOdds ? 'low' : B <= 1 ? 'invalid' : 'ok';
 		if (row.status === 'ok') {
-			row.res = compute(p, B, row.lay);
+			row.res = compute(p, B, row.L);
 			filled.push({ ev, row });
 		}
 	}
@@ -341,8 +376,16 @@ function update() {
 		tr.classList.toggle('is-best', !!best && best.row === row);
 		tr.classList.toggle('is-low', row.status === 'low');
 
+		const backTxt = row.back != null ? ` · back ${fmtNum(row.back)}` : '';
+		cell('lay').innerHTML = row.proposed
+			? `<span class="pg-lay-odds" title="Ordre Lay à proposer : non apparié tant qu'un parieur ne le prend pas">${fmtNum(row.L)}</span>`
+				+ `<span class="pg-sub pg-proposed">proposé</span><span class="pg-sub">lay ${fmtNum(row.lay)}${backTxt}</span>`
+			: `<span class="pg-lay-odds">${fmtNum(row.lay)}</span>`
+				+ (row.amount != null ? `<span class="pg-sub">dispo ${fmtNum(row.amount, 0)} €</span>` : '')
+				+ (state.bestLay ? `<span class="pg-sub" title="Back et Lay consécutifs : pas de meilleure proposition">consécutifs${backTxt}</span>` : '');
+
 		const isBest = best && best.row === row;
-		const t = target == null || isBest ? null : oddsFor(p, row.lay, target);
+		const t = target == null || isBest ? null : oddsFor(p, row.L, target);
 		cell('target').innerHTML = t == null ? '' : `<span class="pg-target-val" title="${best ? 'Cote bet365 à atteindre pour égaler la meilleure option' : 'Cote bet365 pour un résultat à 0 €'}">≥ ${fmtNum(Math.ceil(t * 100) / 100)}</span>`;
 
 		if (row.status === 'low') {
@@ -357,7 +400,8 @@ function update() {
 			continue;
 		}
 		const r = row.res;
-		const short = row.amount != null && r.m > row.amount;
+		// Disponible : n'a de sens que pour le Lay actuel (une proposition attend une contrepartie)
+		const short = !row.proposed && row.amount != null && r.m > row.amount;
 		cell('stake').innerHTML = `<span class="pg-main">${fmtEur(r.m)}</span><span class="pg-sub">resp. ${fmtEur(r.liability)}</span>`
 			+ (short ? `<span class="pg-warn" title="Le Lay disponible sur PIWIx est inférieur à la mise">dispo ${fmtNum(row.amount, 0)} €</span>` : '');
 		cell('win').innerHTML = `<span class="pg-main ${signClass(r.win)}">${fmtSigned(r.win)}</span>`;
@@ -393,7 +437,7 @@ function renderBest(p, filled) {
 				<div class="metric-card">
 					<div class="metric-label">Lay PIWIx</div>
 					<div class="metric-value">${fmtEur(r.m)}</div>
-					<div class="tip">à ${fmtNum(row.lay)} — responsabilité ${fmtEur(r.liability)}</div>
+					<div class="tip">à ${fmtNum(row.L)}${row.proposed ? ` (proposé, lay actuel ${fmtNum(row.lay)})` : ''} — responsabilité ${fmtEur(r.liability)}</div>
 				</div>
 				<div class="metric-card">
 					<div class="metric-label">Si bet365 gagne</div>
@@ -414,7 +458,7 @@ function renderBest(p, filled) {
 				${filled.slice(1, 5).map(({ ev: e, row: x }) => `
 				<li><span>${esc(x.label.res)} &amp; ${esc(x.label.second)}</span>
 					${state.events.length > 1 ? `<span class="tip">${esc(e.opp1 && e.opp2 ? `${e.opp1} – ${e.opp2}` : e.name)}</span>` : ''}
-					<span class="tip">@ ${fmtNum(x.B)} / Lay ${fmtNum(x.lay)}</span>
+					<span class="tip">@ ${fmtNum(x.B)} / Lay ${fmtNum(x.L)}${x.proposed ? ' (proposé)' : ''}</span>
 					<span class="pg-main ${signClass(x.res.score)}">${fmtSigned(x.res.score)}</span>
 					${calcCouvLink(e, x, p)}</li>`).join('')}
 			</ol>` : ''}
@@ -460,7 +504,7 @@ const PARAM_IDS = ['pg-stake', 'pg-fb', 'pg-conv', 'pg-com', 'pg-min'];
 function save() {
 	try {
 		const values = Object.fromEntries(PARAM_IDS.map(id => [id, $(id).value]));
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({ json: state.json, odds: state.odds, mode: state.mode, values }));
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({ json: state.json, odds: state.odds, mode: state.mode, bestLay: state.bestLay, values }));
 	} catch { /* stockage indisponible : rien à faire */ }
 }
 
@@ -470,6 +514,7 @@ function restore() {
 		if (!saved) return;
 		for (const [id, v] of Object.entries(saved.values || {})) if ($(id) && v != null) $(id).value = v;
 		if (saved.mode === 'allin' || saved.mode === 'balanced') state.mode = saved.mode;
+		state.bestLay = saved.bestLay === true;
 		state.odds = saved.odds || {};
 		state.json = saved.json || '';
 		$('pg-json').value = state.json;
@@ -492,6 +537,11 @@ document.addEventListener('DOMContentLoaded', () => {
 		renderModeTip();
 		update();
 	}));
+	$('pg-bestlay').checked = state.bestLay;
+	$('pg-bestlay').addEventListener('change', e => {
+		state.bestLay = e.target.checked;
+		update();
+	});
 
 	$('pg-load').addEventListener('click', () => load($('pg-json').value));
 	$('pg-json').addEventListener('paste', () => setTimeout(() => load($('pg-json').value), 0));
