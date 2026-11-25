@@ -67,6 +67,17 @@ Pour chaque autre issue, la colonne « Cote à viser » donne la cote bet365 à 
 - équilibré : `P(B) = B·S·(1−c)/(L−c) − S + r·F·(L−1)/(L−c)` → `B = (P* + S − r·F·(L−1)/(L−c)) · (L−c) / (S·(1−c))`
 - tout ou rien : `B = 1 + (P* + S)·(L−1) / (S·(1−c))`
 
+### Lien vers calc-couverture
+
+Chaque ligne calculée (colonne Résultat), la carte « Meilleure option » et le classement ont un lien **calc-couv ↗**. Il ouvre la [calculatrice couverture](../calc-couverture/index.html) avec **deux calculateurs** (format `?s=…`, voir [URL_STATE.md](../calc-couverture/URL_STATE.md)), options Commissions, Gain fixe, Intitulés et Site activées :
+
+| Calculateur | Issue 1 « bet365 gagne » | Issue 2 « bet365 perd » |
+|---|---|---|
+| **Équilibré** | Back bet365 à `B`, mise `S`, **Fixe**, distribuée | Lay PIWIx à `L` (commission `c`) + gain fixe `r·F` (freebet à sa valeur), distribuée |
+| **Tout ou rien** | idem, **non distribuée** (vise 0 €) | Lay PIWIx + gain fixe `F` (valeur nominale du freebet), distribuée |
+
+calc-couverture retrouve les mises Lay de l'outil (à l'arrondi près : il ne les arrondit pas au centime). En tout ou rien, le profit de l'issue 2 inclut le freebet entier : perte en cash + `F`. Le lien est construit par `calcCouvUrl()` avec `lz-string` 1.5.0 (CDN jsDelivr, comme les autres outils).
+
 ### Contrôles
 
 - Cote bet365 inférieure à la cote minimale (2 par défaut) : ligne grisée « cote < 2,00 », exclue du classement.
@@ -77,10 +88,11 @@ Pour chaque autre issue, la colonne « Cote à viser » donne la cote bet365 à 
 | Fichier | Rôle |
 |---|---|
 | `index.html` | Page : paramètres, import, meilleure option, tableaux |
-| `pari-garanti.js` | Lecture des marchés, calcul, rendu, sauvegarde locale |
+| `pari-garanti.js` | Lecture des marchés, calcul, rendu, liens calc-couverture, sauvegarde locale |
 | `pari-garanti.css` | Styles propres à l'outil (préfixe `pg-`) |
 | `versions.js` | Nom et version pour `versions-widget.js` |
 
 ## Historique
 
 - **v1.0.0** (2026-11-25) : première version.
+- **v1.1.0** (2026-11-25) : liens vers calc-couverture (deux calculateurs : Équilibré et Tout ou rien) sur chaque option calculée.

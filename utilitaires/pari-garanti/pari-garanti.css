@@ -252,6 +252,18 @@
 	color: var(--color-muted);
 }
 
+.pg-cc-link {
+	display: block;
+	font-family: 'DM Sans', sans-serif;
+	font-size: 0.7rem;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.pg-podium .pg-cc-link { display: inline; margin-left: 0.6rem; }
+
+.pg-cc-btn { margin-left: auto; font-size: 0.85rem; padding: 0.35rem 0.8rem; }
+
 .pg-row.is-best td { background: color-mix(in srgb, var(--color-pos) 14%, transparent); }
 .pg-row.is-best .pg-rank { color: var(--color-pos); font-weight: 700; }
 .pg-row.is-low td:not(.pg-365):not(.pg-score) { opacity: 0.45; }

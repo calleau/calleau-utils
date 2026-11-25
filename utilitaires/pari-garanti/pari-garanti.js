@@ -212,6 +212,53 @@ function oddsFor(p, L, target) {
 	return Number.isFinite(B) ? Math.max(B, p.minOdds, 1.01) : null;
 }
 
+// ── Lien vers calc-couverture ───────────────────────────
+// Deux calculateurs (cf. calc-couverture/URL_STATE.md) : issue 1 = Back bet365 (mise fixe),
+// issue 2 = Lay PIWIx + gain fixe du freebet.
+//   - Équilibré    : deux issues distribuées, freebet compté r·F → même profit partout.
+//   - Tout ou rien : issue 1 non distribuée (0 € si bet365 gagne), freebet à sa valeur
+//                    nominale F (profit de l'issue 2 = perte en cash + freebet).
+
+function calcCouvUrl(ev, row, p) {
+	if (typeof LZString === 'undefined') return null;
+	const fr = (x, d = 2) => x.toFixed(d).replace('.', ',');
+	const combo = `${row.label.res} & ${row.label.second}`;
+	const match = ev.opp1 && ev.opp2 ? `${ev.opp1} – ${ev.opp2}` : ev.name;
+	const calc = mode => {
+		const allin = mode === 'allin';
+		const tag = allin ? 'Tout ou rien' : 'Équilibré';
+		const fbText = allin
+			? `freebet ${fmtNum(p.F, 0)} € (valeur nominale)`
+			: `freebet ${fmtNum(p.F, 0)} € compté ${fmtNum(p.r * 100, 0)} %`;
+		return {
+			i: [
+				{
+					l: `${tag} · bet365 gagne · ${combo} (${match})`,
+					f: 1,
+					...(allin ? { d: 0 } : {}),
+					dt: [{ w: 'bet365', o: [fr(row.B)], s: fr(p.S) }],
+				},
+				{
+					l: `${tag} · bet365 perd · Lay PIWIx + ${fbText}`,
+					dt: [
+						{ t: 'l', w: 'PIWIx', o: [fr(row.lay)], m: [fr(p.c * 100)] },
+						{ t: 'f', w: 'bet365', v: fr(allin ? p.F : p.r * p.F) },
+					],
+				},
+			],
+		};
+	};
+	const state = { v: 1, g: { cm: 1, fg: 1, il: 1, ds: 1 }, c: [calc('balanced'), calc('allin')] };
+	return '../calc-couverture/index.html?s=' + LZString.compressToEncodedURIComponent(JSON.stringify(state));
+}
+
+function calcCouvLink(ev, row, p, cls = 'pg-cc-link') {
+	const url = calcCouvUrl(ev, row, p);
+	return url
+		? `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noopener" title="Ouvrir dans calc-couverture (Équilibré + Tout ou rien)">calc-couv ↗</a>`
+		: '';
+}
+
 // ── Rendu ───────────────────────────────────────────────
 
 function renderEvents() {
@@ -287,7 +334,7 @@ function update() {
 	const target = best ? best.row.res.score : state.mode === 'balanced' ? 0 : null;
 
 	const trByKey = new Map([...document.querySelectorAll('tr.pg-row')].map(tr => [tr.dataset.key, tr]));
-	for (const { row } of rows) {
+	for (const { ev, row } of rows) {
 		const tr = trByKey.get(row.key);
 		if (!tr) continue;
 		const cell = name => tr.querySelector(`[data-cell="${name}"]`);
@@ -315,7 +362,7 @@ function update() {
 			+ (short ? `<span class="pg-warn" title="Le Lay disponible sur PIWIx est inférieur à la mise">dispo ${fmtNum(row.amount, 0)} €</span>` : '');
 		cell('win').innerHTML = `<span class="pg-main ${signClass(r.win)}">${fmtSigned(r.win)}</span>`;
 		cell('lose').innerHTML = `<span class="pg-main ${signClass(r.loseCash)}">${fmtSigned(r.loseCash)}</span><span class="pg-sub">+ ${fmtNum(p.F, 0)} € FB</span>`;
-		cell('score').innerHTML = `<span class="pg-main ${signClass(r.score)}">${fmtSigned(r.score)}</span><span class="pg-rank">#${row.rank}</span>`;
+		cell('score').innerHTML = `<span class="pg-main ${signClass(r.score)}">${fmtSigned(r.score)}</span><span class="pg-rank">#${row.rank}</span>${calcCouvLink(ev, row, p)}`;
 	}
 
 	renderBest(p, filled);
@@ -334,6 +381,7 @@ function renderBest(p, filled) {
 			<div class="pg-best-head">
 				<span class="pg-label">Meilleure option</span>
 				<span class="pg-best-match">${esc(ev.opp1 && ev.opp2 ? `${ev.opp1} – ${ev.opp2}` : ev.name)}</span>
+				${calcCouvLink(ev, row, p, 'btn btn-secondary pg-cc-btn')}
 			</div>
 			<p class="pg-best-combo">${esc(row.label.res)} <span class="pg-amp">&amp;</span> ${esc(row.label.second)}</p>
 			<div class="metrics-grid">
@@ -367,7 +415,8 @@ function renderBest(p, filled) {
 				<li><span>${esc(x.label.res)} &amp; ${esc(x.label.second)}</span>
 					${state.events.length > 1 ? `<span class="tip">${esc(e.opp1 && e.opp2 ? `${e.opp1} – ${e.opp2}` : e.name)}</span>` : ''}
 					<span class="tip">@ ${fmtNum(x.B)} / Lay ${fmtNum(x.lay)}</span>
-					<span class="pg-main ${signClass(x.res.score)}">${fmtSigned(x.res.score)}</span></li>`).join('')}
+					<span class="pg-main ${signClass(x.res.score)}">${fmtSigned(x.res.score)}</span>
+					${calcCouvLink(e, x, p)}</li>`).join('')}
 			</ol>` : ''}
 		</div>`;
 }
