@@ -221,18 +221,28 @@ function params() {
 	};
 }
 
-function compute(p, B, L) {
+function compute(p, B, L, mode = state.mode) {
 	const { S, F, r, c } = p;
-	const exact = state.mode === 'balanced'
+	const exact = mode === 'balanced'
 		? (S * B - r * F) / (L - c)   // même résultat dans les deux cas (FB compté à r·F)
 		: S * (B - 1) / (L - 1);       // 0 si bet365 gagne
 	const m = Math.max(0, round2(exact));
 	const win = S * (B - 1) - m * (L - 1);
 	const loseCash = -S + m * (1 - c);
 	const loseValue = loseCash + r * F;
-	const score = state.mode === 'balanced' ? Math.min(win, loseValue) : loseCash;
+	const score = mode === 'balanced' ? Math.min(win, loseValue) : loseCash;
 	return { m, liability: m * (L - 1), win, loseCash, loseValue, score };
 }
+
+// Scénarios comparés : mode (Équilibré / Tout ou rien) × Lay (actuel / meilleure proposition)
+const SCENARIOS = [
+	{ key: 'balanced|cur', mode: 'balanced', prop: false },
+	{ key: 'balanced|prop', mode: 'balanced', prop: true },
+	{ key: 'allin|cur', mode: 'allin', prop: false },
+	{ key: 'allin|prop', mode: 'allin', prop: true },
+];
+const scenarioKey = (mode, prop) => `${mode}|${prop ? 'prop' : 'cur'}`;
+const MODE_LABEL = { balanced: 'Équilibré', allin: 'Tout ou rien' };
 
 /** Cote bet365 à partir de laquelle une issue atteint le résultat `target` (null si inatteignable). */
 function oddsFor(p, L, target) {
@@ -251,7 +261,8 @@ function oddsFor(p, L, target) {
 //   - Tout ou rien : issue 1 non distribuée (0 € si bet365 gagne), freebet à sa valeur
 //                    nominale F (profit de l'issue 2 = perte en cash + freebet).
 
-function calcCouvUrl(ev, row, p) {
+function calcCouvUrl(ev, row, p, L = row.L) {
+	const proposed = L !== row.lay;
 	if (typeof LZString === 'undefined') return null;
 	const fr = (x, d = 2) => x.toFixed(d).replace('.', ',');
 	const combo = `${row.label.res} & ${row.label.second}`;
@@ -273,7 +284,7 @@ function calcCouvUrl(ev, row, p) {
 				{
 					l: `${tag} · bet365 perd · Lay PIWIx + ${fbText}`,
 					dt: [
-						{ t: 'l', w: row.proposed ? 'PIWIx (proposé)' : 'PIWIx', o: [fr(row.L)], m: [fr(p.c * 100)] },
+						{ t: 'l', w: proposed ? 'PIWIx (proposé)' : 'PIWIx', o: [fr(L)], m: [fr(p.c * 100)] },
 						{ t: 'f', w: 'bet365', v: fr(allin ? p.F : p.r * p.F) },
 					],
 				},
@@ -284,8 +295,8 @@ function calcCouvUrl(ev, row, p) {
 	return '../calc-couverture/index.html?s=' + LZString.compressToEncodedURIComponent(JSON.stringify(state));
 }
 
-function calcCouvLink(ev, row, p, cls = 'pg-cc-link') {
-	const url = calcCouvUrl(ev, row, p);
+function calcCouvLink(ev, row, p, cls = 'pg-cc-link', L = row.L) {
+	const url = calcCouvUrl(ev, row, p, L);
 	return url
 		? `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noopener" title="Ouvrir dans calc-couverture (Équilibré + Tout ou rien)">calc-couv ↗</a>`
 		: '';
@@ -354,11 +365,15 @@ function update() {
 		row.B = B;
 		row.res = null;
 		// Cote Lay retenue : Lay actuel, ou meilleure proposition (option)
-		row.L = state.bestLay ? proposedLay(row.back, row.lay) : row.lay;
+		row.Lprop = proposedLay(row.back, row.lay);
+		row.L = state.bestLay ? row.Lprop : row.lay;
 		row.proposed = row.L !== row.lay;
 		row.status = B == null ? 'empty' : B < p.minOdds ? 'low' : B <= 1 ? 'invalid' : 'ok';
 		if (row.status === 'ok') {
-			row.res = compute(p, B, row.L);
+			// Tous les scénarios (mode × Lay), pour la comparaison
+			row.scen = {};
+			for (const s of SCENARIOS) row.scen[s.key] = compute(p, B, s.prop ? row.Lprop : row.lay, s.mode);
+			row.res = row.scen[scenarioKey(state.mode, state.bestLay)];
 			filled.push({ ev, row });
 		}
 	}
@@ -406,7 +421,11 @@ function update() {
 			+ (short ? `<span class="pg-warn" title="Le Lay disponible sur PIWIx est inférieur à la mise">dispo ${fmtNum(row.amount, 0)} €</span>` : '');
 		cell('win').innerHTML = `<span class="pg-main ${signClass(r.win)}">${fmtSigned(r.win)}</span>`;
 		cell('lose').innerHTML = `<span class="pg-main ${signClass(r.loseCash)}">${fmtSigned(r.loseCash)}</span><span class="pg-sub">+ ${fmtNum(p.F, 0)} € FB</span>`;
-		cell('score').innerHTML = `<span class="pg-main ${signClass(r.score)}">${fmtSigned(r.score)}</span><span class="pg-rank">#${row.rank}</span>${calcCouvLink(ev, row, p)}`;
+		// Option active et cote proposée différente : rappel du résultat avec le Lay actuel
+		const cur = row.proposed ? row.scen[scenarioKey(state.mode, false)] : null;
+		cell('score').innerHTML = `<span class="pg-main ${signClass(r.score)}">${fmtSigned(r.score)}</span>`
+			+ (cur ? `<span class="pg-sub" title="Même issue avec le Lay actuel (${fmtNum(row.lay)})">lay actuel ${fmtSigned(cur.score)}</span>` : '')
+			+ `<span class="pg-rank">#${row.rank}</span>${calcCouvLink(ev, row, p)}`;
 	}
 
 	renderBest(p, filled);
@@ -462,6 +481,73 @@ function renderBest(p, filled) {
 					<span class="pg-main ${signClass(x.res.score)}">${fmtSigned(x.res.score)}</span>
 					${calcCouvLink(e, x, p)}</li>`).join('')}
 			</ol>` : ''}
+			${renderComparison(p, filled)}
+		</div>`;
+}
+
+function renderComparison(p, filled) {
+	const scens = SCENARIOS.filter(s => state.bestLay || !s.prop);
+	const bestOf = key => filled.reduce((b, f) => (!b || f.row.scen[key].score > b.row.scen[key].score ? f : b), null);
+	const bests = Object.fromEntries(scens.map(s => [s.key, bestOf(s.key)]));
+	const name = f => `${f.row.label.res} & ${f.row.label.second}`
+		+ (state.events.length > 1 ? ` (${f.ev.opp1 && f.ev.opp2 ? `${f.ev.opp1} – ${f.ev.opp2}` : f.ev.name})` : '');
+	const scoreTxt = (mode, res) => (mode === 'balanced' ? 'gain garanti ' : 'cash si bet365 perd ') + fmtSigned(res.score);
+	const currentKey = scenarioKey(state.mode, state.bestLay);
+
+	const rows = scens.map(s => {
+		const f = bests[s.key];
+		const res = f.row.scen[s.key];
+		const L = s.prop ? f.row.Lprop : f.row.lay;
+		const isProp = L !== f.row.lay;
+		return `
+			<tr class="${s.key === currentKey ? 'is-current' : ''}">
+				<td class="pg-cmp-scen">${MODE_LABEL[s.mode]}${state.bestLay ? `<span class="pg-sub">${s.prop ? 'Lay proposé' : 'Lay actuel'}</span>` : ''}</td>
+				<td class="pg-cmp-opt">${esc(name(f))}<span class="pg-sub">bet365 ${fmtNum(f.row.B)} · Lay ${fmtNum(L)}${isProp ? ' (proposé)' : s.prop ? ' (consécutifs)' : ''}</span></td>
+				<td class="pg-num"><span class="pg-main">${fmtEur(res.m)}</span><span class="pg-sub">resp. ${fmtEur(res.liability)}</span></td>
+				<td class="pg-num"><span class="pg-main ${signClass(res.win)}">${fmtSigned(res.win)}</span></td>
+				<td class="pg-num"><span class="pg-main ${signClass(res.loseCash)}">${fmtSigned(res.loseCash)}</span><span class="pg-sub">+ ${fmtNum(p.F, 0)} € FB</span></td>
+				<td class="pg-num"><span class="pg-main ${signClass(res.score)}">${fmtSigned(res.score)}</span></td>
+				<td>${calcCouvLink(f.ev, f.row, p, 'pg-cc-link', L)}</td>
+			</tr>`;
+	}).join('');
+
+	// Constats : même meilleure option ou non, avec les résultats des deux scénarios
+	const notes = [];
+	const compare = (ka, kb, labelA, labelB, ctx) => {
+		const a = bests[ka], b = bests[kb];
+		const ra = a.row.scen[ka], rb = b.row.scen[kb];
+		const modeA = ka.split('|')[0], modeB = kb.split('|')[0];
+		notes.push(a.row === b.row
+			? `<li><strong>Même meilleure option</strong> ${ctx} : ${esc(name(a))} — ${labelA} : ${scoreTxt(modeA, ra)} ; ${labelB} : ${scoreTxt(modeB, rb)}.</li>`
+			: `<li><strong>Meilleure option différente</strong> ${ctx} — ${labelA} : ${esc(name(a))} (${scoreTxt(modeA, ra)}) ; ${labelB} : ${esc(name(b))} (${scoreTxt(modeB, rb)}).</li>`);
+	};
+	if (state.bestLay) {
+		compare('balanced|cur', 'balanced|prop', 'Lay actuel', 'Lay proposé', 'avec ou sans proposition en Lay, en Équilibré');
+		compare('allin|cur', 'allin|prop', 'Lay actuel', 'Lay proposé', 'avec ou sans proposition en Lay, en Tout ou rien');
+	}
+	const lay = state.bestLay ? 'prop' : 'cur';
+	compare(`balanced|${lay}`, `allin|${lay}`, 'Équilibré', 'Tout ou rien',
+		`en Équilibré et en Tout ou rien${state.bestLay ? ' (Lay proposé)' : ''}`);
+
+	return `
+		<div class="pg-compare">
+			<span class="pg-label">Comparaison des scénarios</span>
+			<ul class="pg-cmp-notes">${notes.join('')}</ul>
+			<div class="pg-table-wrap">
+			<table class="pg-table pg-cmp-table">
+				<thead><tr>
+					<th class="pg-th-combo">Scénario</th>
+					<th class="pg-th-combo">Meilleure option</th>
+					<th>Mise Lay</th>
+					<th>Si bet365 gagne</th>
+					<th>Si bet365 perd</th>
+					<th>Résultat</th>
+					<th></th>
+				</tr></thead>
+				<tbody>${rows}</tbody>
+			</table>
+			</div>
+			<p class="tip">Résultat : gain garanti en Équilibré (freebet compté ${fmtNum(p.r * 100, 0)} %), cash si bet365 perd en Tout ou rien (+ freebet entier). Ligne surlignée : réglages actuels.</p>
 		</div>`;
 }
 

@@ -89,6 +89,17 @@ Barème des cotes de l'exchange (pas par tranche) : 0,01 jusqu'à 2 ; 0,02 jusqu
 
 Avec l'option, la colonne Lay affiche la cote proposée (« proposé », avec le Lay et le Back actuels en dessous) ou « consécutifs » ; mises, résultats, cote à viser, carte de la meilleure option et liens calc-couverture utilisent la cote proposée. Une proposition n'est appariée que si un parieur la prend : l'avertissement de disponible ne s'applique qu'au Lay actuel.
 
+### Comparaison des scénarios
+
+Chaque ligne renseignée est calculée dans les 4 scénarios `SCENARIOS` : mode (Équilibré / Tout ou rien) × Lay (actuel / proposé, cote `Lprop = proposedLay(back, lay)`). Le tableau principal et la carte « Meilleure option » suivent les réglages choisis ; sous la carte, `renderComparison()` affiche :
+
+- un tableau avec la **meilleure option de chaque scénario** : Équilibré et Tout ou rien avec le Lay actuel, plus les deux scénarios « Lay proposé » quand l'option est cochée. Pour chacun : combinaison, cotes, mise Lay, résultat si bet365 gagne / perd, résultat de classement, lien calc-couverture avec la cote Lay du scénario. La ligne des réglages actuels est surlignée ;
+- des **constats** : même meilleure option ou option différente, avec les résultats des deux scénarios dans tous les cas :
+  - Lay actuel / Lay proposé, en Équilibré puis en Tout ou rien (option cochée) ;
+  - Équilibré / Tout ou rien (avec le Lay retenu).
+
+Option cochée, la colonne Résultat d'une ligne dont la cote proposée diffère du Lay rappelle aussi le résultat avec le Lay actuel (« lay actuel … »).
+
 ### Contrôles
 
 - Cote bet365 inférieure à la cote minimale (2 par défaut) : ligne grisée « cote < 2,00 », exclue du classement.
@@ -108,3 +119,4 @@ Avec l'option, la colonne Lay affiche la cote proposée (« proposé », avec le
 - **v1.0.0** (2026-11-25) : première version.
 - **v1.1.0** (2026-11-25) : liens vers calc-couverture (deux calculateurs : Équilibré et Tout ou rien) sur chaque option calculée.
 - **v1.2.0** (2026-11-25) : option « Meilleure proposition en Lay » (cote juste sous le Lay actuel, sauf Back / Lay consécutifs).
+- **v1.3.0** (2026-11-25) : comparaison des scénarios (Équilibré / Tout ou rien, Lay actuel / proposé) : meilleure option de chacun, même option ou non, résultats des deux.
