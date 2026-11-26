@@ -200,6 +200,10 @@ function findCoversForOutcome(event: any, mainMarketName: string, mainOutcomeNam
           const [oName, oddsMap] = oEntry;
           for (const [s, val] of Object.entries(oddsMap as any)) {
             if (resolved.betType === 'Lay' && s === site) continue;
+            // Uni-site / Multi-sites (séquentiel) : la couverture est sur le site du
+            // principal (uni) ou sur un autre (multi). Filtrer ici plutôt que les
+            // résultats, sinon bestCover peut tomber sur une méthode décochée.
+            if (s === site ? !opts.allowUni : !opts.allowMulti) continue;
             if (resolved.betType === 'Lay') {
               const lay = getLayInfo(val);
               if (!lay) continue;
@@ -818,6 +822,19 @@ function makeSimultResult(
     // T = FB_total / β → fb stake_i = T/(o_i-1), cash stake_i = T/o_i
     // profit = T*(1-α) - 0 = FB_total*(1-α)/β  (all pocket costs are cash stakes only)
     const isFbBet = oddsPerGroup.map((_, i) => !groupInfos[i].isLay && (obligSites.size === 0 || obligSites.has(sitePerGroup[i])));
+
+    // coteMinParSelection : comme en Cash pour les paris principaux, chaque sélection
+    // d'un combiné freebet doit atteindre le minimum (les couvertures cash sont libres).
+    if (opts.coteMinParSelection > 0) {
+      for (let i = 0; i < n; i++) {
+        if (!isFbBet[i] || betsLegsArray[i].length <= 1) continue;
+        for (const lr of betsLegsArray[i]) {
+          const val = data[lr.eventKey]?.markets?.[lr.marketName]?.[lr.outcomeName]?.[sitePerGroup[i]];
+          const o = getBackOdds(val);
+          if (!o || o < opts.coteMinParSelection) return null;
+        }
+      }
+    }
     const alpha = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s : s + 1 / o, 0);
     const beta  = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s + 1 / (o - 1) : s, 0);
     if (!isFinite(beta) || beta <= 0) return null;
@@ -1316,7 +1333,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
     : opts.betType === 'fb' ? getFreebetEligibleSites(opts)
     : Object.keys(opts.sites);
 
-  if (!sitesToUse.length) return [];
+  if (!sitesToUse.length || (!opts.allowUni && !opts.allowMulti)) return [];
 
   // Cache legs per site to avoid recomputing for each n
   const legsPerSite = new Map<string, Leg[]>();

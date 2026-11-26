@@ -260,8 +260,11 @@ Pour calculer ce type de placement il faut suivre les règles suivantes :
 - 1 site obligatoire --> calculer pour le site obligatoire
 - 2 sites obligatoires --> ne pas calculer
 
+En séquentiel, les couvertures sont alors toutes sur le site du combiné.
+
 #### Multi-sites
 Les paris du covering set sont placés sur au moins deux sites différents. Il doit toujours y avoir au moins un pari sur chaque site considérés comme obligatoires.
+En séquentiel, les couvertures sont alors toutes sur d'autres sites que celui du combiné.
 
 ### Symetrie
 La symétrie d'un convering set n'est prise en compte seulement s'il contient au moins un combiné sur au moins deux events. La symetrie va correspondre au fait d'avoir ou non les paris du deuxieme event, de la même façon pour chaque séléction du premier event
@@ -525,5 +528,5 @@ Chaque colonne du tableau de résultats propose un filtre. Le filtre "Méthode" 
 Le moteur est exécuté dans un pool de Web Workers (un par cœur CPU, jusqu'à 8) pour paralléliser les calculs. Chaque worker reçoit un shard `{ index, count }` et ne traite que les combinaisons d'events où `counter % count === index`. Les résultats de chaque worker sont agrégés et triés par profit sur le thread principal.
 
 ### Missions et filtres
-- Le filtre global "Cote min. par sélection" ne s'applique qu'aux combinés (≥ 2 legs), pas aux paris simples.
+- Le filtre global "Cote min. par sélection" ne s'applique qu'aux combinés (≥ 2 legs), pas aux paris simples. Il porte sur les paris principaux (Cash) et sur les paris en freebet (Freebet) ; les couvertures sont libres.
 - Chaque mission peut définir ses propres `coteMin` et `coteMinParSelection` ; `coteMinParSelection` est vérifiée sur chaque leg individuel des paris combinés côté site de la mission.

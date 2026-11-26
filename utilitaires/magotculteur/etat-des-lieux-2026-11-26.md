@@ -35,8 +35,8 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 | # | Problème | Où | Effet |
 |---|---|---|---|
 | B1 | ✅ **Corrigé en v7.2.1** (tolérance `AMOUNT_EPS`). **Arrondi des nombres à virgule sur les montants de mission.** Le moteur cale une mise exactement sur le montant voulu, puis vérifie `mise >= montant`. Le résultat tombe parfois à 9,9999999 € pour 10 €. | [engine.ts:690](src/engine.ts#L690), [app.ts:181](src/app.ts#L181) | Environ **3 % des combinaisons valides sont écartées sans message** en Cash simple, avec « Mise min. par pari » ou « Profit brut » (mesuré sur 200 000 cas simulés). |
-| B2 | **« Cote min. par sélection » n'a aucun effet en Freebet simultané.** Le contrôle se trouve uniquement dans la partie Cash. | [engine.ts:902](src/engine.ts#L902) | Des combinés freebet sortent avec des sélections sous le minimum. |
-| B3 | **Le séquentiel ignore les cases Uni-site / Multi-sites.** | [engine.ts:1309](src/engine.ts#L1309) | Des résultats « Séq. · Multi » apparaissent même quand Multi-sites est décoché. |
+| B2 | ✅ **Corrigé en v7.2.2.** **« Cote min. par sélection » n'a aucun effet en Freebet simultané.** Le contrôle se trouve uniquement dans la partie Cash. | [engine.ts:902](src/engine.ts#L902) | Des combinés freebet sortent avec des sélections sous le minimum. |
+| B3 | ✅ **Corrigé en v7.2.2.** **Le séquentiel ignore les cases Uni-site / Multi-sites.** | [engine.ts:1309](src/engine.ts#L1309) | Des résultats « Séq. · Multi » apparaissent même quand Multi-sites est décoché. |
 | B4 | **Freebet séquentiel en mode avancé** : la mise freebet vient du montant du mode simple (caché), et non du freebet disponible du site. Le contrôle des 98 % compare ensuite cette mise au freebet disponible. | [engine.ts:1511](src/engine.ts#L1511), [engine.ts:716](src/engine.ts#L716) | Aucun résultat si le montant caché est plus petit que le freebet. Mise supérieure au freebet disponible s'il est plus grand. |
 | B7 | **Configuration du mode avancé jamais sauvegardée** (`_advSites` absent des préférences). Le site principal est enregistré mais jamais relu. | [app.ts:54](src/app.ts#L54) | Freebets et missions sont perdus à chaque rechargement ou nouvel onglet. Le site principal repart sur le premier site par ordre alphabétique. |
 | B8 | **Sites d'un ancien JSON conservés** : `_advSites` n'est jamais vidé. | [app.ts:910](src/app.ts#L910), [app.ts:159](src/app.ts#L159) | Une mission obligatoire restée sur un site absent du JSON bloque tous les résultats. |
@@ -151,6 +151,6 @@ Son sens change selon la méthode, et aucune version ne correspond à la spécif
 
 1. **B7 et B8** : sauvegarder le mode avancé, relire le site principal et nettoyer les anciens sites.
 2. ~~**B1** : comparer les montants avec une petite tolérance.~~ Fait en v7.2.1.
-3. **B2 et B3** : corrections simples, sans ambiguïté.
+3. ~~**B2 et B3** : corrections simples, sans ambiguïté.~~ Fait en v7.2.2.
 4. **B5, B6 et B9** : affichage.
 5. **Mode avancé** (B4, B10, B11 et partie 3) : une fois les questions 1 à 4 tranchées.
