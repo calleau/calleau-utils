@@ -6,6 +6,9 @@ import type {
 export const MIN_GAP_MS = 90 * 60 * 1000;
 const TOP_EVENTS = 30;
 const TOP_SEQ = 50;
+// Tolérance (€) des contrôles de montant des missions : une mise calée exactement sur
+// le montant peut retomber juste en dessous par arrondi flottant (10 → 9,999999999999998).
+const AMOUNT_EPS = 1e-6;
 
 function C(n: number, k: number): number {
   if (k < 0 || k > n) return 0;
@@ -686,12 +689,13 @@ function checkAllMissions(data: any, bets: BetDetail[], opts: EngineOpts): { sat
           if (!legOk) continue;
         }
         let meetsAmount = false;
+        const minAmount = mission.montant - AMOUNT_EPS;
         if (mission.montantMode === 'mise_min') {
-          meetsAmount = bet.stake >= mission.montant;
+          meetsAmount = bet.stake >= minAmount;
         } else if (mission.montantMode === 'profit_net_min') {
-          meetsAmount = bet.stake * (bet.odds - 1) >= mission.montant;
+          meetsAmount = bet.stake * (bet.odds - 1) >= minAmount;
         } else if (mission.montantMode === 'profit_brut') {
-          meetsAmount = bet.stake * bet.odds >= mission.montant;
+          meetsAmount = bet.stake * bet.odds >= minAmount;
         }
         if (meetsAmount) {
           ok = true;
