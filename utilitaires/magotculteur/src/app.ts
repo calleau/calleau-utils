@@ -1023,7 +1023,7 @@ function renderAdvancedSites(sites: string[]) {
             </div>
           </div>
           <div class="ff-adv-row">
-            <label class="ff-sublabel">Combinés min.</label>
+            <label class="ff-sublabel" title="Nombre minimum de sélections (matchs) dans un pari placé sur ce site pour qu'il compte pour la mission. 1 = simples acceptés.">Sélections min. par pari</label>
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               ${[1,2,3,4,5].map(nb => `
                 <button class="ff-btn ff-btn--sm${m.nbCombinesMin === nb ? ' ff-btn--active' : ''}"

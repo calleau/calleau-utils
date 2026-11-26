@@ -1190,7 +1190,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
   let globalCounter = 0;
 
   for (const n of opts.allowedNLegs) {
-    const nStr = n === 1 ? '1 combiné' : `${n} combinés`;
+    const nStr = n === 1 ? 'Simples' : `Combinés de ${n}`;
     const hasSym = opts.allowSym;
     const hasAsym = opts.allowAsym && n > 1;
     const symSuffix = (hasSym && !hasAsym) ? ' • Symétrique' : (!hasSym && hasAsym) ? ' • Asymétrique' : '';
@@ -1324,7 +1324,7 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
   let seqCounter = 0;
 
   for (const n of opts.allowedNLegs.filter(x => x >= 2 && x <= 3)) {
-    const nStr = n === 1 ? '1 combiné' : `${n} combinés`;
+    const nStr = n === 1 ? 'Simples' : `Combinés de ${n}`;
     onProgress?.(`${nStr} • Séquentiel`, 0, 0);
 
     for (const site of sitesToUse) {

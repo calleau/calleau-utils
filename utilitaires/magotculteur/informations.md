@@ -154,7 +154,7 @@ Quand on ajoute une mission pour un site les paramètres suivants sont remplissa
 - Objectif
 - Cote minimum
 - Cote minimum par séléction
-- Nb de combinés minimum
+- Sélections min. par pari
 
 ##### Importance
 Selecteur (radio-group boutons)
@@ -203,16 +203,18 @@ Corresponds à la côte minimum des paris qui sont placé sur le site principal.
 ##### Cote minimum par séléction
 Corresponds à la côte minimum par séléction des paris qui sont placé sur le site principal.
 
-##### Nb de combinés minimum
+##### Sélections min. par pari
 Selecteur (radio-group boutons)
 Options 1, 2, 3, + (appuyer sur plus affiche 3 chiffres de plus (4, 5, 6, +) et un autre plus). Une seule séléction possible.
-Pour séléctionner le nombre de combinés minimum qui doivent être réalisés dans le cadre de cette mission.
+Pour séléctionner le nombre minimum de sélections (matchs) qu'un pari placé sur ce site doit contenir pour compter pour cette mission (1 = les simples sont acceptés).
+Libellé affiché : "Sélections min. par pari" (anciennement "Combinés min.", renommé car ambigu), avec une infobulle explicative.
 Si la mission est obligatoire, tous les covering set proposés doivent avoir au moins un des paris qui respecte ce nombre.
 
 ### Paramètres généraux
-#### Nombre de combinés à calculer
+#### Sélections par pari
 Selecteur (radio-group boutons)
-Options 1, 2, 3, 4, 5.
+Libellé affiché : "Sélections par pari (plusieurs choix possibles)" (anciennement "Nb combinés à calculer", renommé car on le comprenait comme un nombre de paris combinés à générer). Une infobulle sur le libellé explique : "Nombre de matchs dans chaque pari : Simple = 1 match, 2 = combiné de 2 matchs, etc."
+Options Simple (= 1 sélection), 2, 3, 4, 5. Chaque valeur correspond au nombre de sélections (legs) de chaque pari calculé.
 On peut séléctionner chaque nombre individuellement (donc faire des combinaison tels que 1 et 5 ou 2,3,4)
 Warning sur le 4 et 5 qui indiquent que si il y a une grosse d'events et de sites inclus dans la données, ça peut prendre énormement de temps à calculer.
 
@@ -222,7 +224,7 @@ Des checkboxes indépendantes qui permettent d'activer/désactiver le calcul de 
 - "Uni-site" "Multi-sites"
 - "Symétrique" "Asym. léger" "Asymétrique"
 
-Quand "Nb combinés à calculer" ne contient que la valeur 1, les méthodes "Séquentiel/Simultané" et "Symétrique/Asym. léger/Asymétrique" sont automatiquement désactivées (grisées) et forcées à "Simult. + Sym." uniquement, les valeurs précédemment cochées sont restaurées dès qu'une autre valeur est ajoutée dans "Nb combinés à calculer".
+Quand "Sélections par pari" ne contient que la valeur Simple, les méthodes "Séquentiel/Simultané" et "Symétrique/Asym. léger/Asymétrique" sont automatiquement désactivées (grisées) et forcées à "Simult. + Sym." uniquement, les valeurs précédemment cochées sont restaurées dès qu'une autre valeur est ajoutée dans "Sélections par pari".
 
 ## Méthode de placement
 ### Timing

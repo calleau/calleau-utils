@@ -1442,3 +1442,15 @@
 	flex-direction: column;
 	gap: 0.4rem;
 }
+
+/* Libellé avec infobulle explicative (title) */
+.ff-label--help {
+	cursor: help;
+}
+
+/* Précision en minuscules à côté d'un libellé en capitales */
+.ff-label-hint {
+	text-transform: none;
+	letter-spacing: 0;
+	font-weight: 400;
+}
