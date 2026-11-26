@@ -34,4 +34,4 @@ npm run dev
 `scripts/build-site.sh` construit le site publiable : il builde le Magotculteur, remonte `utilitaires/*` à la racine et corrige les chemins relatifs.
 
 - **utils.calleau.org** : Coolify construit le `Dockerfile` (script ci-dessus + Nginx) à chaque push sur `main`.
-- **GitHub Pages** : `.github/workflows/deploy.yml` utilise le même script.
+- **GitHub Pages** : `.github/workflows/deploy.yml` utilise le même script. Chaque page y redirige automatiquement vers utils.calleau.org (même chemin, mêmes paramètres et ancre) : le script insère `scripts/github-redirect.html` dans le `<head>` de toutes les pages, et il ne fait rien hors de `*.github.io`.

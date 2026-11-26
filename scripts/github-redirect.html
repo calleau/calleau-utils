@@ -1,0 +1,8 @@
+	<script>
+		// Injecte par scripts/build-site.sh dans chaque page.
+		// Sur GitHub Pages (calleau.github.io/calleau-utils/...), renvoie vers l'adresse officielle
+		// en gardant le chemin, les parametres (?s=...) et l'ancre. Sans effet sur utils.calleau.org.
+		if (location.hostname.endsWith('github.io')) {
+			location.replace('https://utils.calleau.org' + location.pathname.replace(/^\/calleau-utils(?=\/|$)/, '') + location.search + location.hash);
+		}
+	</script>

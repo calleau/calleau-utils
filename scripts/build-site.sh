@@ -55,4 +55,9 @@ find "$OUT" -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name 
 # Retire le préfixe utilitaires/ des liens du menu de la page d'accueil
 sed -i 's#href="utilitaires/#href="#g' "$OUT/index.html"
 
+# Redirection GitHub Pages → utils.calleau.org : insère scripts/github-redirect.html
+# juste après <head> dans toutes les pages (le script ne fait rien hors de *.github.io)
+find "$OUT" -type f -name '*.html' -print0 | \
+	xargs -0 sed -i '/<head>/r scripts/github-redirect.html'
+
 echo "Site construit dans $OUT/"
