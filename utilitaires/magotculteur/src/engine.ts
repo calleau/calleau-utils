@@ -1350,6 +1350,9 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
 
     for (const site of sitesToUse) {
       const legs = legsPerSite.get(site)!;
+      // Freebet : la mise du principal est le freebet disponible du site (en mode simple,
+      // c'est le montant saisi). opts.amount ne sert que de secours.
+      const fbStake = (opts.sites[site]?.freebetAmount ?? 0) > 0 ? opts.sites[site].freebetAmount : opts.amount;
 
       if (n === 1) {
         if (!opts.allowSym) continue; // single-event sequential is always symmetric
@@ -1361,13 +1364,13 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
             const coverLegRef: LegRef = { eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' };
 
             if (opts.betType === 'fb') {
-              const profit = opts.amount * (leg.b - 1) / cover.k;
-              const rate = profit / opts.amount;
+              const profit = fbStake * (leg.b - 1) / cover.k;
+              const rate = profit / fbStake;
               const stake = profit / (cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1));
               const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : null;
 
               const bets: BetDetail[] = [
-                { legs: [principalLegRef], site, odds: leg.bGross, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0 },
+                { legs: [principalLegRef], site, odds: leg.bGross, stake: fbStake, betType: 'fb', role: 'principal', seqStep: 0 },
                 { legs: [coverLegRef], site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
               ];
 
@@ -1523,13 +1526,13 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
           const K = legList.reduce((p, l) => p * l.bestK, 1);
 
           if (opts.betType === 'fb') {
-            const profit = opts.amount * (B - 1) / K;
-            const rate = profit / opts.amount;
+            const profit = fbStake * (B - 1) / K;
+            const rate = profit / fbStake;
             let kPrev = 1;
             const bets: BetDetail[] = [
               {
                 legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
-                site, odds: BGross, stake: opts.amount, betType: 'fb', role: 'principal', seqStep: 0,
+                site, odds: BGross, stake: fbStake, betType: 'fb', role: 'principal', seqStep: 0,
               },
             ];
             for (let i = 0; i < legList.length; i++) {

@@ -23,6 +23,9 @@ let _advancedMode = false;
 
 // Simple mode
 let _simpleSite = '';
+// Site principal choisi par l'utilisateur (sauvegardé) : reste préféré même si un JSON
+// sans ce site a été chargé entre-temps.
+let _preferredSimpleSite = '';
 let _simpleAmountMode: 'mise_totale' | 'mise_min_par_pari' | 'profit_net_min' | 'profit_brut' = 'mise_totale';
 let _simpleAmount = 10;
 let _simpleCashObjective: 'gagner' | 'miser' | 'perdre' = 'miser';
@@ -56,7 +59,7 @@ function savePrefs() {
     localStorage.setItem(PREFS_KEY, JSON.stringify({
       betType: _betType,
       advancedMode: _advancedMode,
-      simpleSite: _simpleSite,
+      simpleSite: _preferredSimpleSite || _simpleSite,
       simpleAmountMode: _simpleAmountMode,
       simpleAmount: _simpleAmount,
       simpleCashObjective: _simpleCashObjective,
@@ -70,8 +73,25 @@ function savePrefs() {
       allowSym: _savedMethods ? _savedMethods.sym : _allowSym,
       allowAsymLight: _savedMethods ? _savedMethods.asymLight : _allowAsymLight,
       allowAsym: _savedMethods ? _savedMethods.asym : _allowAsym,
+      // Mode avancé : config de tous les sites déjà configurés, y compris ceux absents
+      // du JSON courant (retrouvée quand le site revient).
+      advSites: _advSites,
     }));
   } catch {}
+}
+
+// Relit la config du mode avancé sauvegardée, en ignorant les entrées mal formées.
+// Remplit l'objet existant : window._advSites pointe dessus.
+function restoreAdvSites(saved: any) {
+  if (!saved || typeof saved !== 'object') return;
+  for (const [site, cfg] of Object.entries(saved) as [string, any][]) {
+    if (!cfg || typeof cfg !== 'object') continue;
+    _advSites[site] = {
+      freebetAmount: Number(cfg.freebetAmount) >= 0 ? Number(cfg.freebetAmount) : 0,
+      freebetPriority: [1, 2, 3].includes(cfg.freebetPriority) ? cfg.freebetPriority : 3,
+      missions: Array.isArray(cfg.missions) ? cfg.missions.filter((m: any) => m && typeof m === 'object' && m.id) : [],
+    };
+  }
 }
 
 function loadPrefs(): Record<string, any> {
@@ -156,7 +176,10 @@ function buildEngineOpts(): EngineOpts {
   const sites: Record<string, SiteConfig> = {};
 
   if (_advancedMode) {
-    for (const [site, cfg] of Object.entries(_advSites)) {
+    // Seulement les sites du JSON chargé : une mission obligatoire mémorisée pour un
+    // site absent bloquerait tous les résultats.
+    for (const site of _data ? collectSites(_data) : []) {
+      const cfg = _advSites[site] ?? { freebetAmount: 0, freebetPriority: 3 as const, missions: [] };
       sites[site] = {
         freebetAmount: cfg.freebetAmount,
         freebetPriority: cfg.freebetPriority,
@@ -907,14 +930,14 @@ function addAdvMission(site: string) {
     nbCombinesMin: 1,
   };
   _advSites[site].missions.push(mission);
-  renderAdvancedSites(Object.keys(_advSites));
+  rerenderAdvancedSites();
   resetResults(); savePrefs();
 }
 
 function removeAdvMission(site: string, missionId: string) {
   ensureAdvSite(site);
   _advSites[site].missions = _advSites[site].missions.filter(m => m.id !== missionId);
-  renderAdvancedSites(Object.keys(_advSites));
+  rerenderAdvancedSites();
   resetResults(); savePrefs();
 }
 
@@ -924,6 +947,11 @@ function setAdvMissionField(site: string, missionId: string, field: string, val:
   if (!m) return;
   (m as any)[field] = val;
   resetResults(); savePrefs();
+}
+
+// Réaffiche le panneau avancé pour les sites du JSON chargé (pas ceux d'un ancien JSON).
+function rerenderAdvancedSites() {
+  renderAdvancedSites(_data ? collectSites(_data) : []);
 }
 
 function renderAdvancedSites(sites: string[]) {
@@ -975,9 +1003,9 @@ function renderAdvancedSites(sites: string[]) {
             <span class="ff-sublabel">Importance</span>
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               <button class="ff-btn ff-btn--sm${m.importance === 'obligatoire' ? ' ff-btn--active' : ''}"
-                onclick="setAdvMissionField('${esc(site)}','${m.id}','importance','obligatoire'); renderAdvancedSites(Object.keys(window._advSites))">Obligatoire</button>
+                onclick="setAdvMissionField('${esc(site)}','${m.id}','importance','obligatoire'); rerenderAdvancedSites()">Obligatoire</button>
               <button class="ff-btn ff-btn--sm${m.importance === 'optionnelle' ? ' ff-btn--active' : ''}"
-                onclick="setAdvMissionField('${esc(site)}','${m.id}','importance','optionnelle'); renderAdvancedSites(Object.keys(window._advSites))">Optionnelle</button>
+                onclick="setAdvMissionField('${esc(site)}','${m.id}','importance','optionnelle'); rerenderAdvancedSites()">Optionnelle</button>
             </div>
           </div>
           <div class="ff-adv-row">
@@ -985,7 +1013,7 @@ function renderAdvancedSites(sites: string[]) {
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               ${(['mise_min', 'profit_net_min', 'profit_brut'] as const).map(mode => `
                 <button class="ff-btn ff-btn--sm${m.montantMode === mode ? ' ff-btn--active' : ''}"
-                  onclick="setAdvMissionField('${esc(site)}','${m.id}','montantMode','${mode}'); renderAdvancedSites(Object.keys(window._advSites))">
+                  onclick="setAdvMissionField('${esc(site)}','${m.id}','montantMode','${mode}'); rerenderAdvancedSites()">
                   ${mode === 'mise_min' ? 'Mise min.' : mode === 'profit_net_min' ? 'Profit net' : 'Profit brut'}
                 </button>`).join('')}
             </div>
@@ -995,7 +1023,7 @@ function renderAdvancedSites(sites: string[]) {
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               ${(['gagner', 'miser', 'perdre'] as const).map(obj => `
                 <button class="ff-btn ff-btn--sm${m.objectif === obj ? ' ff-btn--active' : ''}"
-                  onclick="setAdvMissionField('${esc(site)}','${m.id}','objectif','${obj}'); renderAdvancedSites(Object.keys(window._advSites))">
+                  onclick="setAdvMissionField('${esc(site)}','${m.id}','objectif','${obj}'); rerenderAdvancedSites()">
                   ${obj.charAt(0).toUpperCase() + obj.slice(1)}
                 </button>`).join('')}
             </div>
@@ -1027,7 +1055,7 @@ function renderAdvancedSites(sites: string[]) {
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               ${[1,2,3,4,5].map(nb => `
                 <button class="ff-btn ff-btn--sm${m.nbCombinesMin === nb ? ' ff-btn--active' : ''}"
-                  onclick="setAdvMissionField('${esc(site)}','${m.id}','nbCombinesMin',${nb}); renderAdvancedSites(Object.keys(window._advSites))">${nb}</button>
+                  onclick="setAdvMissionField('${esc(site)}','${m.id}','nbCombinesMin',${nb}); rerenderAdvancedSites()">${nb}</button>
               `).join('')}
             </div>
           </div>
@@ -1051,6 +1079,7 @@ function renderAdvancedSites(sites: string[]) {
 
 function setSite(site: string) {
   _simpleSite = site;
+  _preferredSimpleSite = site;
   document.querySelectorAll('.ff-site-btn').forEach(b =>
     b.classList.toggle('ff-btn--active', (b as HTMLElement).dataset.site === site)
   );
@@ -1288,7 +1317,8 @@ function updateSiteSelect(sites: string[]) {
   // In freebet mode, only show sites that support freebets as principal site
   const visibleSites = _betType === 'fb' ? sites.filter(s => siteHasFb(s)) : sites;
   const pool = visibleSites.length > 0 ? visibleSites : sites;
-  if (!pool.includes(_simpleSite)) _simpleSite = pool[0] ?? '';
+  if (pool.includes(_preferredSimpleSite)) _simpleSite = _preferredSimpleSite;
+  else if (!pool.includes(_simpleSite)) _simpleSite = pool[0] ?? '';
   wrap.innerHTML = pool.map(s => `
     <button class="ff-site-btn ff-btn${s === _simpleSite ? ' ff-btn--active' : ''}"
       data-site="${esc(s)}" onclick="setSite('${esc(s)}')">${esc(s)}</button>`).join('');
@@ -1330,6 +1360,7 @@ window.setSite = setSite;
 window.stepAmount = stepAmount;
 window.onAmountInput = onAmountInput;
 window.renderAdvancedSites = renderAdvancedSites;
+window.rerenderAdvancedSites = rerenderAdvancedSites;
 window.setAdvFbAmount = setAdvFbAmount;
 window.setAdvFbPriority = setAdvFbPriority;
 window.addAdvMission = addAdvMission;
@@ -1457,6 +1488,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   (document.getElementById('ff-debug-state-icon') as HTMLImageElement).src = bugUrl;
 
   const prefs = loadPrefs();
+  // Avant tout set*() : ils appellent savePrefs(), qui écrirait une config vide.
+  if (typeof prefs.simpleSite === 'string') _preferredSimpleSite = prefs.simpleSite;
+  restoreAdvSites(prefs.advSites);
   if (prefs.betType) setBetType(prefs.betType);
   if (prefs.simpleCashObjective) setObjective(prefs.simpleCashObjective);
 

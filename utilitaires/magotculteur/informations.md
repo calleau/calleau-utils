@@ -117,6 +117,7 @@ Corresponds à la côte minimum par séléction des paris qui sont placé sur le
 
 #### Mode avancé
 Dans le mode avancé, les paramètres sont liés spécifiquement aux différents sites qui sont présents dans le JSON.
+Les paramètres de chaque site sont mémorisés dans le navigateur (comme le site principal du mode simple) et retrouvés au rechargement ou dans un nouvel onglet. Seuls les sites du JSON chargé sont affichés et pris en compte dans le calcul ; la configuration d'un site absent est conservée et réapparaît quand il revient dans un JSON.
 Pour chaque site les paramètres suivants sont disponibles.
 En mode Freebet les paramètres suivants sont accessibles : 
 - Freebet disponible
@@ -129,6 +130,7 @@ En mode Cash les paramètres suivants sont accessibles :
 ##### Freebet disponible
 Si type de mise est Freebet, sinon si c'est Cash le paramètre n'est pas disponible.
 Corresponds au montant des freebets disponible par l'utilisateur sur le site en question.
+En séquentiel, c'est la mise freebet du combiné placé sur ce site.
 
 ##### Priorité d'utilisation des freebets
 Si type de mise est Freebet, sinon si c'est Cash le paramètre n'est pas disponible.
