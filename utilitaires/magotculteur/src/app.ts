@@ -1183,6 +1183,76 @@ async function tryRender() {
 
 // ===== JSON / DATA =====
 
+// ===== BETXTRACTOR-3000 =====
+
+/**
+ * Fichier de l'interface Betxtractor-3000 (« Télécharger / Copier le JSON ») : extractions brutes
+ * (pour l'extension) + leur version au format du Tableau, la seule utilisée ici.
+ */
+function unwrapBetx3000(parsed: any): any {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || parsed.format !== 'betx3000-export') return parsed;
+  if (!parsed.tableau || typeof parsed.tableau !== 'object') {
+    throw new Error('Fichier Betxtractor-3000 sans cotes au format du Tableau'
+      + (parsed.conversionError ? ` (${parsed.conversionError})` : '') + ' : importez-le dans l\'extension puis « Ouvrir avec… ».');
+  }
+  return parsed.tableau;
+}
+
+const BETX3000_ORIGINS = ['https://betxtractor-3000.calleau.org', 'https://uat.betxtractor-3000.calleau.org'];
+const isBetx3000Origin = (origin: string) =>
+  BETX3000_ORIGINS.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+const BETX3000_WAIT_MS = 3 * 60 * 1000;
+
+/**
+ * Page ouverte par le bouton « Ouvrir dans le Magotculteur » de Betxtractor-3000 (?source=betx3000) :
+ * annonce à la page d'origine qu'elle est prête (toutes les secondes, tant que rien n'est reçu),
+ * puis reçoit les cotes par postMessage (origine vérifiée), sans passer par le presse-papier.
+ */
+function receiveFromBetx3000() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('source') !== 'betx3000') return;
+  const info = document.getElementById('ff-json-info')!;
+  const setInfo = (text: string, isError = false) => {
+    info.textContent = text;
+    info.classList.toggle('ff-json-info--error', isError);
+    (info as any).hidden = false;
+  };
+  const opener = window.opener;
+  if (!opener) {
+    setInfo('Page ouverte depuis Betxtractor-3000, mais sa fenêtre n\'est plus là : relancez « Ouvrir dans le Magotculteur ».', true);
+    return;
+  }
+  setInfo('Réception des cotes de Betxtractor-3000…');
+
+  const ping = () => { try { opener.postMessage({ type: 'magotculteur:ready' }, '*'); } catch {} };
+  const interval = setInterval(ping, 1000);
+  const timeout = setTimeout(() => finish('Aucune cote reçue de Betxtractor-3000 : relancez « Ouvrir dans le Magotculteur ».', true), BETX3000_WAIT_MS);
+  function finish(text: string, isError = false) {
+    clearInterval(interval);
+    clearTimeout(timeout);
+    window.removeEventListener('message', onMessage);
+    // Rechargement de la page : pas de nouvelle attente
+    params.delete('source');
+    history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : '') + location.hash);
+    setInfo(text, isError);
+  }
+  function onMessage(e: MessageEvent) {
+    if (e.source !== opener || !isBetx3000Origin(e.origin)) return;
+    const d = e.data;
+    if (d?.type === 'betx3000:tableau' && d.tableau && typeof d.tableau === 'object') {
+      (document.getElementById('ff-json') as HTMLTextAreaElement).value = JSON.stringify(d.tableau);
+      onJsonChange();
+      const n = Object.keys(d.tableau).length;
+      const sites = Array.isArray(d.stats?.sites) && d.stats.sites.length ? ` — ${d.stats.sites.join(', ')}` : '';
+      finish(`Cotes reçues de Betxtractor-3000 : ${n} match(s)${sites}.`);
+    } else if (d?.type === 'betx3000:error') {
+      finish(`Betxtractor-3000 : ${d.error || 'conversion impossible'}`, true);
+    }
+  }
+  window.addEventListener('message', onMessage);
+  ping();
+}
+
 function onJsonChange() {
   const raw = (document.getElementById('ff-json') as HTMLTextAreaElement)?.value.trim();
   const errEl = document.getElementById('ff-json-error')!;
@@ -1193,13 +1263,13 @@ function onJsonChange() {
     updateSiteSelect([]);
   } else {
     try {
-      _data = JSON.parse(raw);
+      _data = unwrapBetx3000(JSON.parse(raw));
       (errEl as any).hidden = true;
       const sites = collectSites(_data);
       updateSiteSelect(sites);
     } catch (e: any) {
       _data = null;
-      errEl.textContent = 'JSON invalide : ' + e.message;
+      errEl.textContent = (e instanceof SyntaxError ? 'JSON invalide : ' : '') + e.message;
       (errEl as any).hidden = false;
       updateSiteSelect([]);
     }
@@ -1490,6 +1560,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (text) { JSON.parse(text); (document.getElementById('ff-json') as HTMLTextAreaElement).value = text; onJsonChange(); }
     } catch {}
   }
+
+  // Bouton « Ouvrir dans le Magotculteur » de Betxtractor-3000
+  receiveFromBetx3000();
 
   const param = new URLSearchParams(location.search).get('data');
   if (param) {

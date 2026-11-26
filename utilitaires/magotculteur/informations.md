@@ -51,6 +51,7 @@ Les paramètres sont visiuellement divisés en trois parties distincts.
 ### Données JSON
 Permet d'insérer les données JSON.
 Contient un grand text area qui contient le JSON et un bouton "Coller" qui colle automatiquement le contenu de notre presse-papié dans le texte area.
+Accepte aussi le fichier téléchargé depuis Betxtractor-3000 (seules les cotes au format du Tableau sont utilisées). Ouvert par le bouton « Ouvrir dans le Magotculteur » de Betxtractor-3000, il reçoit directement les cotes (sans presse-papier) ; une ligne sous la zone indique la réception.
 
 ### Type de mise
 Selecteur (radio-group boutons)

@@ -472,6 +472,17 @@
 	margin: 0;
 }
 
+/* Réception des cotes de Betxtractor-3000 */
+.ff-json-info {
+	font-size: 0.8rem;
+	color: var(--color-muted);
+	margin: 0;
+}
+
+.ff-json-info--error {
+	color: var(--color-neg);
+}
+
 .ff-field--error .ff-label {
 	color: var(--color-neg);
 }

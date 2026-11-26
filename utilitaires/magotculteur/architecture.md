@@ -168,6 +168,18 @@ L'utilisateur colle un JSON représentant les cotes disponibles. Structure atten
 
 Pour les exchanges (Betfair/Smarkets), les cotes peuvent être des objets `{ Back: { odds, odds_net }, Lay: { odds, odds_net } }`.
 
+**Sources des données** (`src/app.ts`) :
+
+| Source | Mécanisme |
+|---|---|
+| Saisie / bouton « Coller » | Texte collé dans la zone JSON |
+| Extension Betxtractor, « Ouvrir avec… » | Presse-papier + `?autopaste=1` |
+| `?data=<base64>` | JSON dans l'adresse (petits jeux de données) |
+| Fichier de Betxtractor-3000 (« Télécharger / Copier le JSON ») | `{ format: "betx3000-export", extractions, tableau }` : `unwrapBetx3000()` ne garde que `tableau` (format ci-dessus) ; `extractions` sert à l'import dans l'extension (v7.2.0) |
+| Betxtractor-3000, « Ouvrir dans le Magotculteur » | `?source=betx3000` + `postMessage` (v7.2.0), cf. ci-dessous |
+
+Échange avec Betxtractor-3000 (`receiveFromBetx3000()`) : la page ouverte envoie `{ type: "magotculteur:ready" }` à `window.opener` toutes les secondes ; Betxtractor-3000 répond, dès que sa conversion est prête, `{ type: "betx3000:tableau", tableau, stats, mappings }` (ou `{ type: "betx3000:error", error }`). Seuls les messages de la fenêtre d'origine et des adresses `https://betxtractor-3000.calleau.org`, `https://uat.betxtractor-3000.calleau.org` (et `http://localhost`) sont acceptés. Pas de presse-papier ni de limite de taille. Sans réponse en 3 min : message d'erreur. Le paramètre `source` est retiré de l'adresse une fois les cotes reçues (un rechargement n'attend plus rien).
+
 ### 4.2 Règles de couverture (`coverage-rules.json`)
 
 Le fichier `assets/coverage-rules.json` définit quels paris se couvrent mutuellement. Chaque règle liste des **groupes** (A à I, soit 2 à 9 issues) représentant des issues mutuellement exclusives et exhaustives.
