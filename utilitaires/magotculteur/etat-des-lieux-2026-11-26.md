@@ -47,9 +47,9 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 
 | # | Problème | Où |
 |---|---|---|
-| B5 | **Barre de progression fausse.** Chaque worker annonce le total global au lieu de sa part. Avec 8 workers, la barre plafonne vers 16 %, le compteur affiche 8 fois trop de combinaisons, et la progression retombe à 0/0 en séquentiel. | [engine.ts:1182](src/engine.ts#L1182), [app.ts:1132](src/app.ts#L1132) |
-| B6 | **Couleur du Taux toujours verte en Cash.** Le seuil attend un taux négatif (−3 %), alors que le taux affiché est un TRJ d'environ 95 %. | [app.ts:95](src/app.ts#L95) |
-| B9 | **« Profit » faux pour un Lay** dans le détail : il affiche `mise × cote`. Ailleurs, ce « Profit » est en fait le retour brut. | [app.ts:327](src/app.ts#L327) |
+| B5 | ✅ **Corrigé en v7.2.4.** **Barre de progression fausse.** Chaque worker annonce le total global au lieu de sa part. Avec 8 workers, la barre plafonne vers 16 %, le compteur affiche 8 fois trop de combinaisons, et la progression retombe à 0/0 en séquentiel. | [engine.ts:1182](src/engine.ts#L1182), [app.ts:1132](src/app.ts#L1132) |
+| B6 | ✅ **Corrigé en v7.2.4.** **Couleur du Taux toujours verte en Cash.** Le seuil attend un taux négatif (−3 %), alors que le taux affiché est un TRJ d'environ 95 %. | [app.ts:95](src/app.ts#L95) |
+| B9 | ✅ **Corrigé en v7.2.4** (renommé « Gain », freebet corrigé aussi). **« Profit » faux pour un Lay** dans le détail : il affiche `mise × cote`. Ailleurs, ce « Profit » est en fait le retour brut. | [app.ts:327](src/app.ts#L327) |
 
 ### Bugs mineurs
 
@@ -152,5 +152,5 @@ Son sens change selon la méthode, et aucune version ne correspond à la spécif
 1. ~~**B7 et B8** : sauvegarder le mode avancé, relire le site principal et nettoyer les anciens sites.~~ Fait en v7.2.3.
 2. ~~**B1** : comparer les montants avec une petite tolérance.~~ Fait en v7.2.1.
 3. ~~**B2 et B3** : corrections simples, sans ambiguïté.~~ Fait en v7.2.2.
-4. **B5, B6 et B9** : affichage.
+4. ~~**B5, B6 et B9** : affichage.~~ Fait en v7.2.4.
 5. **Mode avancé** (~~B4~~ fait en v7.2.3, B10, B11 et partie 3) : une fois les questions 1 à 4 tranchées.

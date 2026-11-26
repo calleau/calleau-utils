@@ -1,5 +1,5 @@
 import EngineWorker from './worker.ts?worker';
-import { collectSites, eventDisplayName, formatDate } from './engine';
+import { collectSites, eventDisplayName, formatDate, getBackOdds, getLayInfo } from './engine';
 import bugOffUrl from '../../../assets/icons/bug-off.svg?url';
 import bugUrl from '../../../assets/icons/bug.svg?url';
 import * as Links from './links';
@@ -114,8 +114,9 @@ function fmt(n: number, d = 2): string { return Number(n).toFixed(d).replace('.'
 
 function rateClass(rate: number, isCash: boolean): string {
   if (isCash) {
-    if (rate >= -0.03) return 'ff-rate-good';
-    if (rate >= -0.07) return 'ff-rate-ok';
+    // En Cash, le taux est un taux de retour (TRJ, ~95 %) : perte de 3 % / 7 % max.
+    if (rate >= 0.97) return 'ff-rate-good';
+    if (rate >= 0.93) return 'ff-rate-ok';
     return 'ff-rate-bad';
   }
   if (rate >= 0.75) return 'ff-rate-good';
@@ -317,6 +318,20 @@ function missionLabel(site: string, missionId: string): string | null {
   return `${site} #${m.number}`;
 }
 
+// Montant crédité si ce pari gagne (« Gain » de la spécification) :
+//  - Back cash : mise × cote (nette de commission sur un exchange, boostée si boost) ;
+//  - Back freebet : mise × (cote − 1), la mise freebet n'est pas rendue ;
+//  - Lay : liability rendue + mise × (1 − commission).
+function betReturnIfWon(bet: BetDetail): number {
+  const val = (l: LegRef) => _data?.[l.eventKey]?.markets?.[l.marketName]?.[l.outcomeName]?.[bet.site];
+  if (bet.liability != null) {
+    const c = getLayInfo(val(bet.legs[0]))?.c ?? 0;
+    return bet.liability + bet.stake * (1 - c);
+  }
+  const odds = !bet.boosted && bet.legs.length === 1 ? (getBackOdds(val(bet.legs[0])) ?? bet.odds) : bet.odds;
+  return bet.betType === 'fb' ? bet.stake * (odds - 1) : bet.stake * odds;
+}
+
 function buildBetDetailRow(bet: BetDetail, idx: number): string {
   const isLay = bet.liability != null;
   const stepLabel = bet.seqStep != null ? `Seq.\u00a0${bet.seqStep + 1}` : `Pari\u00a0${idx + 1}`;
@@ -347,7 +362,7 @@ function buildBetDetailRow(bet: BetDetail, idx: number): string {
     ? `<strong>${fmt(bet.odds)}</strong> <span class="ff-boost-badge" title="Cote boost\u00e9e depuis ${fmt(bet.oddsBase)}">\u26a1 boost</span>`
     : `${fmt(bet.odds)}`;
   const summaryLine = `${sitePill(bet.site, isLay)} \u2022 ${oddsDisplay} \u2022 ${miseTag(bet.betType)} Mise <strong>${fmt(bet.stake)}\u00a0\u20ac</strong>${liabilityStr}`;
-  const grossGain = fmt(bet.stake * bet.odds);
+  const grossGain = fmt(betReturnIfWon(bet));
 
   return `
   <div class="ff-betrow">
@@ -358,8 +373,8 @@ function buildBetDetailRow(bet: BetDetail, idx: number): string {
         <span class="ff-betrow-summary">${summaryLine}</span>
       </div>
     </div>
-    <div class="ff-betrow-gain">
-      <span class="ff-betrow-gain-label">Profit</span>
+    <div class="ff-betrow-gain" title="Montant crédité si ce pari gagne (freebet : mise non rendue ; Lay : liability rendue + mise moins commission)">
+      <span class="ff-betrow-gain-label">Gain</span>
       <span class="ff-betrow-gain-value">${grossGain}\u00a0\u20ac</span>
     </div>
     ${missionsHtml}

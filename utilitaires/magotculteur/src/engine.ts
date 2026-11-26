@@ -518,6 +518,31 @@ function forEachCombo<T>(arr: T[], k: number, fn: (combo: T[]) => void) {
   rec(0, []);
 }
 
+// Nombre d'éléments traités par un shard parmi `total` numérotés 0..total-1
+// (counter % count === index).
+function shardShare(total: number, shard?: ComputeShard): number {
+  if (!shard) return total;
+  return total > shard.index ? Math.ceil((total - shard.index) / shard.count) : 0;
+}
+
+// Progression d'un calcul (simultané puis séquentiel) sur un seul total, connu d'avance,
+// limité à la part du shard : l'interface additionne les workers.
+interface Progress { step(detail: string): void; flush(): void }
+
+function makeProgress(total: number, onProgress?: (detail: string, done: number, total: number) => void): Progress {
+  let done = 0, last = 0, lastDetail = '';
+  return {
+    step(detail) {
+      done++;
+      lastDetail = detail;
+      const now = Date.now();
+      if (now - last >= 50) { last = now; onProgress?.(detail, done, total); }
+    },
+    // Dernier point, sinon le compteur s'arrête sur l'avant-dernier envoi (< 50 ms).
+    flush() { onProgress?.(lastDetail, done, total); },
+  };
+}
+
 function forEachCoverSetCombo(coverSetsPerEvent: LegRef[][][][], fn: (chosen: LegRef[][][]) => void) {
   function rec(idx: number, chosen: LegRef[][][]) {
     if (idx === coverSetsPerEvent.length) { fn(chosen); return; }
@@ -1194,20 +1219,17 @@ function trySimultWithBoost(
 
 // ===== SIMULT MAIN LOOP =====
 
-function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string, done: number, total: number) => void, shard?: ComputeShard): CoveringSetResult[] {
-  const topEvents = getTopEvents(data, opts);
-  const allEventKeys = Object.keys(data);
+// Combinaisons de matchs parcourues par computeSimult (tous shards confondus).
+function countSimultCombos(data: any, opts: EngineOpts, topEvents: string[]): number {
+  const nEvents = Object.keys(data).length;
+  return opts.allowedNLegs.reduce((s, n) => s + C(n === 1 ? nEvents : topEvents.length, n), 0);
+}
 
-  // Pre-compute total event combos for accurate progress tracking
-  let totalCombos = 0;
-  for (const n of opts.allowedNLegs) {
-    totalCombos += C(n === 1 ? allEventKeys.length : topEvents.length, n);
-  }
-  let doneCombos = 0;
+function computeSimult(data: any, opts: EngineOpts, topEvents: string[], progress: Progress, shard?: ComputeShard): CoveringSetResult[] {
+  const allEventKeys = Object.keys(data);
 
   const results: CoveringSetResult[] = [];
   const bestPerCombo = new Map<string, CoveringSetResult>();
-  let lastProgressReport = 0;
   let globalCounter = 0;
 
   for (const n of opts.allowedNLegs) {
@@ -1222,12 +1244,7 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
     forEachCombo(eventPool, n, combo => {
       const myIdx = globalCounter++;
       if (shard && myIdx % shard.count !== shard.index) return;
-      doneCombos++;
-      const now = Date.now();
-      if (now - lastProgressReport >= 50) {
-        lastProgressReport = now;
-        onProgress?.(detail, doneCombos, totalCombos);
-      }
+      progress.step(detail);
       const comboKey = combo.slice().sort().join('|');
       const coverSetsPerEvent = combo.map(ek => n === 1 ? getCoverSets(data, ek, opts) : getComboCoverSets(data, ek, opts));
       if (coverSetsPerEvent.some(s => !s.length)) return;
@@ -1327,26 +1344,83 @@ function computeSimult(data: any, opts: EngineOpts, onProgress?: (detail: string
 
 // ===== SEQUENTIAL COMPUTATION =====
 
-function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, done: number, total: number) => void, shard?: ComputeShard): CoveringSetResult[] {
+// Sélections candidates au combiné séquentiel d'un site (les TOP_SEQ meilleures).
+// Lay can't be combined, so principal must be Back.
+function seqPool(legs: Leg[], opts: EngineOpts): Leg[] {
+  return legs
+    .filter(l => l.dateTime !== null && l.betType === 'Back')
+    // Filter coteMinParSelection BEFORE slicing to TOP_SEQ. Otherwise the top-50
+    // is ranked by b/bestK (coverage efficiency), which often favors moderate-odds
+    // legs over high-odds ones — leaving few or no combos where all legs satisfy
+    // the per-selection minimum.
+    .filter(l => opts.coteMinParSelection <= 0 || l.b >= opts.coteMinParSelection)
+    .sort((a, b) => (opts.betType === 'fb'
+      ? (b.b - 1) / b.bestK - (a.b - 1) / a.bestK
+      : b.b / b.bestK - a.b / a.bestK
+    ))
+    .slice(0, TOP_SEQ);
+}
+
+// Combinés séquentiels de n sélections : matchs distincts, chacun commençant au moins
+// MIN_GAP_MS après le précédent. Même ordre de parcours que les anciennes boucles i/j/m.
+function forEachSeqChain(pool: Leg[], n: number, fn: (legs: Leg[]) => void) {
+  const chain: Leg[] = [];
+  const rec = () => {
+    if (chain.length === n) { fn(chain.slice()); return; }
+    const prev = chain[chain.length - 1];
+    for (const l of pool) {
+      if (prev) {
+        if (!l.dateTime || !prev.dateTime || l.dateTime <= prev.dateTime) continue;
+        if (l.dateTime - prev.dateTime < MIN_GAP_MS) continue;
+        if (chain.some(c => c === l || c.eventKey === l.eventKey)) continue;
+      }
+      chain.push(l); rec(); chain.pop();
+    }
+  };
+  rec();
+}
+
+interface SeqPrep {
+  sitesToUse: string[];
+  nList: number[];
+  legsPerSite: Map<string, Leg[]>;
+  poolPerSite: Map<string, Leg[]>;
+  total: number; // combinés parcourus, tous shards confondus
+}
+
+function prepareSeq(data: any, opts: EngineOpts): SeqPrep | null {
   const obligSites = getObligatorySites(opts);
   const sitesToUse = obligSites.length > 0 ? obligSites
     : opts.betType === 'fb' ? getFreebetEligibleSites(opts)
     : Object.keys(opts.sites);
 
-  if (!sitesToUse.length || (!opts.allowUni && !opts.allowMulti)) return [];
+  if (!sitesToUse.length || (!opts.allowUni && !opts.allowMulti)) return null;
 
   // Cache legs per site to avoid recomputing for each n
   const legsPerSite = new Map<string, Leg[]>();
+  const poolPerSite = new Map<string, Leg[]>();
   for (const site of sitesToUse) {
-    legsPerSite.set(site, collectLegsForSite(data, site, opts));
+    const legs = collectLegsForSite(data, site, opts);
+    legsPerSite.set(site, legs);
+    poolPerSite.set(site, seqPool(legs, opts));
   }
+
+  const nList = opts.allowedNLegs.filter(x => x >= 2 && x <= 3);
+  let total = 0;
+  for (const n of nList)
+    for (const site of sitesToUse) forEachSeqChain(poolPerSite.get(site)!, n, () => { total++; });
+  return { sitesToUse, nList, legsPerSite, poolPerSite, total };
+}
+
+function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progress, shard?: ComputeShard): CoveringSetResult[] {
+  const { sitesToUse, legsPerSite, poolPerSite } = prep;
 
   const results: CoveringSetResult[] = [];
   let seqCounter = 0;
 
-  for (const n of opts.allowedNLegs.filter(x => x >= 2 && x <= 3)) {
+  for (const n of prep.nList) {
     const nStr = n === 1 ? 'Simples' : `Combinés de ${n}`;
-    onProgress?.(`${nStr} • Séquentiel`, 0, 0);
+    const detail = `${nStr} • Séquentiel`;
 
     for (const site of sitesToUse) {
       const legs = legsPerSite.get(site)!;
@@ -1496,19 +1570,8 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
           }
         }
       } else {
-        // n = 2 or 3: multi-leg sequential — Lay can't be combined, so principal must be Back.
-        const pool = [...legs]
-          .filter(l => l.dateTime !== null && l.betType === 'Back')
-          // Filter coteMinParSelection BEFORE slicing to TOP_SEQ. Otherwise the top-50
-          // is ranked by b/bestK (coverage efficiency), which often favors moderate-odds
-          // legs over high-odds ones — leaving few or no combos where all legs satisfy
-          // the per-selection minimum.
-          .filter(l => opts.coteMinParSelection <= 0 || l.b >= opts.coteMinParSelection)
-          .sort((a, b) => (opts.betType === 'fb'
-            ? (b.b - 1) / b.bestK - (a.b - 1) / a.bestK
-            : b.b / b.bestK - a.b / a.bestK
-          ))
-          .slice(0, TOP_SEQ);
+        // n = 2 or 3: multi-leg sequential (pool : cf. seqPool).
+        const pool = poolPerSite.get(site)!;
 
         const trySeqCombo = (legList: Leg[]) => {
           if (opts.coteMinParSelection > 0 && legList.some(l => l.b < opts.coteMinParSelection)) return;
@@ -1713,39 +1776,12 @@ function computeSeq(data: any, opts: EngineOpts, onProgress?: (detail: string, d
           }
         };
 
-        if (n === 2) {
-          for (let i = 0; i < pool.length; i++) {
-            const l1 = pool[i];
-            for (let j = 0; j < pool.length; j++) {
-              if (i === j || pool[j].eventKey === l1.eventKey) continue;
-              const l2 = pool[j];
-              if (!l2.dateTime || !l1.dateTime || l2.dateTime <= l1.dateTime) continue;
-              if (l2.dateTime - l1.dateTime < MIN_GAP_MS) continue;
-              const idx = seqCounter++;
-              if (shard && idx % shard.count !== shard.index) continue;
-              trySeqCombo([l1, l2]);
-            }
-          }
-        } else if (n === 3) {
-          for (let i = 0; i < pool.length; i++) {
-            const l1 = pool[i];
-            for (let j = 0; j < pool.length; j++) {
-              if (i === j || pool[j].eventKey === l1.eventKey) continue;
-              const l2 = pool[j];
-              if (!l2.dateTime || !l1.dateTime || l2.dateTime <= l1.dateTime) continue;
-              if (l2.dateTime - l1.dateTime < MIN_GAP_MS) continue;
-              for (let m = 0; m < pool.length; m++) {
-                if (m === i || m === j || pool[m].eventKey === l1.eventKey || pool[m].eventKey === l2.eventKey) continue;
-                const l3 = pool[m];
-                if (!l3.dateTime || l3.dateTime <= l2.dateTime) continue;
-                if (l3.dateTime - l2.dateTime < MIN_GAP_MS) continue;
-                const idx = seqCounter++;
-                if (shard && idx % shard.count !== shard.index) continue;
-                trySeqCombo([l1, l2, l3]);
-              }
-            }
-          }
-        }
+        forEachSeqChain(pool, n, legList => {
+          const idx = seqCounter++;
+          if (shard && idx % shard.count !== shard.index) return;
+          progress.step(detail);
+          trySeqCombo(legList);
+        });
       }
     }
   }
@@ -1765,12 +1801,20 @@ export function compute(
 ): AllResults {
   const results: CoveringSetResult[] = [];
 
+  // Totaux connus d'avance : une seule barre de progression (simultané puis séquentiel).
+  const topEvents = opts.allowSimult ? getTopEvents(data, opts) : [];
+  const seqPrep = opts.allowSeq ? prepareSeq(data, opts) : null;
+  const total = shardShare(opts.allowSimult ? countSimultCombos(data, opts, topEvents) : 0, shard)
+    + shardShare(seqPrep?.total ?? 0, shard);
+  const progress = makeProgress(total, onProgress);
+
   if (opts.allowSimult) {
-    results.push(...computeSimult(data, opts, onProgress, shard));
+    results.push(...computeSimult(data, opts, topEvents, progress, shard));
   }
-  if (opts.allowSeq) {
-    results.push(...computeSeq(data, opts, onProgress, shard));
+  if (seqPrep) {
+    results.push(...computeSeq(data, opts, seqPrep, progress, shard));
   }
+  progress.flush();
 
   return results.sort((a, b) => b.profit - a.profit);
 }

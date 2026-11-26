@@ -471,6 +471,7 @@ Séquentiel impossible pour 1 seul event
 
 ## Résultats
 L'affichage des résultats doit se faire dans un tableau dont chaque ligne contient un covering set. Il est possible d'ouvrir le détail d'une ligne pour voir les différents paris qui sont placés pour ce covering set.
+Pour chaque pari, le détail affiche son « Gain » : le montant crédité si ce pari gagne (mise × cote ; en freebet la mise n'est pas rendue, soit mise × (cote − 1) ; pour un Lay, la liability rendue plus la mise moins la commission).
 
 Pour chaque ligne il faut afficher les informations suivantes : 
 - Méthodes
@@ -513,6 +514,7 @@ Affiche en € la perte totale du covering set
 
 ### Taux
 Affiche le TRJ du covering set
+Couleur : en Cash, vert à partir de 97 % (perte ≤ 3 %), orange à partir de 93 %, rouge en dessous ; en Freebet (taux de conversion), vert à partir de 75 %, orange à partir de 55 %.
 
 ### Filtres par colonne
 Chaque colonne du tableau de résultats propose un filtre. Le filtre "Méthode" propose notamment les combinaisons :
@@ -528,6 +530,7 @@ Chaque colonne du tableau de résultats propose un filtre. Le filtre "Méthode" 
 ## Architecture technique
 ### Moteur de calcul
 Le moteur est exécuté dans un pool de Web Workers (un par cœur CPU, jusqu'à 8) pour paralléliser les calculs. Chaque worker reçoit un shard `{ index, count }` et ne traite que les combinaisons d'events où `counter % count === index`. Les résultats de chaque worker sont agrégés et triés par profit sur le thread principal.
+La barre de progression couvre tout le calcul (simultané puis séquentiel) : chaque worker annonce dès le départ le nombre de combinaisons de sa part, et l'interface additionne les workers.
 
 ### Missions et filtres
 - Le filtre global "Cote min. par sélection" ne s'applique qu'aux combinés (≥ 2 legs), pas aux paris simples. Il porte sur les paris principaux (Cash) et sur les paris en freebet (Freebet) ; les couvertures sont libres.
