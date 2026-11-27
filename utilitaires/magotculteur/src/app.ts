@@ -3,7 +3,7 @@ import { collectSites, eventDisplayName, formatDate, getBackOdds, getLayInfo } f
 import bugOffUrl from '../../../assets/icons/bug-off.svg?url';
 import bugUrl from '../../../assets/icons/bug.svg?url';
 import * as Links from './links';
-import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission } from './types';
+import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission, AmountMode, AmountConstraint, CashObjective } from './types';
 
 // ===== STATE =====
 let _data: any = null;
@@ -180,6 +180,66 @@ function formatGap(ms: number): string {
 
 // ===== BUILD ENGINE OPTS =====
 
+// Mode avancé : réglages globaux du moteur tirés des freebets et des missions des sites,
+// à la place des réglages (cachés) du mode simple.
+//  - Freebet : montant = freebets des sites en priorité 1 (à défaut 2), « mise totale ».
+//  - Cash : missions de référence = obligatoires (à défaut optionnelles), une contrainte
+//    de montant chacune (la plus exigeante fixe les mises) ; objectif commun des missions,
+//    « Miser » s'ils diffèrent.
+//  - Cotes min. : celles de chaque mission (contrôlées par mission), pas de filtre global.
+//  - Pas de boost.
+interface AdvancedParams {
+  amountMode: AmountMode;
+  amount: number;
+  cashObjective: CashObjective;
+  amountConstraints?: AmountConstraint[];
+  error?: string; // calcul impossible
+  note?: string;  // calcul possible, choix à signaler
+}
+
+const MISSION_AMOUNT_MODE: Record<Mission['montantMode'], AmountMode> = {
+  mise_min: 'mise_min_par_pari',
+  profit_net_min: 'profit_net_min',
+  profit_brut: 'profit_brut',
+};
+
+function deriveAdvancedParams(sites: Record<string, SiteConfig>): AdvancedParams {
+  const entries = Object.entries(sites);
+  if (_betType === 'fb') {
+    const sumPrio = (p: number) => entries
+      .filter(([s, c]) => c.freebetPriority === p && c.freebetAmount > 0 && siteHasFb(s))
+      .reduce((t, [, c]) => t + c.freebetAmount, 0);
+    const amount = sumPrio(1) || sumPrio(2);
+    return {
+      amountMode: 'mise_totale', amount, cashObjective: 'miser',
+      ...(amount > 0 ? {} : { error: 'Mode avancé : indiquez un freebet disponible sur au moins un site (priorité 1 ou 2).' }),
+    };
+  }
+
+  const all = entries.flatMap(([site, c]) => c.missions.map(m => ({ site, m })));
+  const oblig = all.filter(x => x.m.importance === 'obligatoire');
+  const refs = (oblig.length ? oblig : all).filter(x => x.m.montant > 0);
+  if (!refs.length) {
+    return {
+      amountMode: 'mise_min_par_pari', amount: 0, cashObjective: 'miser',
+      error: 'Mode avancé : ajoutez une mission avec un montant pour fixer les mises.',
+    };
+  }
+  const amountConstraints: AmountConstraint[] = refs.map(({ site, m }) => ({
+    mode: MISSION_AMOUNT_MODE[m.montantMode] ?? 'mise_min_par_pari', amount: m.montant, site,
+  }));
+  const objectives = [...new Set(refs.map(x => x.m.objectif || 'miser'))];
+  const cashObjective: CashObjective = objectives.length === 1 ? objectives[0] : 'miser';
+  // Montant principal (chemins qui n'en gèrent qu'un, cf. séquentiel « Miser ») : la plus
+  // grande mise minimale, sinon la première contrainte.
+  const primary = amountConstraints.filter(c => c.mode === 'mise_min_par_pari').sort((a, b) => b.amount - a.amount)[0]
+    ?? amountConstraints[0];
+  return {
+    amountMode: primary.mode, amount: primary.amount, cashObjective, amountConstraints,
+    ...(objectives.length > 1 ? { note: 'Missions avec des objectifs différents : objectif « Miser » utilisé.' } : {}),
+  };
+}
+
 function buildEngineOpts(): EngineOpts {
   const sites: Record<string, SiteConfig> = {};
 
@@ -232,13 +292,22 @@ function buildEngineOpts(): EngineOpts {
     betType: _betType,
     sites,
     allowedNLegs: [..._allowedNLegs],
-    amountMode: _simpleAmountMode,
-    amount: _simpleAmount,
-    cashObjective: _simpleCashObjective,
-    coteMin: _simpleCoteMin,
-    coteMinParSelection: _simpleCoteMinSel,
-    boostPct: _betType === 'cash' ? _simpleBoostPct : 0,
-    boostSite: _betType === 'cash' && _simpleBoostPct > 0 ? _simpleSite : undefined,
+    ...(_advancedMode ? (() => {
+      const { amountMode, amount, cashObjective, amountConstraints } = deriveAdvancedParams(sites);
+      return {
+        amountMode, amount, cashObjective,
+        ...(amountConstraints ? { amountConstraints } : {}),
+        coteMin: 0, coteMinParSelection: 0, boostPct: 0, boostSite: undefined,
+      };
+    })() : {
+      amountMode: _simpleAmountMode,
+      amount: _simpleAmount,
+      cashObjective: _simpleCashObjective,
+      coteMin: _simpleCoteMin,
+      coteMinParSelection: _simpleCoteMinSel,
+      boostPct: _betType === 'cash' ? _simpleBoostPct : 0,
+      boostSite: _betType === 'cash' && _simpleBoostPct > 0 ? _simpleSite : undefined,
+    }),
     allowSeq: _allowSeq,
     allowSimult: _allowSimult,
     allowUni: _allowUni,
@@ -1146,6 +1215,13 @@ function showCalcError(message: string) {
   (el as any).hidden = false;
 }
 
+function showCalcNote(message: string) {
+  const el = document.getElementById('ff-calc-note');
+  if (!el) return;
+  el.textContent = message;
+  (el as any).hidden = !message;
+}
+
 async function tryRender() {
   if (!_data) return;
   if (_allowedNLegs.size === 0) {
@@ -1156,15 +1232,22 @@ async function tryRender() {
 
   const calcError = document.getElementById('ff-calc-error');
   if (calcError) (calcError as any).hidden = true;
+  showCalcNote('');
 
-  // Read current amount. Invalide : bloque en mode simple ; en mode avancé (champ caché),
-  // le dernier montant valide est utilisé.
+  // Read current amount. Invalide : bloque en mode simple (en mode avancé, les montants
+  // viennent des freebets et des missions).
   const amountInput = parseFloat((document.getElementById('ff-amount-input') as HTMLInputElement)?.value);
   if (amountInput > 0) _simpleAmount = amountInput;
   else if (!_advancedMode) {
     markAmountError(true);
     showCalcError('Montant invalide : saisissez un montant supérieur à 0.');
     return;
+  }
+
+  if (_advancedMode) {
+    const { error, note } = deriveAdvancedParams(buildEngineOpts().sites);
+    if (error) { showCalcError(error); return; }
+    if (note) showCalcNote(note);
   }
 
   _results = [];

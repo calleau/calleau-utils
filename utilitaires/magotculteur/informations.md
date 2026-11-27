@@ -128,6 +128,12 @@ En mode Freebet les paramètres suivants sont accessibles :
 En mode Cash les paramètres suivants sont accessibles : 
 - Ajouter une mission
 
+Les réglages du mode simple (montant, objectif, cotes minimum, boost) ne sont pas utilisés en mode avancé. Ils sont remplacés par :
+- Freebet : le montant est le total des freebets des sites en priorité 1 (à défaut en priorité 2). Sans freebet disponible, le calcul est bloqué avec un message.
+- Cash : les missions obligatoires servent de référence (à défaut les optionnelles). Chacune impose son montant (mise minimale sur les paris de son site, profit net ou profit brut) : toutes doivent être respectées, la plus exigeante fixe les mises. L'objectif est celui des missions ; s'ils diffèrent, l'objectif « Miser » est utilisé et un message le signale. Sans mission avec un montant, le calcul est bloqué avec un message.
+- Cotes minimum : celles de chaque mission, contrôlées mission par mission (pas de filtre global).
+- Boost : non disponible en mode avancé.
+
 ##### Freebet disponible
 Si type de mise est Freebet, sinon si c'est Cash le paramètre n'est pas disponible.
 Corresponds au montant des freebets disponible par l'utilisateur sur le site en question.

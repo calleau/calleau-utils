@@ -1,6 +1,6 @@
 import type {
   BetSpec, CoverageRule, EngineOpts, Cover, Leg, LegRef, LayInfo,
-  BetDetail, CoveringSetResult, AllResults, BetType, SiteConfig
+  BetDetail, CoveringSetResult, AllResults, BetType, SiteConfig, AmountConstraint
 } from './types';
 
 export const MIN_GAP_MS = 90 * 60 * 1000;
@@ -9,6 +9,12 @@ const TOP_SEQ = 50;
 // Tolérance (€) des contrôles de montant des missions : une mise calée exactement sur
 // le montant peut retomber juste en dessous par arrondi flottant (10 → 9,999999999999998).
 const AMOUNT_EPS = 1e-6;
+
+// Contraintes de montant Cash (cf. EngineOpts.amountConstraints).
+function amountConstraints(opts: EngineOpts): AmountConstraint[] {
+  const list = (opts.amountConstraints ?? []).filter(c => c.amount > 0);
+  return list.length ? list : [{ mode: opts.amountMode, amount: opts.amount }];
+}
 
 function C(n: number, k: number): number {
   if (k < 0 || k > n) return 0;
@@ -991,39 +997,47 @@ function makeSimultResult(
     }
 
     // amountMode applied only to principal-site bets.
-    const constraintIdxs = principalIdxs.length > 0 ? principalIdxs : oddsPerGroup.map((_, i) => i);
-    const constraintBase = constraintIdxs.map(i => baseStakes[i]);
-    let scale = 1;
-    if (opts.amountMode === 'mise_totale') {
-      const sumP = constraintBase.reduce((s, v) => s + v, 0);
-      if (sumP <= 0) return null;
-      scale = opts.amount / sumP;
-    } else if (opts.amountMode === 'mise_min_par_pari') {
-      // En mode boost + mise_min_par_pari : la mise de référence est celle du pari boosté
-      // (le user veut "au moins opts.amount sur le pari boosté", les autres peuvent varier).
-      const anchor = (boostedIdx != null) ? baseStakes[boostedIdx] : Math.min(...constraintBase);
-      if (!isFinite(anchor) || anchor <= 0) return null;
-      scale = opts.amount / anchor;
-    } else if (opts.amountMode === 'profit_brut') {
-      // Gross gain quand le groupe "dutch" (= principal pour gagner, cover pour perdre,
-      // tous pour miser) gagne, par unité totalStake.
-      let factor: number;
-      if (fixedIdxs === null) factor = rate;
-      else if (obj === 'perdre') factor = 1;
-      else factor = dutchK;
-      if (factor <= 0) return null;
-      scale = opts.amount / factor;
-    } else if (opts.amountMode === 'profit_net_min') {
-      let lossFactor: number;
-      if (fixedIdxs === null) lossFactor = 1 - rate;
-      else lossFactor = 1 - dutchK;
+    const principalOrAll = principalIdxs.length > 0 ? principalIdxs : oddsPerGroup.map((_, i) => i);
+    // Échelle exigée par une contrainte ; null = impossible. Une contrainte limitée à un
+    // site ne porte que sur ses paris principaux (ignorée s'il n'y en a aucun).
+    const scaleFor = (c: AmountConstraint): number | null | 'skip' => {
+      const constraintIdxs = c.site ? principalOrAll.filter(i => sitePerGroup[i] === c.site) : principalOrAll;
+      if (!constraintIdxs.length) return 'skip';
+      const constraintBase = constraintIdxs.map(i => baseStakes[i]);
+      if (c.mode === 'mise_totale') {
+        const sumP = constraintBase.reduce((s, v) => s + v, 0);
+        return sumP > 0 ? c.amount / sumP : null;
+      }
+      if (c.mode === 'mise_min_par_pari') {
+        // En mode boost + mise_min_par_pari : la mise de référence est celle du pari boosté
+        // (le user veut "au moins opts.amount sur le pari boosté", les autres peuvent varier).
+        const anchor = (boostedIdx != null) ? baseStakes[boostedIdx] : Math.min(...constraintBase);
+        return isFinite(anchor) && anchor > 0 ? c.amount / anchor : null;
+      }
+      if (c.mode === 'profit_brut') {
+        // Gross gain quand le groupe "dutch" (= principal pour gagner, cover pour perdre,
+        // tous pour miser) gagne, par unité totalStake.
+        let factor: number;
+        if (fixedIdxs === null) factor = rate;
+        else if (obj === 'perdre') factor = 1;
+        else factor = dutchK;
+        return factor > 0 ? c.amount / factor : null;
+      }
+      // profit_net_min
+      const lossFactor = fixedIdxs === null ? 1 - rate : 1 - dutchK;
       if (lossFactor <= 0) {
         const gainFactor = fixedIdxs === null ? rate - 1 : (obj === 'perdre' ? 0 : dutchK - 1);
-        if (gainFactor <= 0) return null;
-        scale = opts.amount / gainFactor;
-      } else {
-        scale = opts.amount / lossFactor;
+        return gainFactor > 0 ? c.amount / gainFactor : null;
       }
+      return c.amount / lossFactor;
+    };
+    // Toutes les contraintes doivent être tenues : la plus exigeante fixe l'échelle.
+    let scale = 0;
+    for (const c of amountConstraints(opts)) {
+      const sc = scaleFor(c);
+      if (sc === 'skip') continue;
+      if (sc === null || !isFinite(sc) || sc <= 0) return null;
+      scale = Math.max(scale, sc);
     }
     if (!isFinite(scale) || scale <= 0) return null;
 
@@ -1703,21 +1717,35 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
                 if (legList[i].bestCover.site === site) cIdxs.push(i + 1);
               }
               const cTotalCommitted = cIdxs.reduce((s, i) => s + committed1[i], 0);
-              const cMinStake = Math.min(...cIdxs.map(i => stakes1[i]));
 
-              let S_p: number;
-              switch (opts.amountMode) {
-                case 'mise_totale':       S_p = opts.amount / cTotalCommitted; break;
-                case 'mise_min_par_pari': S_p = opts.amount / cMinStake; break;
-                case 'profit_brut':       S_p = opts.amount / B; break;
-                case 'profit_net_min': {
-                  // Net P&L on all-win considering only principal-site committed:
-                  // gain = S_p × B − S_p × cTotalCommitted = S_p × (B − cTotalCommitted)
-                  const factor = Math.abs(B - cTotalCommitted);
-                  S_p = factor > 1e-9 ? opts.amount / factor : opts.amount;
-                  break;
+              // Toutes les contraintes doivent être tenues : la plus exigeante fixe S_p.
+              // Une contrainte limitée à un autre site porte sur ses couvertures.
+              let S_p = 0;
+              for (const c of amountConstraints(opts)) {
+                const onPrincipalSite = !c.site || c.site === site;
+                const idxs = onPrincipalSite ? cIdxs
+                  : legList.map((l, i) => i + 1).filter(i => legList[i - 1].bestCover.site === c.site);
+                if (!idxs.length) continue;
+                const committed = idxs.reduce((s, i) => s + committed1[i], 0);
+                let sp: number;
+                switch (c.mode) {
+                  case 'mise_totale':       sp = c.amount / committed; break;
+                  case 'mise_min_par_pari': sp = c.amount / Math.min(...idxs.map(i => stakes1[i])); break;
+                  // Site du combiné : retour brut du combiné. Autre site : au moins une de ses
+                  // couvertures doit atteindre le montant (comme le contrôle de la mission).
+                  case 'profit_brut':       sp = onPrincipalSite ? c.amount / B
+                    : c.amount / Math.max(...idxs.map(i => stakes1[i] * legList[i - 1].bestCover.oddsGross)); break;
+                  case 'profit_net_min': {
+                    // Net P&L on all-win considering only principal-site committed:
+                    // gain = S_p × B − S_p × cTotalCommitted = S_p × (B − cTotalCommitted)
+                    const factor = Math.abs(B - cTotalCommitted);
+                    sp = factor > 1e-9 ? c.amount / factor : c.amount;
+                    break;
+                  }
+                  default: sp = c.amount;
                 }
-                default: S_p = opts.amount;
+                if (!isFinite(sp) || sp <= 0) return;
+                S_p = Math.max(S_p, sp);
               }
               if (!isFinite(S_p) || S_p <= 0) return;
 

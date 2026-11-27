@@ -20,7 +20,7 @@ Corps JSON. **Un fichier de debug de l'interface (bouton « bug ») peut être e
 
 | Champ | Requis | Description |
 |---|---|---|
-| `engineOpts` | oui | Réglages du moteur, comme dans un fichier de debug : `sites` (missions, freebets), `betType`, `allowedNLegs`, `amountMode`, `amount`, méthodes… |
+| `engineOpts` | oui | Réglages du moteur, comme dans un fichier de debug : `sites` (missions, freebets), `betType`, `allowedNLegs`, `amountMode`, `amount`, méthodes… Facultatif en Cash : `amountConstraints` (`[{ mode, amount, site? }]`), plusieurs contraintes de montant toutes respectées, la plus exigeante fixe les mises (mode avancé de l'interface) ; absent, `amountMode` / `amount` s'appliquent. |
 | `data` | oui | Cotes au format Betxtractor (export de l'extension collé dans l'interface). |
 | `coverageRules` | non | Règles de couverture. Voir l'ordre ci-dessous. |
 | `limit` | non | Nombre de résultats renvoyés, les meilleurs d'abord. Défaut : `50`. |

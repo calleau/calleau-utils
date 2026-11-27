@@ -483,6 +483,13 @@
 	color: var(--color-neg);
 }
 
+/* Remarque sous le bouton Calculer (mode avancé) */
+.ff-calc-note {
+	font-size: 0.8rem;
+	color: var(--color-muted);
+	margin: 0;
+}
+
 /* Montant invalide (vide ou ≤ 0) */
 .numinput.numinput--error {
 	outline: 1.5px solid var(--color-neg);

@@ -45,6 +45,13 @@ export type AmountMode = 'mise_totale' | 'mise_min_par_pari' | 'profit_net_min' 
 export type CashObjective = 'gagner' | 'miser' | 'perdre';
 export type BetType = 'fb' | 'cash';
 
+// Contrainte de montant (Cash) : mode + montant, éventuellement limitée aux paris d'un site.
+export interface AmountConstraint {
+  mode: AmountMode;
+  amount: number;
+  site?: string;
+}
+
 export interface EngineOpts {
   coverageRules: CoverageRule[];
   betType: BetType;
@@ -53,6 +60,10 @@ export interface EngineOpts {
   // Montant de référence (mode simple ou global)
   amountMode: AmountMode;
   amount: number;
+  // Cash, optionnel (mode avancé : une contrainte par mission de référence). Toutes
+  // doivent être respectées : la plus exigeante fixe les mises. Absent : une seule
+  // contrainte { amountMode, amount } sur les paris principaux.
+  amountConstraints?: AmountConstraint[];
   // Cash uniquement
   cashObjective: CashObjective;
   // Filtres globaux (mode simple)
