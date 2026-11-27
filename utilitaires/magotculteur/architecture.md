@@ -227,6 +227,7 @@ Côté moteur (`getCoverSets`) :
 Le freebet est joué sur un combiné de N sélections Back (même site). Chaque sélection est couverte individuellement par un Lay ou un Back adverse sur un autre site, **dans l'ordre** des matchs.
 
 - **2 à 5 sélections** (v7.8.0) : le Back est un combiné ; chaque couverture intervient au moment de son match. Pas de séquentiel pour 1 sélection (un simple est du simultané).
+- **Sélections** (`SeqLeg`, v7.9.0) : une ou deux issues jouées (cote équivalente b = 1/Σ 1/b), les autres issues de la règle couvertes chacune sur son meilleur site (cote effective équivalente E = 1/Σ 1/e, k = E/(E−1)). Règles à 2 issues : `findCoversForOutcome` ; à 3 issues ou plus : ensembles de `getCoverSets`. Plusieurs combinés si des issues jouées sont multiples (tous rapportent X ; freebet : X = S / Σ 1/(B_c − 1)). Les formules ci-dessous s'appliquent avec b, B et k équivalents.
 
 **Formule freebet (profit égal sur chaque issue) :**
 ```

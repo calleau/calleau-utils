@@ -96,7 +96,7 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 | F9 | ✅ **Corrigé en v7.7.1** : mode de montant appliqué en séquentiel Cash « Miser » et en Freebet. **Mode de montant ignoré** en Freebet et en Cash « Miser » : la mise principale vaut toujours le montant saisi (en Freebet : le freebet du site depuis la v7.2.3). |
 | F10 | ✅ **Corrigé en v7.4.1** : cote min. sur la cote du combiné en séquentiel ; v7.8.0 : aussi sur les couvertures placées sur le site du combiné, comme en simultané. **Cote min. appliquée à chaque sélection** et non à la cote combinée ([engine.ts:241](src/engine.ts#L241)), contrairement au simultané. |
 | F11 | ✅ **Corrigé en v7.8.0** : combinés séquentiels de 2 à 5 sélections ; branche « 1 sélection » supprimée (un simple est du simultané). **2 ou 3 sélections seulement** : 4 et 5 sont ignorées, et la branche « 1 sélection » ne s'exécute jamais. |
-| F12 | **Couvertures limitées aux règles à 2 issues** : les exemples 1 à 3 de la spécification ne sont pas gérés (M1 B et M1 C couverts séparément, couverture combinée). |
+| F12 | ✅ **Corrigé en v7.9.0** : couverture répartie sur plusieurs issues et plusieurs combinés (1 ou 2 issues jouées par match). **Couvertures limitées aux règles à 2 issues** : les exemples 1 à 3 de la spécification ne sont pas gérés (M1 B et M1 C couverts séparément, couverture combinée). |
 | F13 | **Boost non géré** : quand un boost est actif, le séquentiel sort quand même des résultats non boostés. |
 | F14 | **Écart minimum de 90 min entre deux matchs, en dur** : pensé pour le foot. Les matchs sans date sont écartés sans message. |
 
@@ -149,7 +149,7 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 2. **Mode avancé** (F1, F2, F3) : le montant d'une mission doit-il fixer les mises ? Quel objectif et quelle cote min. appliquer quand plusieurs sites ont des missions ?
 3. **Plusieurs sites en priorité 1** (F5) : faut-il répartir les freebets site par site, pour viser 98 à 100 % de chaque freebet ?
 4. **Priorité 2** (F4, B11) : comment la jouer quand un site est déjà en priorité 1 ? Faut-il plafonner chaque site à son freebet disponible ?
-5. **Séquentiel** (F11, F12) : veux-tu les couvertures sur marchés à 3 issues, les couvertures combinées et les combinés de 4 ou 5 sélections ?
+5. ~~**Séquentiel** (F11, F12)~~ fait en v7.8.0 et v7.9.0 : veux-tu les couvertures sur marchés à 3 issues, les couvertures combinées et les combinés de 4 ou 5 sélections ?
 6. **Séquentiel Gagner / Perdre** (C1, C2) : le profit affiché doit-il supposer toutes les couvertures placées d'avance, ou suivre le déroulement réel ?
 7. **Asymétrique / Asym. léger** (F15, F16) : faut-il les fusionner, ou implémenter le vrai asymétrique de la spécification ?
 8. **Dédoublonnage** (F17) : un seul résultat par combinaison de matchs, ou toutes les variantes ?

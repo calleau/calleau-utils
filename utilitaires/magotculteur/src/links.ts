@@ -112,6 +112,10 @@ export function buildCouvSeqUrl(r: CoveringSetResult, ctx: LinkContext): string 
   if (!principal) return '';
   const covers = r.bets.filter(b => b.role === 'cover');
   if (!covers.length) return '';
+  // couv-seq : un seul combiné et une couverture par sélection. Pas de lien pour plusieurs
+  // combinés ou une couverture répartie sur plusieurs issues.
+  if (r.bets.filter(b => b.role === 'principal').length > 1) return '';
+  if (new Set(covers.map(c => c.seqStep)).size !== covers.length) return '';
 
   // Bet compact (omission des défauts : type="freebet", amount=50,
   // oddsMode="individual", totalOdd=null, odds=[null,null]).
