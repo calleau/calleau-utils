@@ -2,7 +2,7 @@
 // Chargé par index.html en <script type="text/babel" src="fb-conv.js"> : Babel standalone le récupère
 // en HTTP et le compile dans le navigateur. Il faut donc un serveur (pas de file://), comme le reste du site.
 
-const { useState, useMemo } = React;
+const { useState, useMemo, useEffect } = React;
 
 const OUTCOME_LABELS = ["1", "N", "2"];
 
@@ -114,17 +114,249 @@ function Outcome({ o, dim }) {
   return <span className={`fb-outcome o${o}` + (dim ? " is-dim" : "")}>{OUTCOME_LABELS[o]}</span>;
 }
 
+/* ──────────────────────────────────────────────────────────
+   Sauvegarde de l'état — lien (?s=<lz-string>) + miroir localStorage.
+   Format décrit dans URL_STATE.md (mêmes conventions que couv-seq / calc-couverture) :
+   clés courtes, valeurs par défaut omises, cotes en nombres.
+   Au chargement : URL, sinon localStorage, sinon valeurs par défaut.
+   Le dernier calcul est rebâti à l'identique : sélection retenue par mode,
+   paris placés, et cotes du moment du calcul si elles ont changé depuis (`r.in`).
+   ────────────────────────────────────────────────────────── */
+
+const STATE_VERSION = 1;
+const URL_PARAM = "s";
+const STORAGE_KEY = "fbconv_state";
+const TABS = ["plan", "ranking", "all"];
+
+const numOrNull = (v) => { const f = parseFloat(v); return isFinite(f) ? f : null; };
+const numToStr  = (v) => (typeof v === "number" && isFinite(v)) ? String(v) : "";
+const round4    = (x) => Math.round(x * 1e4) / 1e4;
+const clampInt  = (v, lo, hi, def) => (Number.isInteger(v) && v >= lo && v <= hi) ? v : def;
+
+// Entrées prises en compte par le calcul (sert aussi à détecter un changement depuis le dernier calcul)
+function snapshotOf(bookmakers, freebetType, effectiveComboSize, totalMatches) {
+  return {
+    bookmakers: bookmakers.map(bk => ({
+      id: bk.id, freebetActive: bk.freebetActive,
+      matches: bk.matches,
+      guaranteedMatches: bk.guaranteedMatches,
+    })),
+    freebetType, effectiveComboSize, totalMatches,
+  };
+}
+
+// Grille de cotes (tableau par match de chaînes) ⇄ tableau de nombres|null, matchs vides finaux rognés
+function encodeGrid(rows) {
+  const out = (rows || []).map(r => { const vals = r.map(numOrNull); return vals.some(v => v !== null) ? vals : null; });
+  while (out.length && out[out.length - 1] === null) out.pop();
+  return out.length ? out : undefined;
+}
+
+function decodeGrid(arr, n, width) {
+  return Array.from({ length: n }, (_, mi) => {
+    const row = Array.isArray(arr) && Array.isArray(arr[mi]) ? arr[mi] : [];
+    return Array.from({ length: width }, (_, j) => numToStr(row[j]));
+  });
+}
+
+function encodeBookmakers(bks, withAmounts) {
+  return bks.map(bk => {
+    const e = { i: bk.id };
+    if (withAmounts) { const a = numOrNull(bk.freebetAmount); if (a !== null) e.a = a; }
+    if (!bk.freebetActive) e.x = 1;
+    const o = encodeGrid(bk.matches); if (o) e.o = o;
+    const go = encodeGrid(bk.guaranteedMatches); if (go) e.go = go;
+    return e;
+  });
+}
+
+// Ordre de la liste = ordre de priorité ; sites inconnus ignorés, sites absents ajoutés à la fin
+function decodeBookmakers(arr, n) {
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(arr) ? arr : []).forEach(e => {
+    const def = BOOKMAKER_DEFS.find(d => d.id === e?.i);
+    if (!def || seen.has(def.id)) return;
+    seen.add(def.id);
+    out.push({
+      ...def,
+      freebetAmount: numToStr(e.a),
+      freebetActive: e.x !== 1,
+      matches: decodeGrid(e.o, n, 3),
+      guaranteedMatches: decodeGrid(e.go, n, 2),
+    });
+  });
+  makeDefaultBookmakers(n).forEach(bk => { if (!seen.has(bk.id)) out.push(bk); });
+  return out;
+}
+
+function encodeState(s) {
+  const o = { v: STATE_VERSION };
+  if (s.totalMatches !== 3) o.n = s.totalMatches;
+  if (s.comboSize !== 3) o.k = s.comboSize;
+  if (s.freebetType === "full") o.ft = 1;
+  if (s.showGuaranteed) o.g = 1;
+  if (s.stakeMode === "persite") o.sm = 1;
+  if (s.standardStake !== 100) o.ss = s.standardStake;
+  const mx = numOrNull(s.maxStake); if (mx !== null) o.mx = mx;
+  const mn = s.matchNames.map((name, i) => name === `Match ${i + 1}` ? "" : String(name).slice(0, 100));
+  while (mn.length && mn[mn.length - 1] === "") mn.pop();
+  if (mn.length) o.mn = mn;
+  if (s.selectedTab !== "plan") o.t = s.selectedTab;
+  const b = encodeBookmakers(s.bookmakers, true);
+  const isDefaultB = b.every((e, i) => Object.keys(e).length === 1 && e.i === BOOKMAKER_DEFS[i].id);
+  if (!isDefaultB) o.b = b;
+  if (s.calc) {
+    const r = {};
+    if (s.calc.std) r.s = s.calc.std;
+    if (s.calc.guar) r.gs = s.calc.guar;
+    if (s.calc.displayMode === "guaranteed") r.dm = 1;
+    const p = Object.entries(s.calc.placedBets)
+      .map(([i, pb]) => [Number(i), round4(pb.stake), round4(pb.payout), round4(pb.odds)]);
+    if (p.length) r.p = p;
+    const sn = s.calc.snapshot;
+    if (sn) {
+      r.in = { n: sn.totalMatches, k: sn.effectiveComboSize, b: encodeBookmakers(sn.bookmakers, false) };
+      if (sn.freebetType === "full") r.in.ft = 1;
+    }
+    o.r = r;
+  }
+  return o;
+}
+
+// Sélection de matchs valide pour un calcul à n matchs, k en combiné (indices croissants distincts)
+function validSelection(mi, n, k) {
+  if (!Array.isArray(mi) || mi.length !== k) return null;
+  const ok = mi.every((v, i) => Number.isInteger(v) && v >= 0 && v < n && (i === 0 || v > mi[i - 1]));
+  return ok ? mi : null;
+}
+
+function decodeState(o) {
+  if (!o || typeof o !== "object" || o.v !== STATE_VERSION) return null;
+  const n = clampInt(o.n, 2, 7, 3);
+  const st = {
+    totalMatches: n,
+    comboSize: clampInt(o.k, 2, 5, 3),
+    freebetType: o.ft === 1 ? "full" : "profit",
+    showGuaranteed: o.g === 1,
+    stakeMode: o.sm === 1 ? "persite" : "standard",
+    standardStake: (typeof o.ss === "number" && isFinite(o.ss) && o.ss >= 0) ? o.ss : 100,
+    maxStake: numToStr(o.mx),
+    matchNames: Array.from({ length: n }, (_, i) =>
+      (Array.isArray(o.mn) && typeof o.mn[i] === "string" && o.mn[i]) ? o.mn[i] : `Match ${i + 1}`),
+    selectedTab: TABS.includes(o.t) ? o.t : "plan",
+    bookmakers: decodeBookmakers(o.b, n),
+    calc: null,
+  };
+  const r = o.r;
+  if (r && typeof r === "object") {
+    let snapshot;
+    if (r.in && typeof r.in === "object") {
+      const sn = clampInt(r.in.n, 2, 7, n);
+      const sk = Math.min(clampInt(r.in.k, 2, 5, st.comboSize), sn);
+      snapshot = snapshotOf(decodeBookmakers(r.in.b, sn), r.in.ft === 1 ? "full" : "profit", sk, sn);
+    } else {
+      snapshot = snapshotOf(st.bookmakers, st.freebetType, Math.min(st.comboSize, n), n);
+    }
+    const maxIdx = Math.pow(3, snapshot.effectiveComboSize);
+    const placedBets = {};
+    (Array.isArray(r.p) ? r.p : []).forEach(e => {
+      if (!Array.isArray(e)) return;
+      const [i, stake, payout, odds] = e;
+      if (Number.isInteger(i) && i >= 0 && i < maxIdx && [stake, payout, odds].every(v => typeof v === "number" && isFinite(v) && v > 0))
+        placedBets[i] = { stake, payout, odds };
+    });
+    st.calc = {
+      snapshot,
+      std: validSelection(r.s, snapshot.totalMatches, snapshot.effectiveComboSize),
+      guar: validSelection(r.gs, snapshot.totalMatches, snapshot.effectiveComboSize),
+      displayMode: r.dm === 1 ? "guaranteed" : "standard",
+      placedBets,
+    };
+  }
+  return st;
+}
+
+// Classement de toutes les sélections + meilleure (ou celle imposée par `fixedSelection`)
+function buildPlan(activeBks, n, k, freebetType, useGuaranteed, fixedSelection) {
+  const ranking = [];
+  subsets(n, k).forEach((matchIndices) => {
+    const { rate, details } = computeConversion(activeBks, matchIndices, freebetType, useGuaranteed);
+    if (rate !== null) ranking.push({ matchIndices, rate, details });
+  });
+  ranking.sort((a, b) => b.rate - a.rate);
+  if (!fixedSelection) return { best: null, ranking };
+  const { rate, details } = computeConversion(activeBks, fixedSelection, freebetType, useGuaranteed);
+  return { best: rate === null ? null : { matchIndices: fixedSelection, rate, details }, ranking };
+}
+
+// Rebâtit les plans figés d'un calcul sauvegardé, avec les cotes du moment du calcul
+function plansFromCalc(calc, currentBookmakers) {
+  const sn = calc.snapshot;
+  const activeBks = sn.bookmakers.filter(b => b.freebetActive).map(b => ({
+    ...BOOKMAKER_DEFS.find(d => d.id === b.id),
+    ...b,
+    freebetAmount: currentBookmakers.find(c => c.id === b.id)?.freebetAmount ?? "",
+  }));
+  const hasG = activeBks.some(bk => bk.guaranteedMatches.some(m => m.some(v => v !== "")));
+  return {
+    std: buildPlan(activeBks, sn.totalMatches, sn.effectiveComboSize, sn.freebetType, false, calc.std),
+    guar: hasG ? buildPlan(activeBks, sn.totalMatches, sn.effectiveComboSize, sn.freebetType, true, calc.guar) : null,
+  };
+}
+
+function readSavedState() {
+  // 1. Lien partagé
+  try {
+    const s = new URLSearchParams(window.location.search).get(URL_PARAM);
+    if (s && typeof LZString !== "undefined") {
+      const st = decodeState(JSON.parse(LZString.decompressFromEncodedURIComponent(s)));
+      if (st) return st;
+    }
+  } catch (_) {}
+  // 2. Dernier état du navigateur
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { const st = decodeState(JSON.parse(raw)); if (st) return st; }
+  } catch (_) {}
+  // 3. Valeurs par défaut
+  return decodeState({ v: STATE_VERSION });
+}
+
+function writeSavedState(o) {
+  const json = JSON.stringify(o);
+  try { localStorage.setItem(STORAGE_KEY, json); } catch (_) {}
+  if (typeof LZString === "undefined") return;
+  try {
+    const url = new URL(window.location);
+    url.searchParams.set(URL_PARAM, LZString.compressToEncodedURIComponent(json));
+    history.replaceState(null, "", url);
+  } catch (_) {}
+}
+
+function clearSavedState() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+  try {
+    const url = new URL(window.location);
+    url.searchParams.delete(URL_PARAM);
+    history.replaceState(null, "", url);
+  } catch (_) {}
+}
+
+const INIT = readSavedState();
+const INIT_PLANS = INIT.calc ? plansFromCalc(INIT.calc, INIT.bookmakers) : null;
+
 function FreebetOptimizer() {
-  const [totalMatches, setTotalMatches] = useState(3);
-  const [comboSize, setComboSize]       = useState(3);
-  const [bookmakers, setBookmakers]     = useState(() => makeDefaultBookmakers(3));
-  const [freebetType, setFreebetType]   = useState("profit");
-  const [matchNames, setMatchNames]     = useState(["Match 1", "Match 2", "Match 3"]);
-  const [selectedTab, setSelectedTab]   = useState("plan");
-  const [stakeMode, setStakeMode]       = useState("standard");
-  const [standardStake, setStandardStake] = useState(100);
-  const [maxStake, setMaxStake]           = useState("");  // "" = no cap
-  const [placedBets, setPlacedBets]       = useState({}); // { [idx]: { stake, payout } }
+  const [totalMatches, setTotalMatches] = useState(INIT.totalMatches);
+  const [comboSize, setComboSize]       = useState(INIT.comboSize);
+  const [bookmakers, setBookmakers]     = useState(INIT.bookmakers);
+  const [freebetType, setFreebetType]   = useState(INIT.freebetType);
+  const [matchNames, setMatchNames]     = useState(INIT.matchNames);
+  const [selectedTab, setSelectedTab]   = useState(INIT.selectedTab);
+  const [stakeMode, setStakeMode]       = useState(INIT.stakeMode);
+  const [standardStake, setStandardStake] = useState(INIT.standardStake);
+  const [maxStake, setMaxStake]           = useState(INIT.maxStake);  // "" = no cap
+  const [placedBets, setPlacedBets]       = useState(INIT.calc?.placedBets ?? {}); // { [idx]: { stake, payout, odds } }
 
   const effectiveComboSize = Math.min(comboSize, totalMatches);
   const activeBookmakers = useMemo(() => bookmakers.filter((bk) => bk.freebetActive), [bookmakers]);
@@ -159,23 +391,42 @@ function FreebetOptimizer() {
   const allSubsets = useMemo(() => subsets(totalMatches, effectiveComboSize), [totalMatches, effectiveComboSize]);
 
   // Frozen plan — only updated on manual "Calculer" click
-  const [frozenPlan, setFrozenPlan] = useState(null);
-  const [frozenPlanGuaranteed, setFrozenPlanGuaranteed] = useState(null);
+  const [frozenPlan, setFrozenPlan] = useState(INIT_PLANS?.std ?? null);
+  const [frozenPlanGuaranteed, setFrozenPlanGuaranteed] = useState(INIT_PLANS?.guar ?? null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [calcSnapshot, setCalcSnapshot] = useState(null); // snapshot of inputs at last calc
-  const [showGuaranteed, setShowGuaranteed] = useState(false);
-  const [displayMode, setDisplayMode] = useState("standard"); // "standard" | "guaranteed"
+  const [calcSnapshot, setCalcSnapshot] = useState(INIT.calc ? JSON.stringify(INIT.calc.snapshot) : null); // snapshot of inputs at last calc
+  const [showGuaranteed, setShowGuaranteed] = useState(INIT.showGuaranteed);
+  const [displayMode, setDisplayMode] = useState(INIT.calc?.displayMode ?? "standard"); // "standard" | "guaranteed"
 
   function makeSnapshot() {
-    return JSON.stringify({
-      bookmakers: bookmakers.map(bk => ({
-        id: bk.id, freebetActive: bk.freebetActive,
-        matches: bk.matches,
-        guaranteedMatches: bk.guaranteedMatches,
-      })),
-      freebetType, effectiveComboSize, totalMatches,
-    });
+    return JSON.stringify(snapshotOf(bookmakers, freebetType, effectiveComboSize, totalMatches));
   }
+
+  // Sauvegarde (URL + localStorage), regroupée ~400 ms après la dernière modification
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const current = makeSnapshot();
+      const calc = frozenPlan === null ? null : {
+        // Cotes du calcul gardées à part seulement si elles diffèrent des cotes affichées
+        snapshot: calcSnapshot !== null && calcSnapshot !== current ? JSON.parse(calcSnapshot) : null,
+        std: frozenPlan?.best?.matchIndices ?? null,
+        guar: frozenPlanGuaranteed?.best?.matchIndices ?? null,
+        displayMode, placedBets,
+      };
+      writeSavedState(encodeState({
+        totalMatches, comboSize, freebetType, showGuaranteed, stakeMode, standardStake,
+        maxStake, matchNames, selectedTab, bookmakers, calc,
+      }));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [totalMatches, comboSize, freebetType, showGuaranteed, stakeMode, standardStake, maxStake,
+      matchNames, selectedTab, bookmakers, frozenPlan, frozenPlanGuaranteed, calcSnapshot, displayMode, placedBets]);
+
+  const handleClearAll = () => {
+    if (!window.confirm("Tout effacer ? Les matchs, cotes, montants et paris placés seront perdus.")) return;
+    clearSavedState();
+    window.location.reload();
+  };
 
   // Check if any guaranteed odds are filled
   const hasGuaranteedData = useMemo(() =>
@@ -955,6 +1206,7 @@ function FreebetOptimizer() {
 
       <div className="fb-test">
         <button type="button" className="btn btn-ghost" onClick={fillTestValues}>🎲 Valeurs tests</button>
+        <button type="button" className="btn btn-ghost" onClick={handleClearAll}>🗑 Tout effacer</button>
       </div>
     </>
   );

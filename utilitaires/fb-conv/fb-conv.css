@@ -992,5 +992,5 @@ input::placeholder { color: var(--color-muted); opacity: 0.7; }
 .fb-method strong { color: var(--color-text); }
 .fb-method code { font-family: 'DM Mono', monospace; color: var(--color-text); }
 
-.fb-test { display: flex; justify-content: center; }
+.fb-test { display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap; }
 .fb-test .btn { border-style: dashed; color: var(--color-muted); }
