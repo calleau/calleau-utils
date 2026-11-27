@@ -1665,6 +1665,48 @@ function computeSimult(data: any, opts: EngineOpts, topEvents: string[], progres
 
 // ===== SEQUENTIAL COMPUTATION =====
 
+// Séquentiel Cash : mise du combiné S_p exigée par les contraintes de montant (toutes tenues,
+// la plus exigeante l'emporte). stakes1 / committed1 : mises et engagements par unité de S_p,
+// [0] = combiné, [i] = couverture de la sélection i. Une contrainte porte sur les paris du site
+// du combiné (le combiné et ses couvertures sur ce site), ou sur les couvertures d'un autre site
+// si elle est limitée à ce site. NaN = impossible.
+function seqPrincipalScale(stakes1: number[], committed1: number[], legList: Leg[], site: string, B: number, opts: EngineOpts): number {
+  const coversOn = (s: string) => legList.map((_, i) => i + 1).filter(i => legList[i - 1].bestCover.site === s);
+  const cIdxs = [0, ...coversOn(site)];
+  let S_p = 0;
+  for (const c of amountConstraints(opts)) {
+    const onPrincipalSite = !c.site || c.site === site;
+    const idxs = onPrincipalSite ? cIdxs : coversOn(c.site!);
+    if (!idxs.length) continue;
+    const committed = idxs.reduce((s, i) => s + committed1[i], 0);
+    let sp: number;
+    switch (c.mode) {
+      case 'mise_totale':       sp = c.amount / committed; break;
+      case 'mise_min_par_pari': sp = c.amount / Math.min(...idxs.map(i => stakes1[i])); break;
+      // Site du combiné : retour brut du combiné. Autre site : au moins une de ses
+      // couvertures doit atteindre le montant (comme le contrôle de la mission).
+      case 'profit_brut':       sp = onPrincipalSite ? c.amount / B
+        : c.amount / Math.max(...idxs.map(i => stakes1[i] * legList[i - 1].bestCover.oddsGross)); break;
+      case 'profit_net_min': {
+        // Gain net de chaque pari concerné quand il gagne : combiné S_p × (B − 1),
+        // couverture mise × (cote − 1) (Lay : mise × (1 − commission)).
+        const nets = idxs.map(i => {
+          if (i === 0) return B - 1;
+          const cv = legList[i - 1].bestCover;
+          return stakes1[i] * (cv.type === 'lay' ? 1 - cv.c! : cv.odds - 1);
+        });
+        const minNet = Math.min(...nets);
+        sp = minNet > 1e-9 ? c.amount / minNet : NaN;
+        break;
+      }
+      default: sp = c.amount;
+    }
+    if (!isFinite(sp) || sp <= 0) return NaN;
+    S_p = Math.max(S_p, sp);
+  }
+  return S_p > 0 ? S_p : NaN;
+}
+
 // Sélections candidates au combiné séquentiel d'un site (les TOP_SEQ meilleures).
 // Lay can't be combined, so principal must be Back.
 function seqPool(legs: Leg[], opts: EngineOpts): Leg[] {
@@ -1919,13 +1961,20 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
           const K = legList.reduce((p, l) => p * l.bestK, 1);
 
           if (opts.betType === 'fb') {
-            const profit = fbStake * (B - 1) / K;
-            const rate = profit / fbStake;
+            // Mise freebet du combiné : le freebet du site, relevée si le mode de montant l'exige
+            // (comme en simultané) : mise min. = montant ; profit net / brut : gain du freebet
+            // gagnant, mise × (B − 1), au moins égal au montant.
+            let S = fbStake;
+            if (opts.amountMode === 'mise_min_par_pari') S = Math.max(S, opts.amount);
+            else if (opts.amountMode === 'profit_net_min' || opts.amountMode === 'profit_brut') S = Math.max(S, opts.amount / (B - 1));
+            if (!isFinite(S) || S <= 0) return;
+            const profit = S * (B - 1) / K;
+            const rate = profit / S;
             let kPrev = 1;
             const bets: BetDetail[] = [
               {
                 legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
-                site, odds: BGross, stake: fbStake, betType: 'fb', role: 'principal', seqStep: 0,
+                site, odds: BGross, stake: S, betType: 'fb', role: 'principal', seqStep: 0,
               },
             ];
             for (let i = 0; i < legList.length; i++) {
@@ -1953,7 +2002,8 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
             });
           } else {
             // Cash multi-leg seq.
-            //  - 'miser': principal stake = opts.amount, dutch with compounded covers via leg.bestK.
+            //  - 'miser': dutch with compounded covers via leg.bestK ; combiné S_p fixé par le mode
+            //    de montant (seqPrincipalScale), comme pour gagner / perdre.
             //  - 'gagner'/'perdre': covers compound to cover the at-stake notional before
             //    each leg. stake_cover_i = S_p × Π_{j<i} b_j / coverReturnRate_i.
             //    Principal stake S_p scaled per amountMode.
@@ -1963,11 +2013,25 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
             const bets: BetDetail[] = [];
 
             if (isMiser) {
-              const T = opts.amount * rate;
+              // Mises et engagements par unité de mise du combiné.
+              const stakes1: number[] = [1];
+              const committed1: number[] = [1];
+              let kPrev1 = 1;
+              for (const leg of legList) {
+                const cover = leg.bestCover;
+                const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
+                const st = rate * kPrev1 / gain;
+                stakes1.push(st);
+                committed1.push(cover.type === 'lay' ? st * (cover.lGross! - 1) : st);
+                kPrev1 *= leg.bestK;
+              }
+              const S_p = seqPrincipalScale(stakes1, committed1, legList, site, B, opts);
+              if (!isFinite(S_p) || S_p <= 0) return;
+              const T = S_p * rate;
               let kPrev = 1;
               bets.push({
                 legs: legList.map(l => ({ eventKey: l.eventKey, marketName: l.marketName, outcomeName: l.outcomeName, betType: 'Back' as const })),
-                site, odds: BGross, stake: opts.amount, betType: 'cash', role: 'principal', seqStep: 0,
+                site, odds: BGross, stake: S_p, betType: 'cash', role: 'principal', seqStep: 0,
               });
               for (let i = 0; i < legList.length; i++) {
                 const leg = legList[i];
@@ -1990,7 +2054,7 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
               results.push({
                 timing: 'seq', placement: uniqueSites.size === 1 ? 'uni' : 'multi', symmetry,
                 bets, eventKeys: [...new Set(legList.map(l => l.eventKey))], nMatches: legList.length,
-                profit: T - opts.amount, rate, totalCash: opts.amount + coversTotal,
+                profit: T - S_p, rate, totalCash: S_p + coversTotal,
                 satisfiedMissions,
               });
             } else {
@@ -2026,47 +2090,7 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
                 committed1.push(cashUnit);
                 kPrev1 *= leg.b;
               }
-              // Constraint set: principal-site bets only (= principal at idx 0, plus any
-              // cover whose site matches the principal site).
-              const cIdxs: number[] = [0];
-              for (let i = 0; i < legList.length; i++) {
-                if (legList[i].bestCover.site === site) cIdxs.push(i + 1);
-              }
-
-              // Toutes les contraintes doivent être tenues : la plus exigeante fixe S_p.
-              // Une contrainte limitée à un autre site porte sur ses couvertures.
-              let S_p = 0;
-              for (const c of amountConstraints(opts)) {
-                const onPrincipalSite = !c.site || c.site === site;
-                const idxs = onPrincipalSite ? cIdxs
-                  : legList.map((l, i) => i + 1).filter(i => legList[i - 1].bestCover.site === c.site);
-                if (!idxs.length) continue;
-                const committed = idxs.reduce((s, i) => s + committed1[i], 0);
-                let sp: number;
-                switch (c.mode) {
-                  case 'mise_totale':       sp = c.amount / committed; break;
-                  case 'mise_min_par_pari': sp = c.amount / Math.min(...idxs.map(i => stakes1[i])); break;
-                  // Site du combiné : retour brut du combiné. Autre site : au moins une de ses
-                  // couvertures doit atteindre le montant (comme le contrôle de la mission).
-                  case 'profit_brut':       sp = onPrincipalSite ? c.amount / B
-                    : c.amount / Math.max(...idxs.map(i => stakes1[i] * legList[i - 1].bestCover.oddsGross)); break;
-                  case 'profit_net_min': {
-                    // Gain net de chaque pari concerné quand il gagne : principal S_p × (B − 1),
-                    // couverture mise × (cote − 1) (Lay : mise × (1 − commission)).
-                    const nets = idxs.map(i => {
-                      if (i === 0) return B - 1;
-                      const cv = legList[i - 1].bestCover;
-                      return stakes1[i] * (cv.type === 'lay' ? 1 - cv.c! : cv.odds - 1);
-                    });
-                    const minNet = Math.min(...nets);
-                    sp = minNet > 1e-9 ? c.amount / minNet : NaN;
-                    break;
-                  }
-                  default: sp = c.amount;
-                }
-                if (!isFinite(sp) || sp <= 0) return;
-                S_p = Math.max(S_p, sp);
-              }
+              const S_p = seqPrincipalScale(stakes1, committed1, legList, site, B, opts);
               if (!isFinite(S_p) || S_p <= 0) return;
 
               bets.push({

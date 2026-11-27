@@ -90,7 +90,7 @@ Si le type de mise est Cash, l'option s'appelle alors "Mise minimale par pari" e
 
 ###### Profit net minimum
 Le profit net (gain - mise) minimum de tous les paris d'un covering set placé sur le site principal doit alors être du montant indiqué.
-Concrètement : pour chaque pari du site principal, le gain net s'il gagne (mise × (cote − 1) ; Lay : mise × (1 − commission)) atteint le montant, et le plus petit de ces gains fixe les mises (simultané et séquentiel Cash « Gagner » / « Perdre »). En Freebet, le gain net d'un freebet gagnant est le même pour tous les paris freebet. Le séquentiel « Miser » ignore encore ce mode (mise du combiné = montant).
+Concrètement : pour chaque pari du site principal, le gain net s'il gagne (mise × (cote − 1) ; Lay : mise × (1 − commission)) atteint le montant, et le plus petit de ces gains fixe les mises (simultané et séquentiel, tous objectifs). En Freebet, le gain net d'un freebet gagnant est le même pour tous les paris freebet.
 
 ###### Profit brut
 Le profit brut (gain d'un pari) de tous les paris d'un covering set placé sur le site principal doit alors être du montant indiqué.
@@ -245,7 +245,8 @@ Quand "Sélections par pari" ne contient que la valeur Simple, les méthodes "S�
 ## Méthode de placement
 ### Timing
 #### Séquentiel
-Possible seulement si le covering set contient au moins un combiné sur au moins deux events. Les couvertures du combiné sont alors placées séparément, dans l'ordre chronologique. Ces couvertures peuvent être un simple pari opposé comme un autre combiné ou un plusieurs paris. La principal différence avec le simultané est que les paris de couverture suivant ne sont placés que si la permiere couverture est perdante et que donc une partie du combiné est gagnant.
+Possible seulement si le covering set contient au moins un combiné sur au moins deux events.
+Le mode de montant (« Montant misé ») s'applique comme en simultané : en Cash, il fixe la mise du combiné (avec ses couvertures placées sur le même site) ; en Freebet, la mise du combiné est le freebet, relevée si le mode l'exige (mise min. par pari, profit net ou brut). Les couvertures du combiné sont alors placées séparément, dans l'ordre chronologique. Ces couvertures peuvent être un simple pari opposé comme un autre combiné ou un plusieurs paris. La principal différence avec le simultané est que les paris de couverture suivant ne sont placés que si la permiere couverture est perdante et que donc une partie du combiné est gagnant.
 Cette méthode est le plus souvent utile pour placer des couvertures sur des sites ne permettant pas de placer des combinés (site d'exchanges par exemple). Mais elle doit tout de même être proposée pour des sites classiques.
 Le calculateur permet alors de calculer à l'avance toutes les paris et leurs mises qui seront à placer. Le profit de tous les paris doit être égal (à moins d'indication contraire dans les missions).
 
