@@ -158,6 +158,8 @@ Il faudra ne proposer que :
 - un (ou plusieurs) paris freebet sur B totalisant au minimum 14,7€ et s'approchant au maximum de 15€
 - pour couvir le reste des paris cash de nimporte quel site OU des paris freebet du site C
 
+Mise en œuvre (simultané) : chaque freebet en priorité 1 est joué en entier (100 %). Pour y arriver, une même issue peut être jouée en freebet sur plusieurs sites en priorité 1, et complétée en cash sur un autre site ; toutes les issues rapportent le même montant. Le calculateur choisit la répartition qui donne le meilleur profit (programme linéaire par covering set). Forcément multi-sites : rien en uni-site. Limites actuelles : les sites en priorité 2 ne servent alors qu'en cash, et le séquentiel ne propose rien avec plusieurs sites en priorité 1.
+
 ##### Ajouter une mission
 Pour chaque site, il est possible d'ajouter une (ou plusieurs) missions qui doivent être réalisées sur ce site.
 Une mission ne peut toujours être fait que en Cash, mais une mission peut quand même être ajoutée sur une conversion de freebet pour essayer d'être réalisée en même temps que la conversion.

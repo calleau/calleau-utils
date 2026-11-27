@@ -1146,6 +1146,215 @@ function makeSimultResult(
   };
 }
 
+// ===== PLUSIEURS SITES EN PRIORITÉ 1 (Freebet) =====
+
+// Programme linéaire : maximiser c·x avec x ≥ 0 et, pour chaque ligne, coef·x ≤ rhs
+// (ou = rhs si eq), rhs ≥ 0. Simplexe en deux phases, règle de Bland (pas de cyclage).
+// Petits problèmes seulement (quelques dizaines de variables). null = impossible.
+interface LPRow { coef: number[]; rhs: number; eq: boolean }
+
+function solveLP(c: number[], rows: LPRow[]): number[] | null {
+  const EPS = 1e-9;
+  const nVar = c.length, m = rows.length;
+  const nSlack = rows.filter(r => !r.eq).length;
+  const nArt = m - nSlack;
+  const nCol = nVar + nSlack + nArt; // + colonne RHS
+  const T: number[][] = [];
+  const basis: number[] = [];
+  let si = nVar, ai = nVar + nSlack;
+  for (const r of rows) {
+    const row = new Array(nCol + 1).fill(0);
+    for (let j = 0; j < nVar; j++) row[j] = r.coef[j] ?? 0;
+    row[nCol] = r.rhs;
+    if (r.eq) { row[ai] = 1; basis.push(ai++); } else { row[si] = 1; basis.push(si++); }
+    T.push(row);
+  }
+  const isArt = (j: number) => j >= nVar + nSlack;
+
+  const pivot = (pr: number, pc: number) => {
+    const p = T[pr][pc];
+    for (let j = 0; j <= nCol; j++) T[pr][j] /= p;
+    for (let i = 0; i < m; i++) {
+      if (i === pr) continue;
+      const f = T[i][pc];
+      if (Math.abs(f) < 1e-15) continue;
+      for (let j = 0; j <= nCol; j++) T[i][j] -= f * T[pr][j];
+    }
+    basis[pr] = pc;
+  };
+
+  const run = (cost: number[], allowed: (j: number) => boolean): boolean => {
+    for (let iter = 0; iter < 1000; iter++) {
+      let enter = -1;
+      for (let j = 0; j < nCol; j++) {
+        if (!allowed(j) || basis.includes(j)) continue;
+        let rc = cost[j];
+        for (let i = 0; i < m; i++) rc -= cost[basis[i]] * T[i][j];
+        if (rc > EPS) { enter = j; break; }
+      }
+      if (enter < 0) return true;
+      let leave = -1, best = Infinity;
+      for (let i = 0; i < m; i++) {
+        if (T[i][enter] <= EPS) continue;
+        const ratio = T[i][nCol] / T[i][enter];
+        if (ratio < best - EPS || (Math.abs(ratio - best) <= EPS && basis[i] < basis[leave])) { best = ratio; leave = i; }
+      }
+      if (leave < 0) return false; // non borné
+      pivot(leave, enter);
+    }
+    return false;
+  };
+
+  // Phase 1 : annuler les variables artificielles.
+  if (nArt > 0) {
+    const cost1 = Array.from({ length: nCol }, (_, j) => isArt(j) ? -1 : 0);
+    if (!run(cost1, () => true)) return null;
+    for (let i = 0; i < m; i++) if (isArt(basis[i]) && T[i][nCol] > 1e-7) return null; // impossible
+    // Artificielles restées dans la base à 0 : les sortir si possible.
+    for (let i = 0; i < m; i++) {
+      if (!isArt(basis[i])) continue;
+      const j = Array.from({ length: nVar + nSlack }, (_, k) => k).find(k => Math.abs(T[i][k]) > EPS && !basis.includes(k));
+      if (j !== undefined) pivot(i, j);
+    }
+  }
+  // Phase 2.
+  const cost2 = Array.from({ length: nCol }, (_, j) => j < nVar ? c[j] : 0);
+  if (!run(cost2, j => !isArt(j))) return null;
+  const x = new Array(nVar).fill(0);
+  for (let i = 0; i < m; i++) if (basis[i] < nVar) x[basis[i]] = T[i][nCol];
+  return x;
+}
+
+// Freebet avec plusieurs sites en priorité 1 : chaque freebet joué en entier (spécification :
+// A 10 €, B 15 € → paris freebet totalisant 10 € sur A et 15 € sur B). Une issue peut être
+// jouée en freebet sur un ou plusieurs de ces sites, et complétée en cash sur un autre site
+// (meilleure cote) ; toutes les issues rapportent T.
+// Programme linéaire, en « retour » P[k][s] = mise freebet × (cote − 1) :
+//   maximiser profit = T − Σ_k cash_k,  cash_k = (T − Σ_s P[k][s]) / cote cash_k
+//   avec Σ_s P[k][s] ≤ T (= T sans cote cash), Σ_k P[k][s] / (cote[k][s] − 1) = freebet de s.
+function makeMultiP1Result(
+  data: any,
+  betsLegsArray: LegRef[][],
+  eventKeys: string[],
+  symmetry: 'sym' | 'asym' | 'asym-light',
+  opts: EngineOpts,
+  p1Sites: string[],
+): CoveringSetResult | null {
+  const n = betsLegsArray.length;
+  const p1 = new Set(p1Sites);
+  const cashSites = Object.keys(opts.sites).filter(s => !p1.has(s));
+
+  // Options de chaque issue : freebet sur les sites en priorité 1, meilleure cote cash ailleurs.
+  const fbOpts: { site: string; info: LegGroupInfo; v: number }[][] = [];
+  const cashOpt: ({ site: string; info: LegGroupInfo } | null)[] = [];
+  for (let k = 0; k < n; k++) {
+    const legs = betsLegsArray[k];
+    const fo: { site: string; info: LegGroupInfo; v: number }[] = [];
+    if (!legs.some(l => l.betType === 'Lay')) for (const s of p1Sites) {
+      const info = legGroupInfo(data, legs, s, opts.coteMinParSelection);
+      if (!info || info.isLay || info.effOdds <= 1) continue;
+      if (opts.coteMin > 0 && info.displayOdds < opts.coteMin) continue;
+      if (aboveCoteMax(info.displayOdds, opts)) continue;
+      if (opts.coteMinParSelection > 0 && legs.length > 1 && legs.some(lr => {
+        const o = getBackOdds(data[lr.eventKey]?.markets?.[lr.marketName]?.[lr.outcomeName]?.[s]);
+        return !o || o < opts.coteMinParSelection;
+      })) continue;
+      fo.push({ site: s, info, v: -1 });
+    }
+    let best: { site: string; info: LegGroupInfo } | null = null;
+    for (const s of cashSites) {
+      const info = legGroupInfo(data, legs, s, opts.coteMinParSelection);
+      if (info && info.effOdds > 1 && (!best || info.effOdds > best.info.effOdds)) best = { site: s, info };
+    }
+    if (!fo.length && !best) return null;
+    fbOpts.push(fo);
+    cashOpt.push(best);
+  }
+
+  // Variables : P[k][s] (une par option freebet), puis T.
+  let nv = 0;
+  for (const fo of fbOpts) for (const o of fo) o.v = nv++;
+  const iT = nv++;
+  const c = new Array(nv).fill(0);
+  c[iT] = 1;
+  const rows: LPRow[] = [];
+  for (let k = 0; k < n; k++) {
+    const coef = new Array(nv).fill(0);
+    for (const o of fbOpts[k]) coef[o.v] = 1;
+    coef[iT] = -1;
+    const cash = cashOpt[k];
+    if (cash) {
+      const w = 1 / cash.info.effOdds;
+      c[iT] -= w;
+      for (const o of fbOpts[k]) c[o.v] += w;
+    }
+    rows.push({ coef, rhs: 0, eq: !cash });
+  }
+  let tCap = 0;
+  for (const s of p1Sites) {
+    const amount = opts.sites[s].freebetAmount;
+    const coef = new Array(nv).fill(0);
+    let maxGain = 0;
+    for (const fo of fbOpts) for (const o of fo) if (o.site === s) {
+      coef[o.v] = 1 / (o.info.effOdds - 1);
+      maxGain = Math.max(maxGain, o.info.effOdds - 1);
+    }
+    if (maxGain <= 0) return null; // ce site ne peut rien jouer dans cet ensemble de couverture
+    rows.push({ coef, rhs: amount, eq: true });
+    tCap += amount * maxGain;
+  }
+  // Borne de T (sinon non borné si les cotes cash forment un arbitrage).
+  const capRow = new Array(nv).fill(0);
+  capRow[iT] = 1;
+  rows.push({ coef: capRow, rhs: tCap, eq: false });
+
+  const x = solveLP(c, rows);
+  if (!x) return null;
+  const T = x[iT];
+  if (!(T > 1e-9)) return null;
+
+  const bets: BetDetail[] = [];
+  const infos: LegGroupInfo[] = [];
+  let cashTotal = 0;
+  for (let k = 0; k < n; k++) {
+    let paid = 0;
+    for (const o of fbOpts[k]) {
+      const p = x[o.v];
+      if (p <= 1e-9) continue;
+      paid += p;
+      bets.push({ legs: betsLegsArray[k], site: o.site, odds: o.info.displayOdds, stake: p / (o.info.effOdds - 1), betType: 'fb', role: 'principal' });
+      infos.push(o.info);
+    }
+    const rest = T - paid;
+    const cash = cashOpt[k];
+    if (rest > 1e-9 * Math.max(1, T)) {
+      if (!cash) return null;
+      const stake = rest / cash.info.effOdds;
+      cashTotal += stake;
+      bets.push({ legs: betsLegsArray[k], site: cash.site, odds: cash.info.displayOdds, stake, betType: 'cash', role: 'cover' });
+      infos.push(cash.info);
+    }
+  }
+  patchLayBets(bets, infos);
+
+  const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
+  if (!obligatoryOk) return null;
+  const profit = T - cashTotal;
+  const fbTotal = p1Sites.reduce((s, site) => s + opts.sites[site].freebetAmount, 0);
+  return {
+    timing: 'simult',
+    placement: new Set(bets.map(b => b.site)).size === 1 ? 'uni' : 'multi',
+    symmetry,
+    bets,
+    eventKeys,
+    nMatches: eventKeys.length,
+    profit,
+    rate: profit / fbTotal,
+    totalCash: bets.reduce((s, b) => s + (b.betType === 'cash' ? (b.liability ?? b.stake) : 0), 0),
+    satisfiedMissions,
+  };
+}
+
 // Try all site assignments for a covering set
 function trySimult(
   data: any,
@@ -1159,6 +1368,14 @@ function trySimult(
   const obligSites = getObligatorySites(opts);
   const fbSites = getFreebetEligibleSites(opts);
   const allSites = Object.keys(opts.sites);
+
+  // Freebet, plusieurs sites en priorité 1 : un seul calcul (programme linéaire) par ensemble
+  // de couverture, qui choisit lui-même les sites ; forcément multi-sites.
+  if (opts.betType === 'fb' && obligSites.length >= 2) {
+    if (!opts.allowMulti) return results;
+    const r = makeMultiP1Result(data, betsLegsArray, eventKeys, symmetry, opts, obligSites);
+    return r ? [r] : results;
+  }
 
   // Helper: get best odds for a leg group from a list of sites
   function bestSiteForGroup(legRefs: LegRef[], sites: string[]): { site: string; odds: number } | null {
