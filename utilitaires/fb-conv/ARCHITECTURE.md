@@ -8,7 +8,8 @@ Version actuelle : voir [`versions.js`](versions.js) (`CURRENT_VERSION`).
 
 | Fichier | Rôle |
 |---|---|
-| `index.html` | Page + composant React (`FreebetOptimizer`), JSX compilé dans le navigateur par Babel standalone (CDN) |
+| `index.html` | Structure de la page (en-tête, `#root`, pied de page) et chargement des scripts |
+| `fb-conv.js` | Calcul + composant React (`FreebetOptimizer`) en JSX, chargé en `<script type="text/babel" src>` et compilé dans le navigateur par Babel standalone (CDN). Babel le récupère en HTTP : ouvrir la page depuis un serveur, pas en `file://` |
 | `fb-conv.css` | Styles propres à l'outil, construits sur les variables de `../../theme.css` (clair / sombre) |
 | `versions.js` | Métadonnées lues par `../../versions-widget.js` |
 | `v1.0.0/` | Ancienne version (thème sombre autonome, sans `theme.css`) |
@@ -25,5 +26,6 @@ Bookmakers : PMU, Betclic, Unibet, Winamax, PSEL (`BOOKMAKER_DEFS`). Le champ `s
 
 ## Historique
 
+- **v2.0.1** (2026-11-27) : JavaScript sorti de `index.html` dans `fb-conv.js`. Aucun changement visible.
 - **v2.0.0** (2026-11-27) : passage au thème global (`theme.css`, mode clair / sombre, bouton de thème, widget des versions, pied de page), styles sortis dans `fb-conv.css`, noms de sites en pastilles aux couleurs des sites. Calcul inchangé.
 - **v1.0.0** : version d'origine, thème sombre autonome.
