@@ -725,7 +725,8 @@ function checkAllMissions(data: any, bets: BetDetail[], opts: EngineOpts): { sat
   let obligatoryOk = true;
 
   for (const [site, cfg] of Object.entries(opts.sites)) {
-    const siteBets = bets.filter(b => b.site === site);
+    // Une mission se fait toujours en cash (spécification) : les paris freebet ne comptent pas.
+    const siteBets = bets.filter(b => b.site === site && b.betType !== 'fb');
 
     for (const mission of cfg.missions) {
       const minLegs = mission.nbCombinesMin || 1;
@@ -817,9 +818,12 @@ function makeSimultResult(
   symmetry: 'sym' | 'asym' | 'asym-light',
   sitePerGroup: string[],
   opts: EngineOpts,
-  boostedIdx: number | null = null
+  boostedIdx: number | null = null,
+  // Freebet : pari d'un site en priorité 1 joué en cash (mission de ce site, cf. fin de fonction)
+  forcedCashIdx: number | null = null,
 ): CoveringSetResult | null {
   const n = betsLegsArray.length;
+  const sitePerGroupIn = sitePerGroup;
   const groupInfos: LegGroupInfo[] = [];
   const oddsPerGroup: number[] = []; // effective odds (for dutching math, boostée si applicable)
   const oddsPerGroupBase: number[] = []; // effective odds non boostées (pour calcul rateNoBoost)
@@ -871,7 +875,7 @@ function makeSimultResult(
     // Mixed dutch formula: α = Σ(1/o) for cash bets, β = Σ(1/(o-1)) for fb bets
     // T = FB_total / β → fb stake_i = T/(o_i-1), cash stake_i = T/o_i
     // profit = T*(1-α) - 0 = FB_total*(1-α)/β  (all pocket costs are cash stakes only)
-    const isFbBet = oddsPerGroup.map((_, i) => !groupInfos[i].isLay && (obligSites.size === 0 || obligSites.has(sitePerGroup[i])));
+    const isFbBet = oddsPerGroup.map((_, i) => i !== forcedCashIdx && !groupInfos[i].isLay && (obligSites.size === 0 || obligSites.has(sitePerGroup[i])));
 
     // coteMinParSelection : comme en Cash pour les paris principaux, chaque sélection
     // d'un combiné freebet doit atteindre le minimum (les couvertures cash sont libres).
@@ -965,7 +969,7 @@ function makeSimultResult(
         odds: groupInfos[i].displayOdds,
         stake,
         betType: isFb ? 'fb' : 'cash',
-        role: isFbBet[i] ? 'principal' : 'cover',
+        role: isFbBet[i] || i === forcedCashIdx ? 'principal' : 'cover',
       });
     }
     patchLayBets(bets, groupInfos);
@@ -1127,7 +1131,21 @@ function makeSimultResult(
   }
 
   const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
-  if (!obligatoryOk) return null;
+  if (!obligatoryOk) {
+    // Freebet, mission obligatoire non remplie sur un site en priorité 1 : ses paris y sont
+    // tous en freebet, qui ne compte pas pour une mission. Variantes avec un de ces paris joué
+    // en cash ; la meilleure (taux de conversion) qui remplit les missions.
+    if (opts.betType !== 'fb' || forcedCashIdx !== null || boostedIdx !== null) return null;
+    const missing = (s: string) => (opts.sites[s]?.missions ?? []).some(m => m.importance === 'obligatoire' && !satisfiedMissions.includes(m.id));
+    let best: CoveringSetResult | null = null;
+    for (let i = 0; i < n; i++) {
+      const s = sitePerGroupIn[i];
+      if (!obligSites.has(s) || !missing(s)) continue;
+      const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, sitePerGroupIn, opts, null, i);
+      if (r && (!best || r.rate > best.rate)) best = r;
+    }
+    return best;
+  }
 
   const uniqueSites = new Set(sitePerGroup);
   const placement: 'uni' | 'multi' = uniqueSites.size === 1 ? 'uni' : 'multi';

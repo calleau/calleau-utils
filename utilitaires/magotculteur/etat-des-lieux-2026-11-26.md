@@ -75,7 +75,7 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 | F4 | ✅ **Corrigé en v7.5.0 en simultané** (meilleur taux de conversion global ; séquentiel à faire). **Priorité 2 (« Pour compléter »)** : inutilisée en simultané dès qu'un site est en priorité 1. |
 | F5 | ✅ **Corrigé en v7.6.0 en simultané** : chaque freebet joué en entier, une issue peut être répartie entre plusieurs sites (programme linéaire). Reste : priorité 2 en cash seulement dans ce cas, séquentiel. **Plusieurs sites en priorité 1** : la répartition des freebets suit les cotes, sans viser le freebet de chaque site, puis chaque site doit atteindre 98 %. L'exemple de la spécification (A à 10 €, B à 15 €) ne donne presque jamais de résultat. |
 | F6 | ✅ **Corrigé en v7.6.1** : le site devient obligatoire (au moins un pari cash, pas d'uni-site avec deux sites obligatoires). **Mission obligatoire en Freebet** : elle ne rend pas le site obligatoire, contrairement à la spécification. Elle reste pourtant exigée, ce qui élimine des résultats sans explication. |
-| F7 | **Missions et freebets** : un pari freebet peut valider une mission, alors que la spécification dit qu'une mission se fait toujours en Cash. |
+| F7 | ✅ **Corrigé en v7.6.2** : seuls les paris cash valident une mission ; mission sur un site en priorité 1 = un de ses paris joué en cash (simultané). **Missions et freebets** : un pari freebet peut valider une mission, alors que la spécification dit qu'une mission se fait toujours en Cash. |
 
 ### « Profit net min. »
 

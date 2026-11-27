@@ -163,6 +163,7 @@ Mise en œuvre (simultané) : chaque freebet en priorité 1 est joué en entier 
 ##### Ajouter une mission
 Pour chaque site, il est possible d'ajouter une (ou plusieurs) missions qui doivent être réalisées sur ce site.
 Une mission ne peut toujours être fait que en Cash, mais une mission peut quand même être ajoutée sur une conversion de freebet pour essayer d'être réalisée en même temps que la conversion.
+Un pari en freebet ne valide donc jamais une mission. Pour une mission sur un site en priorité 1 (où les paris sont en freebet), le calculateur joue un des paris de ce site en cash (simultané), en choisissant la variante au meilleur taux de conversion qui remplit les missions.
 Quand on ajoute une mission pour un site les paramètres suivants sont remplissables : 
 - Montant misé
 - Objectif
