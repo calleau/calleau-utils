@@ -258,7 +258,9 @@ function collectLegsForSite(data: any, site: string, opts: EngineOpts): Leg[] {
         // Back principal candidate
         const b = getBackOdds(fbVal);
         const bGross = getBackOddsGross(fbVal) ?? b;
-        if (b && b > 1 && bGross && (opts.coteMin <= 0 || bGross >= opts.coteMin)) {
+        // Pas de filtre coteMin par sélection : en séquentiel, la cote min. porte sur la cote
+        // du combiné (trySeqCombo), comme en simultané.
+        if (b && b > 1 && bGross) {
           const covers = findCoversForOutcome(event, marketName, outcomeName, 'Back', site, opts);
           if (covers.length) {
             const bestCover = covers.reduce((best, cov) => cov.k < best.k ? cov : best);
@@ -274,7 +276,7 @@ function collectLegsForSite(data: any, site: string, opts: EngineOpts): Leg[] {
           const lay = getLayInfo(fbVal);
           if (lay) {
             const bForSeq = lay.lGross - lay.c;
-            if (isFinite(bForSeq) && bForSeq > 1 && (opts.coteMin <= 0 || lay.lGross >= opts.coteMin)) {
+            if (isFinite(bForSeq) && bForSeq > 1) {
               const covers = findCoversForOutcome(event, marketName, outcomeName, 'Lay', site, opts);
               if (covers.length) {
                 const bestCover = covers.reduce((best, cov) => cov.k < best.k ? cov : best);
@@ -1462,6 +1464,10 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
         for (const leg of legs) {
           // Lay principals are not allowed in freebet mode (no fb on exchange).
           if (leg.betType === 'Lay' && opts.betType === 'fb') continue;
+          // Cotes min. et max. du pari principal (collectLegsForSite ne filtre plus).
+          // Branche inactive : nList ne garde que 2 et 3 sélections.
+          if (opts.coteMin > 0 && leg.bGross < opts.coteMin) continue;
+          if (aboveCoteMax(leg.bGross, opts)) continue;
           for (const cover of leg.covers) {
             const principalLegRef: LegRef = { eventKey: leg.eventKey, marketName: leg.marketName, outcomeName: leg.outcomeName, betType: leg.betType };
             const coverLegRef: LegRef = { eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' };
@@ -1615,6 +1621,8 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
           // bookmaker : la cote affichée sur le ticket est la base des gains réels).
           const B = roundCombo(legList.reduce((p, l) => p * l.b, 1));
           const BGross = roundCombo(legList.reduce((p, l) => p * l.bGross, 1));
+          // Cotes min. et max. sur la cote du combiné (cote affichée), comme en simultané.
+          if (opts.coteMin > 0 && BGross < opts.coteMin) return;
           if (aboveCoteMax(BGross, opts)) return;
           const K = legList.reduce((p, l) => p * l.bestK, 1);
 

@@ -20,7 +20,7 @@ Corps JSON. **Un fichier de debug de l'interface (bouton « bug ») peut être e
 
 | Champ | Requis | Description |
 |---|---|---|
-| `engineOpts` | oui | Réglages du moteur, comme dans un fichier de debug : `sites` (missions, freebets), `betType`, `allowedNLegs`, `amountMode`, `amount`, méthodes… Facultatif en Cash : `amountConstraints` (`[{ mode, amount, site? }]`), plusieurs contraintes de montant toutes respectées, la plus exigeante fixe les mises (mode avancé de l'interface) ; absent, `amountMode` / `amount` s'appliquent. Facultatif : `coteMax`, cote maximale des paris placés sur le site principal (site du freebet en priorité 1 ou de la mission obligatoire ; cote combinée pour un combiné ; couvertures libres), absente ou `0` = pas de limite. |
+| `engineOpts` | oui | Réglages du moteur, comme dans un fichier de debug : `sites` (missions, freebets), `betType`, `allowedNLegs`, `amountMode`, `amount`, méthodes… Facultatif en Cash : `amountConstraints` (`[{ mode, amount, site? }]`), plusieurs contraintes de montant toutes respectées, la plus exigeante fixe les mises (mode avancé de l'interface) ; absent, `amountMode` / `amount` s'appliquent. `coteMin` / `coteMax` : cotes minimale et maximale des paris placés sur le site principal (site du freebet en priorité 1 ou de la mission obligatoire ; cote combinée pour un combiné ; couvertures libres ; en simultané comme en séquentiel), absente ou `0` = pas de limite (`coteMax` est facultative). |
 | `data` | oui | Cotes au format Betxtractor (export de l'extension collé dans l'interface). |
 | `coverageRules` | non | Règles de couverture. Voir l'ordre ci-dessous. |
 | `limit` | non | Nombre de résultats renvoyés, les meilleurs d'abord. Défaut : `50`. |

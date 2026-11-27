@@ -111,6 +111,7 @@ Indique que dans un covering set, tous les paris qui sont placés sur le site pr
 
 ##### Cote minimum
 Corresponds à la côte minimum des paris qui sont placé sur le site principal.
+Pour un combiné, c'est la cote du combiné qui est comparée, en simultané comme en séquentiel (la « Cote minimum par séléction » porte sur chaque match).
 
 ##### Cote minimum par séléction
 Corresponds à la côte minimum par séléction des paris qui sont placé sur le site principal.
