@@ -94,8 +94,8 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 | # | Problème |
 |---|---|
 | F9 | ✅ **Corrigé en v7.7.1** : mode de montant appliqué en séquentiel Cash « Miser » et en Freebet. **Mode de montant ignoré** en Freebet et en Cash « Miser » : la mise principale vaut toujours le montant saisi (en Freebet : le freebet du site depuis la v7.2.3). |
-| F10 | ✅ **Corrigé en v7.4.1** : cote min. sur la cote du combiné en séquentiel. **Cote min. appliquée à chaque sélection** et non à la cote combinée ([engine.ts:241](src/engine.ts#L241)), contrairement au simultané. |
-| F11 | **2 ou 3 sélections seulement** : 4 et 5 sont ignorées, et la branche « 1 sélection » ne s'exécute jamais. |
+| F10 | ✅ **Corrigé en v7.4.1** : cote min. sur la cote du combiné en séquentiel ; v7.8.0 : aussi sur les couvertures placées sur le site du combiné, comme en simultané. **Cote min. appliquée à chaque sélection** et non à la cote combinée ([engine.ts:241](src/engine.ts#L241)), contrairement au simultané. |
+| F11 | ✅ **Corrigé en v7.8.0** : combinés séquentiels de 2 à 5 sélections ; branche « 1 sélection » supprimée (un simple est du simultané). **2 ou 3 sélections seulement** : 4 et 5 sont ignorées, et la branche « 1 sélection » ne s'exécute jamais. |
 | F12 | **Couvertures limitées aux règles à 2 issues** : les exemples 1 à 3 de la spécification ne sont pas gérés (M1 B et M1 C couverts séparément, couverture combinée). |
 | F13 | **Boost non géré** : quand un boost est actif, le séquentiel sort quand même des résultats non boostés. |
 | F14 | **Écart minimum de 90 min entre deux matchs, en dur** : pensé pour le foot. Les matchs sans date sont écartés sans message. |

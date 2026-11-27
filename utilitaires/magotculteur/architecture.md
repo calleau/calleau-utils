@@ -226,8 +226,7 @@ Côté moteur (`getCoverSets`) :
 
 Le freebet est joué sur un combiné de N sélections Back (même site). Chaque sélection est couverte individuellement par un Lay ou un Back adverse sur un autre site, **dans l'ordre** des matchs.
 
-- **1 sélection** : 1 Back + 1 couverture.
-- **2 ou 3 sélections** : le Back est un combiné ; chaque couverture intervient au moment de son match.
+- **2 à 5 sélections** (v7.8.0) : le Back est un combiné ; chaque couverture intervient au moment de son match. Pas de séquentiel pour 1 sélection (un simple est du simultané).
 
 **Formule freebet (profit égal sur chaque issue) :**
 ```

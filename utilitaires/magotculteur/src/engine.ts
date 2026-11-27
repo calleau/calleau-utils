@@ -226,7 +226,9 @@ function findCoversForOutcome(event: any, mainMarketName: string, mainOutcomeNam
               const o = getBackOdds(val);
               if (!o || o <= 1) continue;
               const oGross = getBackOddsGross(val) ?? o;
-              // Cote max : comme en simultané, aussi pour une couverture sur le site du principal.
+              // Cotes min. et max. : comme en simultané, aussi pour une couverture sur le site
+              // du principal (tous les paris du site principal).
+              if (s === site && opts.coteMin > 0 && oGross < opts.coteMin) continue;
               if (s === site && aboveCoteMax(oGross, opts)) continue;
               const key = `B:${mName}:${oName}:${s}`;
               if (seen.has(key)) continue; seen.add(key);
@@ -268,23 +270,7 @@ function collectLegsForSite(data: any, site: string, opts: EngineOpts): Leg[] {
           }
         }
 
-        // Lay principal candidate (only when site is an exchange exposing lay odds).
-        // For seq math we want T = opts.amount × leg.b / cover.k — this requires
-        // leg.b = (lGross - c) for a Lay principal (vs. odds for a Back).
-        // Lay principals are cash-only (skipped in fb mode).
-        if (opts.betType !== 'fb') {
-          const lay = getLayInfo(fbVal);
-          if (lay) {
-            const bForSeq = lay.lGross - lay.c;
-            if (isFinite(bForSeq) && bForSeq > 1) {
-              const covers = findCoversForOutcome(event, marketName, outcomeName, 'Lay', site, opts);
-              if (covers.length) {
-                const bestCover = covers.reduce((best, cov) => cov.k < best.k ? cov : best);
-                legs.push({ eventKey, evName, evDate, evComp, dateTime, marketName, outcomeName, betType: 'Lay', b: bForSeq, bGross: lay.lGross, layInfo: lay, covers, bestCover, bestK: bestCover.k });
-              }
-            }
-          }
-        }
+        // Pas de principal Lay : un combiné ne peut pas être Lay (le séquentiel ne fait que des combinés).
       }
     }
   }
@@ -1770,7 +1756,8 @@ function prepareSeq(data: any, opts: EngineOpts): SeqPrep | null {
     poolPerSite.set(site, seqPool(legs, opts));
   }
 
-  const nList = opts.allowedNLegs.filter(x => x >= 2 && x <= 3);
+  // Combinés de 2 à 5 sélections (un simple n'a rien de séquentiel : simultané).
+  const nList = opts.allowedNLegs.filter(x => x >= 2 && x <= 5);
   let total = 0;
   for (const n of nList)
     for (const site of sitesToUse) forEachSeqChain(poolPerSite.get(site)!, n, () => { total++; });
@@ -1778,168 +1765,21 @@ function prepareSeq(data: any, opts: EngineOpts): SeqPrep | null {
 }
 
 function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progress, shard?: ComputeShard): CoveringSetResult[] {
-  const { sitesToUse, legsPerSite, poolPerSite } = prep;
+  const { sitesToUse, poolPerSite } = prep;
 
   const results: CoveringSetResult[] = [];
   let seqCounter = 0;
 
   for (const n of prep.nList) {
-    const nStr = n === 1 ? 'Simples' : `Combinés de ${n}`;
-    const detail = `${nStr} • Séquentiel`;
+    const detail = `Combinés de ${n} • Séquentiel`;
 
     for (const site of sitesToUse) {
-      const legs = legsPerSite.get(site)!;
       // Freebet : la mise du principal est le freebet disponible du site (en mode simple,
       // c'est le montant saisi). opts.amount ne sert que de secours.
       const fbStake = (opts.sites[site]?.freebetAmount ?? 0) > 0 ? opts.sites[site].freebetAmount : opts.amount;
 
-      if (n === 1) {
-        if (!opts.allowSym) continue; // single-event sequential is always symmetric
-        for (const leg of legs) {
-          // Lay principals are not allowed in freebet mode (no fb on exchange).
-          if (leg.betType === 'Lay' && opts.betType === 'fb') continue;
-          // Cotes min. et max. du pari principal (collectLegsForSite ne filtre plus).
-          // Branche inactive : nList ne garde que 2 et 3 sélections.
-          if (opts.coteMin > 0 && leg.bGross < opts.coteMin) continue;
-          if (aboveCoteMax(leg.bGross, opts)) continue;
-          for (const cover of leg.covers) {
-            const principalLegRef: LegRef = { eventKey: leg.eventKey, marketName: leg.marketName, outcomeName: leg.outcomeName, betType: leg.betType };
-            const coverLegRef: LegRef = { eventKey: leg.eventKey, marketName: cover.marketName, outcomeName: cover.outcomeName, betType: cover.type === 'lay' ? 'Lay' : 'Back' };
-
-            if (opts.betType === 'fb') {
-              const profit = fbStake * (leg.b - 1) / cover.k;
-              const rate = profit / fbStake;
-              const stake = profit / (cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1));
-              const liability = cover.type === 'lay' ? stake * (cover.lGross! - 1) : null;
-
-              const bets: BetDetail[] = [
-                { legs: [principalLegRef], site, odds: leg.bGross, stake: fbStake, betType: 'fb', role: 'principal', seqStep: 0 },
-                { legs: [coverLegRef], site: cover.site, odds: cover.oddsGross, stake, betType: 'cash', role: 'cover', seqStep: 0, ...(liability != null ? { liability } : {}) },
-              ];
-
-              const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
-              if (!obligatoryOk) continue;
-              results.push({
-                timing: 'seq', placement: cover.site === site ? 'uni' : 'multi', symmetry: 'sym',
-                bets, eventKeys: [leg.eventKey], nMatches: 1,
-                profit, rate, totalCash: liability != null ? liability : stake, satisfiedMissions,
-              });
-            } else {
-              // Cash. The rate is the same for all objectives; only the stake
-              // distribution and profit semantics differ:
-              //  - 'miser': principal stake = opts.amount, dutch-invariant profit.
-              //  - 'gagner'/'perdre': every winning outcome returns gross = opts.amount
-              //    (stake_i = opts.amount / return_rate_i); profit = amount − totalCommitted.
-              const rate = leg.b / cover.k;
-              const coverReturnRate = cover.type === 'lay' ? (cover.lGross! - cover.c!) : cover.odds;
-              let principalStake: number, principalCashCommitted: number;
-              let stakeCover: number, liabilityCover: number | null;
-              let profit: number, totalCashCommitted: number;
-
-              if (opts.cashObjective === 'miser') {
-                const T = opts.amount * rate;
-                const gain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
-                stakeCover = T / gain;
-                liabilityCover = cover.type === 'lay' ? stakeCover * (cover.lGross! - 1) : null;
-                principalStake = opts.amount;
-                principalCashCommitted = leg.betType === 'Lay' && leg.layInfo
-                  ? opts.amount * (leg.layInfo.lGross - 1)
-                  : opts.amount;
-                profit = T - principalCashCommitted;
-                totalCashCommitted = principalCashCommitted + (liabilityCover ?? stakeCover);
-              } else {
-                // gagner / perdre with different cover sizing per objective:
-                //   - 'gagner' : cover refunds principal cash committed (cover-win net = 0).
-                //     cover_committed = principal_cash_committed / gainFactor_cover × layAdjust
-                //     stake_cover (= back stake or lay stake) = principal_cash_committed / gainFactor_cover
-                //   - 'perdre' : cover sized so that principal-win break-even all-upfront.
-                //     cover_committed = principal_gain_on_principal_win
-                //     i.e. (Back cover) stake_cover = principalGain_p ; (Lay cover) liability = principalGain_p.
-                const isGagner = opts.cashObjective === 'gagner';
-                const principalGain = leg.betType === 'Lay' && leg.layInfo ? (1 - leg.layInfo.c) : (leg.b - 1);
-                const coverGain = cover.type === 'lay' ? (1 - cover.c!) : (cover.odds - 1);
-                const principalCashPerUnitSp = leg.betType === 'Lay' && leg.layInfo ? (leg.layInfo.lGross - 1) : 1;
-
-                // Cover cash committed per unit S_p:
-                //   - gagner : principalCashPerUnitSp / coverGain
-                //   - perdre : principalGain
-                const coverCashPerUnitSp = isGagner
-                  ? principalCashPerUnitSp / coverGain
-                  : principalGain;
-                // Displayed stake per unit S_p (back stake or lay stake):
-                const coverStakePerUnitSp = cover.type === 'lay'
-                  ? coverCashPerUnitSp / (cover.lGross! - 1)
-                  : coverCashPerUnitSp;
-
-                // Apply amountMode on principal-site bets only.
-                const coverOnPrincipalSite = cover.site === site;
-                let S_p: number;
-                switch (opts.amountMode) {
-                  case 'mise_totale': {
-                    const denom = principalCashPerUnitSp + (coverOnPrincipalSite ? coverCashPerUnitSp : 0);
-                    S_p = opts.amount / denom;
-                    break;
-                  }
-                  case 'mise_min_par_pari': {
-                    // min displayed stake on principal-site bets
-                    const candidates = [1];
-                    if (coverOnPrincipalSite) candidates.push(coverStakePerUnitSp);
-                    S_p = opts.amount / Math.min(...candidates);
-                    break;
-                  }
-                  case 'profit_brut': {
-                    // Gross return on principal-win = S_p × principalReturnFactor.
-                    const factor = leg.betType === 'Lay' && leg.layInfo
-                      ? (leg.layInfo.lGross - leg.layInfo.c)
-                      : leg.b;
-                    S_p = opts.amount / factor;
-                    break;
-                  }
-                  case 'profit_net_min': {
-                    S_p = principalGain > 1e-9 ? opts.amount / principalGain : opts.amount;
-                    break;
-                  }
-                  default: S_p = opts.amount;
-                }
-                if (!isFinite(S_p) || S_p <= 0) continue;
-
-                principalStake = S_p;
-                principalCashCommitted = S_p * principalCashPerUnitSp;
-                stakeCover = S_p * coverStakePerUnitSp;
-                liabilityCover = cover.type === 'lay' ? stakeCover * (cover.lGross! - 1) : null;
-                totalCashCommitted = principalCashCommitted + (liabilityCover ?? stakeCover);
-                // Profit reported:
-                //   - gagner : net all-upfront on principal-win = principal_gain − cover_committed (typically loss)
-                //   - perdre : net all-upfront on cover-win = cover_gain − principal_committed
-                if (isGagner) {
-                  profit = S_p * principalGain - (liabilityCover ?? stakeCover);
-                } else {
-                  const coverNetGain = cover.type === 'lay' ? stakeCover * (1 - cover.c!) : stakeCover * (cover.odds - 1);
-                  profit = coverNetGain - principalCashCommitted;
-                }
-              }
-
-              const principalBet: BetDetail = leg.betType === 'Lay' && leg.layInfo
-                ? { legs: [principalLegRef], site, odds: leg.layInfo.lGross, stake: principalStake, betType: 'cash', role: 'principal', seqStep: 0, liability: principalCashCommitted }
-                : { legs: [principalLegRef], site, odds: leg.bGross, stake: principalStake, betType: 'cash', role: 'principal', seqStep: 0 };
-
-              const bets: BetDetail[] = [
-                principalBet,
-                { legs: [coverLegRef], site: cover.site, odds: cover.oddsGross, stake: stakeCover, betType: 'cash', role: 'cover', seqStep: 0, ...(liabilityCover != null ? { liability: liabilityCover } : {}) },
-              ];
-
-              const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
-              if (!obligatoryOk) continue;
-              results.push({
-                timing: 'seq', placement: cover.site === site ? 'uni' : 'multi', symmetry: 'sym',
-                bets, eventKeys: [leg.eventKey], nMatches: 1,
-                profit, rate, totalCash: totalCashCommitted, satisfiedMissions,
-              });
-            }
-          }
-        }
-      } else {
-        // n = 2 or 3: multi-leg sequential (pool : cf. seqPool).
+      {
+        // Combiné de n sélections (pool : cf. seqPool).
         const pool = poolPerSite.get(site)!;
 
         const trySeqCombo = (legList: Leg[]) => {
