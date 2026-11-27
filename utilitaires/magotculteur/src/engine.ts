@@ -587,6 +587,16 @@ function getObligatorySites(opts: EngineOpts): string[] {
     .map(([s]) => s);
 }
 
+// Sites obligatoires au sens de la spécification : en plus des précédents (Freebet : sites en
+// priorité 1), les sites ayant une mission obligatoire. Ils doivent tous recevoir au moins un
+// pari ; en Freebet, un site à mission sans priorité 1 y reçoit un pari cash.
+function getRequiredSites(opts: EngineOpts): string[] {
+  const sites = new Set(getObligatorySites(opts));
+  for (const [s, cfg] of Object.entries(opts.sites))
+    if (cfg.missions.some(m => m.importance === 'obligatoire')) sites.add(s);
+  return [...sites];
+}
+
 function getFreebetEligibleSites(opts: EngineOpts): string[] {
   return Object.entries(opts.sites)
     .filter(([, cfg]) => cfg.freebetPriority <= 2 && cfg.freebetAmount > 0)
@@ -1368,6 +1378,29 @@ function trySimult(
   const obligSites = getObligatorySites(opts);
   const fbSites = getFreebetEligibleSites(opts);
   const allSites = Object.keys(opts.sites);
+  // Freebet : sites à mission obligatoire sans priorité 1 (vide en Cash).
+  const extraRequired = getRequiredSites(opts).filter(s => !obligSites.includes(s));
+
+  // Place au moins un pari sur chaque site de extraRequired : la couverture (pari hors des
+  // sites requis) qui y perd le moins de cote y est déplacée. null = impossible.
+  const withRequired = (assign: string[]): string[] | null => {
+    let a = assign;
+    for (const rs of extraRequired) {
+      if (a.includes(rs)) continue;
+      let bestG = -1, bestRatio = 0;
+      for (let g = 0; g < a.length; g++) {
+        if (obligSites.includes(a[g]) || extraRequired.includes(a[g])) continue;
+        const o = legGroupOdds(data, betsLegsArray[g], rs, opts.coteMinParSelection);
+        const cur = legGroupOdds(data, betsLegsArray[g], a[g], opts.coteMinParSelection);
+        if (!o || !cur) continue;
+        if (o / cur > bestRatio) { bestRatio = o / cur; bestG = g; }
+      }
+      if (bestG < 0) return null;
+      a = a.slice();
+      a[bestG] = rs;
+    }
+    return a;
+  };
 
   // Freebet, plusieurs sites en priorité 1 : un seul calcul (programme linéaire) par ensemble
   // de couverture, qui choisit lui-même les sites ; forcément multi-sites.
@@ -1411,6 +1444,12 @@ function trySimult(
         : obligSites.length === 0 ? allSites
         : []; // 2+ obligatory cash sites: can't do uni (would miss one)
     }
+    // Sites requis en plus (mission obligatoire en Freebet) : uni-site seulement sur le site
+    // requis lui-même, et rien s'il y en a deux ou plus (spécification).
+    if (extraRequired.length) {
+      const required = [...obligSites, ...extraRequired];
+      uniSites = uniSites.filter(s => required.every(r => r === s));
+    }
 
     for (const site of uniSites) {
       const sitePerGroup = betsLegsArray.map(() => site);
@@ -1425,12 +1464,16 @@ function trySimult(
     // The obligatory-site check below ensures P1 freebet sites are included.
     const sitesToUse = allSites;
 
-    const sitePerGroup: string[] = [];
+    let sitePerGroup: string[] = [];
     let valid = true;
     for (const legRefs of betsLegsArray) {
       const best = bestSiteForGroup(legRefs, sitesToUse);
       if (!best) { valid = false; break; }
       sitePerGroup.push(best.site);
+    }
+    if (valid) {
+      const a = withRequired(sitePerGroup);
+      if (a) sitePerGroup = a; else valid = false;
     }
 
     if (valid) {
@@ -1475,7 +1518,9 @@ function trySimult(
           if (!valid) continue;
           if (new Set(assignment).size < 2) continue;
           if (obligSites.some(os => !assignment.includes(os))) continue;
-          const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, assignment, opts, boostedIdx);
+          const withReq = withRequired(assignment);
+          if (!withReq) continue;
+          const r = makeSimultResult(data, betsLegsArray, eventKeys, symmetry, withReq, opts, boostedIdx);
           if (r) results.push(r);
         }
       }

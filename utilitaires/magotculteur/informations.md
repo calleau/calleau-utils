@@ -261,7 +261,7 @@ Les sites Obligatoire sont les sites qui répondent aux critères suivants, tous
 - Mode avancé
     - Freebet
         - Si un ou plusieurs sites on une priorité freebet de 1, ce sont les Obligatoires
-        - Tous les sites ayant une mission Obligatoire sont également considérés comme Obligatoires
+        - Tous les sites ayant une mission Obligatoire sont également considérés comme Obligatoires (ils reçoivent au moins un pari, en cash, puisque seuls les sites en priorité 1 jouent en freebet ; en multi-sites, la couverture qui y perd le moins de cote y est placée)
     - Cash
         - Tous les sites ayant une mission Obligatoire sont considérés comme Obligatoires
 
