@@ -145,6 +145,7 @@ Si type de mise est Freebet, sinon si c'est Cash le paramètre n'est pas disponi
 Trois valeurs peuvent être séléctionnées ici
 "1-Tout utiliser", indique que le montant de la cagnotte doit être totatelement utilisé (à 2% près du maximum) dans tous les covering sets proposés.
 "2-Pour compléter", indique que le montant de cette cagnotte peut-etre utilisé si besoin pour compléter les covering sets proposés.
+Le but est toujours le meilleur taux de conversion global : profit / (freebets en priorité 1 + freebets en priorité 2 utilisés). En simultané multi-sites, une couverture passe en freebet sur un site en priorité 2 seulement si elle améliore ce taux (son taux propre, (cote − 1) / cote de la couverture cash, dépasse le taux courant), sans dépasser le freebet disponible du site. Les mises restent fixées par les freebets en priorité 1. Pas encore géré en séquentiel.
 "3-Ne pas utiliser", indique qu'aucun pari en freebet ne doit être proposé pour ce site. Fait fonctionnelement la même chose que d'avoir le montant de "Freebet disponible" du site à 0.
 
 Ainsi si plusieurs sites sont en priorité 1, il faut proposer des covering set qui utilise l'entiereté de la cagnotte des deux sites.
@@ -521,7 +522,7 @@ Affiche la plus petite et la plus grande cote des paris utilisés dans ce coveri
 Affiche en € la perte totale du covering set
 
 ### Taux
-Affiche le TRJ du covering set
+Affiche le TRJ du covering set (en Freebet : le taux de conversion, profit / freebets utilisés, priorité 2 comprise). En Freebet, les résultats sont triés par taux ; la colonne Taux est triable.
 Couleur : en Cash, vert à partir de 97 % (perte ≤ 3 %), orange à partir de 93 %, rouge en dessous ; en Freebet (taux de conversion), vert à partir de 75 %, orange à partir de 55 %.
 
 ### Filtres par colonne

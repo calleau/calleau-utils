@@ -875,7 +875,7 @@ function makeSimultResult(
         }
       }
     }
-    const alpha = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s : s + 1 / o, 0);
+    let alpha = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s : s + 1 / o, 0);
     const beta  = oddsPerGroup.reduce((s, o, i) => isFbBet[i] ? s + 1 / (o - 1) : s, 0);
     if (!isFinite(beta) || beta <= 0) return null;
     rate = (1 - alpha) / beta;
@@ -900,17 +900,61 @@ function makeSimultResult(
       if (T0 < opts.amount) totalFB = opts.amount * beta;
     }
 
-    profit = totalFB * rate;
     const T = totalFB / beta;
 
+    // Priorité 2 (« Pour compléter ») : une couverture peut passer en freebet sur un site en
+    // priorité 2 (mise T/(o2−1), plus de cash). But : le meilleur taux de conversion global,
+    // profit / (freebets priorité 1 + freebets priorité 2 utilisés). T reste fixé par la
+    // priorité 1. Une couverture passe en freebet si son taux marginal (o2−1)/o_cash dépasse
+    // le taux courant : essais du meilleur au moins bon, freebet de chaque site plafonné.
+    const fb2 = new Array<boolean>(n).fill(false);
+    let beta2 = 0;
+    if (obligSites.size > 0 && opts.allowMulti) {
+      const p2Sites = Object.entries(opts.sites)
+        .filter(([s, c]) => c.freebetPriority === 2 && c.freebetAmount > 0 && !obligSites.has(s))
+        .map(([s]) => s);
+      const candidates: { i: number; site: string; info: LegGroupInfo; ratio: number }[] = [];
+      if (p2Sites.length) for (let i = 0; i < n; i++) {
+        if (isFbBet[i] || betsLegsArray[i].some(l => l.betType === 'Lay')) continue;
+        let best: { site: string; info: LegGroupInfo } | null = null;
+        for (const s of p2Sites) {
+          const info = legGroupInfo(data, betsLegsArray[i], s, opts.coteMinParSelection);
+          if (!info || info.isLay || info.effOdds <= 1) continue;
+          if (!best || info.effOdds > best.info.effOdds) best = { site: s, info };
+        }
+        if (best) candidates.push({ i, ...best, ratio: (best.info.effOdds - 1) / oddsPerGroup[i] });
+      }
+      candidates.sort((a, b) => b.ratio - a.ratio);
+      const used: Record<string, number> = {};
+      for (const c of candidates) {
+        const cost = 1 / (c.info.effOdds - 1);
+        const a2 = alpha - 1 / oddsPerGroup[c.i];
+        if ((1 - a2) / (beta + beta2 + cost) <= (1 - alpha) / (beta + beta2)) break;
+        const fbUsed = (used[c.site] ?? 0) + T * cost;
+        if (fbUsed > opts.sites[c.site].freebetAmount * (1 + 1e-9)) continue; // plafond du site
+        used[c.site] = fbUsed;
+        fb2[c.i] = true;
+        alpha = a2;
+        beta2 += cost;
+        sitePerGroup = sitePerGroup.slice();
+        sitePerGroup[c.i] = c.site;
+        groupInfos[c.i] = c.info;
+        oddsPerGroup[c.i] = c.info.effOdds;
+      }
+    }
+
+    profit = T * (1 - alpha);
+    rate = profit / (T * (beta + beta2)); // = (1 − α) / β sans priorité 2
+
     for (let i = 0; i < n; i++) {
-      const stake = isFbBet[i] ? T / (oddsPerGroup[i] - 1) : T / oddsPerGroup[i];
+      const isFb = isFbBet[i] || fb2[i];
+      const stake = isFb ? T / (oddsPerGroup[i] - 1) : T / oddsPerGroup[i];
       bets.push({
         legs: betsLegsArray[i],
         site: sitePerGroup[i],
         odds: groupInfos[i].displayOdds,
         stake,
-        betType: isFbBet[i] ? 'fb' : 'cash',
+        betType: isFb ? 'fb' : 'cash',
         role: isFbBet[i] ? 'principal' : 'cover',
       });
     }
@@ -1860,13 +1904,10 @@ export function compute(
     + shardShare(seqPrep?.total ?? 0, shard);
   const progress = makeProgress(total, onProgress);
 
-  if (opts.allowSimult) {
-    results.push(...computeSimult(data, opts, topEvents, progress, shard));
-  }
-  if (seqPrep) {
-    results.push(...computeSeq(data, opts, seqPrep, progress, shard));
-  }
+  // Pas de push(...liste) : au-delà d'environ 100 000 résultats, l'étalement dépasse la pile.
+  const simult = opts.allowSimult ? computeSimult(data, opts, topEvents, progress, shard) : [];
+  const seq = seqPrep ? computeSeq(data, opts, seqPrep, progress, shard) : [];
   progress.flush();
 
-  return results.sort((a, b) => b.profit - a.profit);
+  return results.concat(simult, seq).sort((a, b) => b.profit - a.profit);
 }

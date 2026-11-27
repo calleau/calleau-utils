@@ -15,7 +15,8 @@ let _workers: Worker[] = [];
 let _visibleCount = 50;
 let _colFilters: Record<string, any> = {};
 let _cfpOpenCol: string | null = null;
-let _sort: { col: 'result' | 'date'; dir: 'asc' | 'desc' } = { col: 'result', dir: 'desc' };
+type SortCol = 'result' | 'date' | 'taux';
+let _sort: { col: SortCol; dir: 'asc' | 'desc' } = { col: 'result', dir: 'desc' };
 
 // Config state
 let _betType: 'fb' | 'cash' = 'fb';
@@ -674,8 +675,8 @@ function thFilter(col: string, label: string, extraClass = '', sortable = false)
   </div>`;
 }
 
-// Re-clic sur la colonne déjà triée = inverse le sens. Défauts : date croissante, résultat décroissant.
-function setSort(col: 'result' | 'date') {
+// Re-clic sur la colonne déjà triée = inverse le sens. Défauts : date croissante, résultat et taux décroissants.
+function setSort(col: SortCol) {
   if (_sort.col === col) _sort = { col, dir: _sort.dir === 'asc' ? 'desc' : 'asc' };
   else _sort = { col, dir: col === 'date' ? 'asc' : 'desc' };
   renderPage();
@@ -691,6 +692,10 @@ function compareResults(a: CoveringSetResult, b: CoveringSetResult): number {
       return _sort.dir === 'asc' ? ta - tb : tb - ta;
     }
     return b.profit - a.profit;
+  }
+  if (_sort.col === 'taux') {
+    const d = a.rate - b.rate || a.profit - b.profit;
+    return _sort.dir === 'asc' ? d : -d;
   }
   return _sort.dir === 'asc' ? a.profit - b.profit : b.profit - a.profit;
 }
@@ -794,7 +799,7 @@ function renderPage() {
     ${thFilter('coteAutres', 'Cotes autres', 'ff-th-center')}
     ${thFilter('result', 'Résultat', '', true)}
     <div class="ff-th" title="Résultat équivalent sans le boost (même cover set)">Sans boost</div>
-    ${thFilter('taux', 'Taux')}`;
+    ${thFilter('taux', 'Taux', '', true)}`;
 
   if (!visible.length) {
     const hasFilters = Object.keys(_colFilters).length > 0;
@@ -1252,6 +1257,9 @@ async function tryRender() {
 
   _results = [];
   _colFilters = {};
+  // Freebet : meilleur taux de conversion global d'abord (avec la priorité 2, le profit en €
+  // ne suit plus le taux) ; Cash : meilleur résultat d'abord.
+  _sort = { col: _betType === 'fb' ? 'taux' : 'result', dir: 'desc' };
 
   const btn = document.getElementById('ff-calc-btn') as HTMLButtonElement;
   const overlay = document.getElementById('ff-calc-overlay')!;

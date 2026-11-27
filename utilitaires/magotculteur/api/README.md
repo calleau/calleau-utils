@@ -51,6 +51,7 @@ Réponse :
 }
 ```
 
+- `rate` : en freebet, taux de conversion = `profit` / freebets utilisés (priorité 1, et priorité 2 si des couvertures passent en freebet sur un site en priorité 2).
 - `total` : nombre de résultats trouvés, avant `minProfit` et `limit`.
 - `links.calcCouverture` : une colonne de cotes par match, chaque sélection dans la colonne de son match. Pour un freebet ou un pari boosté combiné sur plusieurs matchs, une dernière colonne « Freebet : mise non rendue » / « Boost +X % sur le combiné » porte, sur sa seule ligne, le coefficient qui ramène le produit des colonnes à la cote à utiliser (cote − 1 pour un freebet, cote boostée).
 - `links.couvSeq` : seulement pour les couvertures séquentielles multi-matchs (comme dans l'interface).
