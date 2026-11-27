@@ -468,6 +468,7 @@ function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): num
   const obligSet = new Set(getObligatorySites(opts));
   let invSum = 0;
   let maxO = 0;
+  let minO = Infinity;
   for (const legs of legsArray) {
     let bestO = 0;
     let bestOblig = 0;
@@ -491,6 +492,7 @@ function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): num
     if (opts.coteMin > 0 && obligSet.size === 0 && bestO < opts.coteMin) return null;
     invSum += opts.betType === 'fb' ? 1 / (bestO - 1) : 1 / bestO;
     if (bestO > maxO) maxO = bestO;
+    if (bestO < minO) minO = bestO;
   }
   if (invSum <= 0) return null;
   const rate = 1 / invSum;
@@ -498,7 +500,9 @@ function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): num
   // Cash, stakes_i = rate/o_i par unité de mise totale → profit/amount selon amountMode.
   if (opts.amountMode === 'mise_min_par_pari') return (rate - 1) * maxO / rate;
   if (opts.amountMode === 'profit_brut') return (rate - 1) / rate;
-  return rate - 1; // mise_totale (profit_net_min : perte fixe, on départage au taux)
+  // profit_net_min : gain net de chaque pari rate × (o − 1) / o, le plus petit (cote la plus basse) fixe l'échelle.
+  if (opts.amountMode === 'profit_net_min') return (rate - 1) * minO / (rate * (minO - 1));
+  return rate - 1; // mise_totale
 }
 
 function getAsymSplits(data: any, eventKey: string, opts: EngineOpts) {
@@ -660,41 +664,6 @@ function legGroupInfo(data: any, legRefs: LegRef[], site: string, coteMinPerSel:
   // Silence unused-param warnings for callers that still pass coteMinPerSel.
   void coteMinPerSel;
   return { effOdds: combined, displayOdds: combinedGross, isLay: false, layInfo: null };
-}
-
-// For 'gagner'/'perdre' objective: every winning outcome returns a common gross X.
-// Stakes are stake_i = X/rate_i; cash committed is stake_i (Back) or stake_i*(lGross-1) (Lay).
-// X is derived from opts.amount according to amountMode so the user-facing constraint
-// is honored. constraintIdxs restricts the constraint to a subset (typically
-// principal-site bets) — without this the smallest cover stake on a non-principal
-// site would dominate min/sum and yield unintended scaling.
-function computeXForGagnerPerdre(
-  returnRates: number[],
-  laysGross: (number | null)[],
-  amountMode: 'mise_totale' | 'mise_min_par_pari' | 'profit_net_min' | 'profit_brut',
-  amount: number,
-  constraintIdxs?: number[],
-): number {
-  const stakes1 = returnRates.map(r => 1 / r);
-  const committed1 = stakes1.map((s, i) => laysGross[i] != null ? s * (laysGross[i]! - 1) : s);
-  const cIdxs = constraintIdxs && constraintIdxs.length > 0
-    ? constraintIdxs
-    : returnRates.map((_, i) => i);
-  const cTotalCommitted = cIdxs.reduce((s, i) => s + committed1[i], 0);
-  const cMinStake = Math.min(...cIdxs.map(i => stakes1[i]));
-  switch (amountMode) {
-    case 'mise_totale':       return amount / cTotalCommitted;
-    case 'mise_min_par_pari': return amount / cMinStake;
-    case 'profit_net_min': {
-      // Net P&L on a winning outcome, considering only constraint-set committed:
-      // when group k wins, principal-site net = X - cTotalCommitted (covers on
-      // other sites are not counted as our loss budget here).
-      const diff = Math.abs(1 - cTotalCommitted);
-      return diff > 1e-9 ? amount / diff : amount;
-    }
-    case 'profit_brut':
-    default:                  return amount;
-  }
 }
 
 // For Lay groups, the per-group "stake" computed above represents the cash committed
@@ -907,7 +876,8 @@ function makeSimultResult(
         if (needed > totalFB) totalFB = needed;
       }
     } else if (opts.amountMode === 'profit_net_min') {
-      if (totalFB * rate < opts.amount) totalFB = opts.amount / rate;
+      // Gain net d'un freebet gagnant = mise × (cote − 1) = T, le même pour tous.
+      if (totalFB / beta < opts.amount) totalFB = opts.amount * beta;
     } else if (opts.amountMode === 'profit_brut') {
       // min gross return = T (cash bets return exactly T if they win)
       const T0 = totalFB / beta;
@@ -1090,13 +1060,11 @@ function makeSimultResult(
         else factor = dutchK;
         return factor > 0 ? c.amount / factor : null;
       }
-      // profit_net_min
-      const lossFactor = fixedIdxs === null ? 1 - rate : 1 - dutchK;
-      if (lossFactor <= 0) {
-        const gainFactor = fixedIdxs === null ? rate - 1 : (obj === 'perdre' ? 0 : dutchK - 1);
-        return gainFactor > 0 ? c.amount / gainFactor : null;
-      }
-      return c.amount / lossFactor;
+      // profit_net_min (spécification) : le gain net de chaque pari concerné quand il gagne,
+      // mise × (cote − 1) (Lay : engagement × (cote effective − 1)), atteint le montant ;
+      // le plus petit fixe l'échelle.
+      const minNet = Math.min(...constraintIdxs.map(i => baseStakes[i] * (oddsPerGroup[i] - 1)));
+      return minNet > 0 ? c.amount / minNet : null;
     };
     // Toutes les contraintes doivent être tenues : la plus exigeante fixe l'échelle.
     let scale = 0;
@@ -2064,7 +2032,6 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
               for (let i = 0; i < legList.length; i++) {
                 if (legList[i].bestCover.site === site) cIdxs.push(i + 1);
               }
-              const cTotalCommitted = cIdxs.reduce((s, i) => s + committed1[i], 0);
 
               // Toutes les contraintes doivent être tenues : la plus exigeante fixe S_p.
               // Une contrainte limitée à un autre site porte sur ses couvertures.
@@ -2084,10 +2051,15 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
                   case 'profit_brut':       sp = onPrincipalSite ? c.amount / B
                     : c.amount / Math.max(...idxs.map(i => stakes1[i] * legList[i - 1].bestCover.oddsGross)); break;
                   case 'profit_net_min': {
-                    // Net P&L on all-win considering only principal-site committed:
-                    // gain = S_p × B − S_p × cTotalCommitted = S_p × (B − cTotalCommitted)
-                    const factor = Math.abs(B - cTotalCommitted);
-                    sp = factor > 1e-9 ? c.amount / factor : c.amount;
+                    // Gain net de chaque pari concerné quand il gagne : principal S_p × (B − 1),
+                    // couverture mise × (cote − 1) (Lay : mise × (1 − commission)).
+                    const nets = idxs.map(i => {
+                      if (i === 0) return B - 1;
+                      const cv = legList[i - 1].bestCover;
+                      return stakes1[i] * (cv.type === 'lay' ? 1 - cv.c! : cv.odds - 1);
+                    });
+                    const minNet = Math.min(...nets);
+                    sp = minNet > 1e-9 ? c.amount / minNet : NaN;
                     break;
                   }
                   default: sp = c.amount;

@@ -79,6 +79,8 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 
 ### « Profit net min. »
 
+✅ **F8 corrigé en v7.7.0** : définition de la spécification partout (gain net de chaque pari du site principal ≥ montant, le plus petit fixe les mises).
+
 **F8** : son sens change selon la méthode, et aucune version ne correspond à la spécification (« profit net minimum de chaque pari sur le site principal ») :
 
 | Méthode | Comportement actuel |
@@ -143,7 +145,7 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 
 ## 6. Questions ouvertes
 
-1. **« Profit net min. »** (F8) : profit de chaque pari du site principal (spécification), ou perte totale cible (comportement actuel en Cash) ?
+1. ~~**« Profit net min. »** (F8)~~ tranché en v7.7.0 (spécification) : profit de chaque pari du site principal (spécification), ou perte totale cible (comportement actuel en Cash) ?
 2. **Mode avancé** (F1, F2, F3) : le montant d'une mission doit-il fixer les mises ? Quel objectif et quelle cote min. appliquer quand plusieurs sites ont des missions ?
 3. **Plusieurs sites en priorité 1** (F5) : faut-il répartir les freebets site par site, pour viser 98 à 100 % de chaque freebet ?
 4. **Priorité 2** (F4, B11) : comment la jouer quand un site est déjà en priorité 1 ? Faut-il plafonner chaque site à son freebet disponible ?

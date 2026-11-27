@@ -90,6 +90,7 @@ Si le type de mise est Cash, l'option s'appelle alors "Mise minimale par pari" e
 
 ###### Profit net minimum
 Le profit net (gain - mise) minimum de tous les paris d'un covering set placé sur le site principal doit alors être du montant indiqué.
+Concrètement : pour chaque pari du site principal, le gain net s'il gagne (mise × (cote − 1) ; Lay : mise × (1 − commission)) atteint le montant, et le plus petit de ces gains fixe les mises (simultané et séquentiel Cash « Gagner » / « Perdre »). En Freebet, le gain net d'un freebet gagnant est le même pour tous les paris freebet. Le séquentiel « Miser » ignore encore ce mode (mise du combiné = montant).
 
 ###### Profit brut
 Le profit brut (gain d'un pari) de tous les paris d'un covering set placé sur le site principal doit alors être du montant indiqué.
