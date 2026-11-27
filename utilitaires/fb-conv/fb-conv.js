@@ -6,23 +6,54 @@ const { useState, useMemo, useEffect } = React;
 
 const OUTCOME_LABELS = ["1", "N", "2"];
 
-// `site` = clé des couleurs de theme.css (--site-<site>-bg / -text, .ff-site-pill[data-site])
-const BOOKMAKER_DEFS = [
-  { id: 1, name: "PMU",     site: "pmu" },
-  { id: 2, name: "Betclic", site: "betclic" },
-  { id: 3, name: "Unibet",  site: "unibet" },
-  { id: 4, name: "Winamax", site: "winamax" },
-  { id: 5, name: "PSEL",    site: "psel" },
+// Sites proposés à l'ajout. `site` = clé des couleurs de theme.css (--site-<site>-bg / -text,
+// .ff-site-pill[data-site]). `preGuaranteed` : cotes de base déjà garanties (paiement anticipé
+// sans cote 1G / 2G à saisir), modifiable ensuite site par site.
+const SITE_CATALOG = [
+  { site: "bet365",     name: "bet365" },
+  { site: "betclic",    name: "Betclic" },
+  { site: "betify",     name: "Betify" },
+  { site: "betsson",    name: "Betsson" },
+  { site: "bwin",       name: "bwin" },
+  { site: "daznbet",    name: "Daznbet" },
+  { site: "feelingbet", name: "Feelingbet" },
+  { site: "olybet",     name: "OlyBet" },
+  { site: "pmu",        name: "PMU" },
+  { site: "pokerstars", name: "Pokerstars" },
+  { site: "psel",       name: "PSEL" },
+  { site: "unibet",     name: "Unibet" },
+  { site: "vbet",       name: "VBET" },
+  { site: "winamax",    name: "Winamax", preGuaranteed: true },
+];
+const catalogEntry = (site) => SITE_CATALOG.find(c => c.site === site) || null;
+const CUSTOM_NAME_MAX = 40;
+
+// Sites par défaut (ids 1 à 5 : aussi ceux des liens sauvegardés avant la v2.2.0)
+const DEFAULT_SITES = [
+  { id: 1, site: "pmu" },
+  { id: 2, site: "betclic" },
+  { id: 3, site: "unibet" },
+  { id: 4, site: "winamax" },
+  { id: 5, site: "psel" },
 ];
 
-function makeDefaultBookmakers(numMatches) {
-  return BOOKMAKER_DEFS.map((def) => ({
-    ...def,
+// site "" = site personnalisé (nom libre, sans couleur de marque)
+function makeBookmaker(id, site, numMatches, name) {
+  const cat = catalogEntry(site);
+  return {
+    id,
+    site: cat ? site : "",
+    name: cat ? cat.name : (name || "Autre site"),
+    preGuaranteed: !!cat?.preGuaranteed,
     freebetAmount: "",
     freebetActive: true,
     matches: Array(numMatches).fill(null).map(() => ["", "", ""]),
     guaranteedMatches: Array(numMatches).fill(null).map(() => ["", ""]), // [g1, g2]
-  }));
+  };
+}
+
+function makeDefaultBookmakers(numMatches) {
+  return DEFAULT_SITES.map(d => makeBookmaker(d.id, d.site, numMatches));
 }
 
 function subsets(n, k) {
@@ -51,9 +82,11 @@ function getBestOdds(activeBookmakers, matchIndices, combo, useGuaranteed = fals
   let best = 0, bestBk = null, bestUsedG = [];
   activeBookmakers.forEach((bk) => {
     const usedG = [];
+    // Site aux cotes déjà garanties : ses cotes de base servent telles quelles
+    const useG = useGuaranteed && !bk.preGuaranteed;
     const valid = combo.every((outcome, pos) => {
       const mi = matchIndices[pos];
-      if (useGuaranteed && (outcome === 0 || outcome === 2)) {
+      if (useG && (outcome === 0 || outcome === 2)) {
         const gIdx = outcome === 0 ? 0 : 1;
         const gVal = bk.guaranteedMatches?.[mi]?.[gIdx];
         if (gVal !== "" && gVal !== undefined && !isNaN(parseFloat(gVal))) {
@@ -67,7 +100,7 @@ function getBestOdds(activeBookmakers, matchIndices, combo, useGuaranteed = fals
     if (!valid) return;
     const odds = combo.reduce((prod, outcome, pos) => {
       const mi = matchIndices[pos];
-      if (useGuaranteed && (outcome === 0 || outcome === 2)) {
+      if (useG && (outcome === 0 || outcome === 2)) {
         const gIdx = outcome === 0 ? 0 : 1;
         const gVal = bk.guaranteedMatches?.[mi]?.[gIdx];
         if (gVal !== "" && gVal !== undefined && !isNaN(parseFloat(gVal)))
@@ -107,7 +140,7 @@ const matchStateClass = (std, guar, hasData) =>
   std && guar ? "is-both" : std ? "is-std" : guar ? "is-guar" : hasData ? "has-data" : "";
 
 function SitePill({ bk, dim }) {
-  return <span className={"ff-site-pill" + (dim ? " is-dim" : "")} data-site={bk.site}>{bk.name}</span>;
+  return <span className={"ff-site-pill" + (dim ? " is-dim" : "")} data-site={bk.site || undefined}>{bk.name || "Site"}</span>;
 }
 
 function Outcome({ o, dim }) {
@@ -137,7 +170,8 @@ const clampInt  = (v, lo, hi, def) => (Number.isInteger(v) && v >= lo && v <= hi
 function snapshotOf(bookmakers, freebetType, effectiveComboSize, totalMatches) {
   return {
     bookmakers: bookmakers.map(bk => ({
-      id: bk.id, freebetActive: bk.freebetActive,
+      id: bk.id, site: bk.site, name: bk.name, preGuaranteed: bk.preGuaranteed,
+      freebetActive: bk.freebetActive,
       matches: bk.matches,
       guaranteedMatches: bk.guaranteedMatches,
     })),
@@ -159,9 +193,15 @@ function decodeGrid(arr, n, width) {
   });
 }
 
+// Un site : `i` id, `s` clé de site (omise pour un site par défaut inchangé, "" = personnalisé),
+// `nm` nom d'un site personnalisé, `pg` cotes déjà garanties (si différent du catalogue).
 function encodeBookmakers(bks, withAmounts) {
   return bks.map(bk => {
     const e = { i: bk.id };
+    const def = DEFAULT_SITES.find(d => d.id === bk.id);
+    if (!def || def.site !== bk.site) e.s = bk.site;
+    if (!bk.site) e.nm = String(bk.name || "").slice(0, CUSTOM_NAME_MAX);
+    if (!!bk.preGuaranteed !== !!catalogEntry(bk.site)?.preGuaranteed) e.pg = bk.preGuaranteed ? 1 : 0;
     if (withAmounts) { const a = numOrNull(bk.freebetAmount); if (a !== null) e.a = a; }
     if (!bk.freebetActive) e.x = 1;
     const o = encodeGrid(bk.matches); if (o) e.o = o;
@@ -170,23 +210,32 @@ function encodeBookmakers(bks, withAmounts) {
   });
 }
 
-// Ordre de la liste = ordre de priorité ; sites inconnus ignorés, sites absents ajoutés à la fin
+// Ordre de la liste = ordre de priorité. Liste absente → sites par défaut.
+// Sans `s`, l'id désigne un site par défaut (format des liens d'avant la v2.2.0).
 function decodeBookmakers(arr, n) {
+  if (!Array.isArray(arr)) return makeDefaultBookmakers(n);
   const seen = new Set();
   const out = [];
-  (Array.isArray(arr) ? arr : []).forEach(e => {
-    const def = BOOKMAKER_DEFS.find(d => d.id === e?.i);
-    if (!def || seen.has(def.id)) return;
-    seen.add(def.id);
-    out.push({
-      ...def,
-      freebetAmount: numToStr(e.a),
-      freebetActive: e.x !== 1,
-      matches: decodeGrid(e.o, n, 3),
-      guaranteedMatches: decodeGrid(e.go, n, 2),
-    });
+  arr.forEach(e => {
+    if (!e || typeof e !== "object" || !Number.isInteger(e.i) || e.i <= 0 || seen.has(e.i)) return;
+    let site;
+    if (typeof e.s === "string") site = catalogEntry(e.s) ? e.s : "";
+    else {
+      const def = DEFAULT_SITES.find(d => d.id === e.i);
+      if (!def) return;
+      site = def.site;
+    }
+    seen.add(e.i);
+    const name = typeof e.nm === "string" && e.nm.trim() ? e.nm.slice(0, CUSTOM_NAME_MAX) : undefined;
+    const bk = makeBookmaker(e.i, site, n, name);
+    if (e.pg === 1) bk.preGuaranteed = true;
+    if (e.pg === 0) bk.preGuaranteed = false;
+    bk.freebetAmount = numToStr(e.a);
+    bk.freebetActive = e.x !== 1;
+    bk.matches = decodeGrid(e.o, n, 3);
+    bk.guaranteedMatches = decodeGrid(e.go, n, 2);
+    out.push(bk);
   });
-  makeDefaultBookmakers(n).forEach(bk => { if (!seen.has(bk.id)) out.push(bk); });
   return out;
 }
 
@@ -204,7 +253,8 @@ function encodeState(s) {
   if (mn.length) o.mn = mn;
   if (s.selectedTab !== "plan") o.t = s.selectedTab;
   const b = encodeBookmakers(s.bookmakers, true);
-  const isDefaultB = b.every((e, i) => Object.keys(e).length === 1 && e.i === BOOKMAKER_DEFS[i].id);
+  const isDefaultB = b.length === DEFAULT_SITES.length &&
+    b.every((e, i) => Object.keys(e).length === 1 && e.i === DEFAULT_SITES[i].id);
   if (!isDefaultB) o.b = b;
   if (s.calc) {
     const r = {};
@@ -293,12 +343,12 @@ function buildPlan(activeBks, n, k, freebetType, useGuaranteed, fixedSelection) 
 // Rebâtit les plans figés d'un calcul sauvegardé, avec les cotes du moment du calcul
 function plansFromCalc(calc, currentBookmakers) {
   const sn = calc.snapshot;
+  // Le site peut avoir été retiré depuis : nom, couleur et cotes viennent du calcul
   const activeBks = sn.bookmakers.filter(b => b.freebetActive).map(b => ({
-    ...BOOKMAKER_DEFS.find(d => d.id === b.id),
     ...b,
     freebetAmount: currentBookmakers.find(c => c.id === b.id)?.freebetAmount ?? "",
   }));
-  const hasG = activeBks.some(bk => bk.guaranteedMatches.some(m => m.some(v => v !== "")));
+  const hasG = activeBks.some(bk => !bk.preGuaranteed && bk.guaranteedMatches.some(m => m.some(v => v !== "")));
   return {
     std: buildPlan(activeBks, sn.totalMatches, sn.effectiveComboSize, sn.freebetType, false, calc.std),
     guar: hasG ? buildPlan(activeBks, sn.totalMatches, sn.effectiveComboSize, sn.freebetType, true, calc.guar) : null,
@@ -345,6 +395,12 @@ function clearSavedState() {
 
 const INIT = readSavedState();
 const INIT_PLANS = INIT.calc ? plansFromCalc(INIT.calc, INIT.bookmakers) : null;
+
+// Ids jamais réutilisés (y compris ceux d'un site retiré encore présent dans le dernier calcul),
+// pour qu'un nouveau site ne récupère pas les mises d'un ancien
+let nextBookmakerId = 1 + Math.max(0,
+  ...INIT.bookmakers.map(b => b.id),
+  ...(INIT.calc ? INIT.calc.snapshot.bookmakers.map(b => b.id) : []));
 
 function FreebetOptimizer() {
   const [totalMatches, setTotalMatches] = useState(INIT.totalMatches);
@@ -430,7 +486,7 @@ function FreebetOptimizer() {
 
   // Check if any guaranteed odds are filled
   const hasGuaranteedData = useMemo(() =>
-    bookmakers.some(bk => bk.freebetActive &&
+    bookmakers.some(bk => bk.freebetActive && !bk.preGuaranteed &&
       bk.guaranteedMatches?.some(m => m.some(v => v !== "" && !isNaN(parseFloat(v))))
     ), [bookmakers]);
 
@@ -577,6 +633,25 @@ function FreebetOptimizer() {
     });
   };
 
+  // Ajout d'un site du catalogue, ou d'un site personnalisé (choice === "custom")
+  const addBookmaker = (choice) => {
+    if (!choice) return;
+    const id = nextBookmakerId++;
+    const bk = choice === "custom"
+      ? makeBookmaker(id, "", totalMatches, `Site ${bookmakers.filter(b => !b.site).length + 1}`)
+      : makeBookmaker(id, choice, totalMatches);
+    setBookmakers(prev => [...prev, bk]);
+  };
+
+  const removeBookmaker = (bk) => {
+    const hasData = bk.freebetAmount !== "" ||
+      bk.matches.some(m => m.some(v => v !== "")) || bk.guaranteedMatches.some(m => m.some(v => v !== ""));
+    if (hasData && !window.confirm(`Retirer ${bk.name} ? Ses cotes et son montant seront perdus.`)) return;
+    setBookmakers(prev => prev.filter(b => b.id !== bk.id));
+  };
+
+  const availableCatalog = SITE_CATALOG.filter(c => !bookmakers.some(b => b.site === c.site));
+
   const togglePlaced = (idx) => {
     setPlacedBets(prev => {
       if (prev[idx]) {
@@ -595,8 +670,8 @@ function FreebetOptimizer() {
   const fillTestValues = () => {
     setBookmakers(prev => prev.map(bk => {
       const matches = bk.matches.map(() => [0,1,2].map(() => (2.7 + Math.random() * 0.3).toFixed(2)));
-      const guaranteedMatches = matches.map(m => bk.id === 4
-        ? ["", ""]  // Winamax: base odds already guaranteed
+      const guaranteedMatches = matches.map(m => bk.preGuaranteed
+        ? ["", ""]  // cotes de base déjà garanties (ex. Winamax)
         : [
             (parseFloat(m[0]) - Math.random() * 0.2).toFixed(2),
             (parseFloat(m[2]) - Math.random() * 0.2).toFixed(2),
@@ -746,7 +821,13 @@ function FreebetOptimizer() {
             const diff = showCompare ? requiredStake - amount : null;
             return (
               <div key={bk.id} data-site={bk.site} className={"fb-site" + (active ? "" : " is-off")}>
-                <div><SitePill bk={bk} dim={!active} /></div>
+                <div className="fb-site-head">
+                  {bk.site
+                    ? <SitePill bk={bk} dim={!active} />
+                    : <input className="fb-site-name" value={bk.name} maxLength={CUSTOM_NAME_MAX} placeholder="Nom du site" aria-label="Nom du site"
+                        onChange={(e) => updateBkField(bk.id, "name", e.target.value)} />}
+                  <button type="button" className="fb-site-remove" onClick={() => removeBookmaker(bk)} title={`Retirer ${bk.name}`} aria-label={`Retirer ${bk.name}`}>×</button>
+                </div>
                 <div className={"numinput" + (stakeMode === "standard" ? " is-disabled" : "")}>
                   <input type="number" min="0" step="1" value={bk.freebetAmount} placeholder="0" disabled={stakeMode === "standard"} onChange={(e) => updateBkField(bk.id, "freebetAmount", e.target.value)} />
                   <span className="unit">€</span>
@@ -756,12 +837,26 @@ function FreebetOptimizer() {
                     {Math.abs(diff) < 0.01 ? "✓ Montant exact" : diff > 0 ? `⚠ +${diff.toFixed(2)}€ manquant` : `ℹ ${Math.abs(diff).toFixed(2)}€ non utilisé`}
                   </div>
                 )}
+                {showGuaranteed && (
+                  <label className="fb-site-opt" title="Le site paie déjà en avance (ex. Winamax) : pas de cote 1G / 2G à saisir, ses cotes normales servent dans le plan avec garanties">
+                    <input type="checkbox" className="check" checked={!!bk.preGuaranteed} onChange={(e) => updateBkField(bk.id, "preGuaranteed", e.target.checked)} />
+                    Cotes déjà garanties
+                  </label>
+                )}
                 <button type="button" className={"fb-include" + (active ? " is-on" : "")} onClick={() => toggleActive(bk.id)}>
                   {active ? "✓ Inclus" : "✗ Exclu"}
                 </button>
               </div>
             );
           })}
+          <div className="fb-site fb-site-add">
+            <span className="fb-label">Ajouter un site</span>
+            <select value="" onChange={(e) => addBookmaker(e.target.value)} aria-label="Ajouter un site">
+              <option value="">Choisir…</option>
+              {availableCatalog.map(c => <option key={c.site} value={c.site}>{c.name}</option>)}
+              <option value="custom">Autre (nom libre)…</option>
+            </select>
+          </div>
         </div>
 
         {/* Barre de synthèse */}
@@ -846,7 +941,7 @@ function FreebetOptimizer() {
       })() : (
         <section className="card fb-empty">
           <div className="fb-empty-icon">📋</div>
-          {activeBookmakers.length === 0 ? "Active au moins un site pour calculer le plan."
+          {activeBookmakers.length === 0 ? "Ajoute ou active au moins un site pour calculer le plan."
             : stakeMode === "persite" && totalStakeAmount === 0 ? "Renseigne le montant de freebet d'au moins un site actif."
             : "Saisis les cotes pour obtenir le plan de paris optimal."}
         </section>
@@ -926,7 +1021,7 @@ function FreebetOptimizer() {
                           })}
                         </div>
                         {/* Cotes garanties — surlignées par le plan avec garanties */}
-                        {showGuaranteed && bk.id !== 4 && (
+                        {showGuaranteed && !bk.preGuaranteed && (
                           <div className={"fb-odds-group is-guar" + (active && isSelectedGuar && filledG ? " is-sel" : "")}>
                             {[0,1].map((gIdx) => {
                               const gVal = bk.guaranteedMatches?.[mi]?.[gIdx] ?? "";
@@ -1049,7 +1144,7 @@ function FreebetOptimizer() {
           </div>
         ) : (
           <div className="fb-tab-empty">
-            {activeBookmakers.length === 0 ? "Active au moins un site." : stakeMode === "persite" && totalStakeAmount === 0 ? "Renseigne le montant de freebet d'au moins un site actif." : "Saisis les cotes pour calculer le plan."}
+            {activeBookmakers.length === 0 ? "Ajoute ou active au moins un site." : stakeMode === "persite" && totalStakeAmount === 0 ? "Renseigne le montant de freebet d'au moins un site actif." : "Saisis les cotes pour calculer le plan."}
           </div>
         )
       )}

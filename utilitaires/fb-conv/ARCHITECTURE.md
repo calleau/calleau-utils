@@ -15,7 +15,15 @@ Version actuelle : voir [`versions.js`](versions.js) (`CURRENT_VERSION`).
 | `URL_STATE.md` | Format de l'état sauvegardé dans le lien (`?s=`) et dans le navigateur |
 | `v1.0.0/` | Ancienne version (thème sombre autonome, sans `theme.css`) |
 
-Bookmakers : PMU, Betclic, Unibet, Winamax, PSEL (`BOOKMAKER_DEFS`). Le champ `site` est la clé des couleurs de `theme.css` (`--site-<site>-bg/-text`, `.ff-site-pill[data-site]`) ; `fb-conv.css` en tire `--bk-accent` (bandeaux, bordures), ajusté en thème sombre.
+## Sites
+
+- Par défaut : PMU, Betclic, Unibet, Winamax, PSEL (`DEFAULT_SITES`, ids 1 à 5).
+- Modifiables dans la carte « Freebets disponibles par site » :
+  - **Ajouter** : un site du catalogue (`SITE_CATALOG`, les 14 sites qui ont des couleurs dans `theme.css`), ou « Autre » avec un nom libre, sans couleur de marque.
+  - **Retirer** : bouton × sur la carte, avec confirmation si le site a des cotes ou un montant.
+  - Les ids ne sont jamais réutilisés (`nextBookmakerId`), pour qu'un nouveau site ne récupère pas les mises d'un site retiré encore présent dans le dernier calcul.
+- **Cotes déjà garanties** (`preGuaranteed`, visible quand les garanties sont activées) : le site paie déjà en avance. Sa ligne 1G / 2G est masquée et ses cotes normales servent telles quelles dans le plan avec garanties. Coché par défaut pour Winamax (avant la v2.2.0, c'était codé en dur sur Winamax).
+- Couleurs : le champ `site` est la clé des couleurs de `theme.css` (`--site-<site>-bg/-text`, `.ff-site-pill[data-site]`) ; `fb-conv.css` en tire `--bk-accent` (bandeaux, bordures), ajusté en thème sombre.
 
 ## Le calcul
 
@@ -31,6 +39,7 @@ Tout l'état est sauvegardé ~400 ms après chaque modification, dans le lien (`
 
 ## Historique
 
+- **v2.2.0** (2026-11-27) : sites modifiables (ajout depuis un catalogue de 14 sites ou nom libre, retrait), option « Cotes déjà garanties » par site (remplace la règle codée en dur pour Winamax). Les liens sauvegardés en v2.1.0 restent lisibles.
 - **v2.1.0** (2026-11-27) : sauvegarde de l'état dans le lien et dans le navigateur (plus rien n'est perdu à la fermeture, lien partageable) ; bouton « Tout effacer ».
 - **v2.0.1** (2026-11-27) : JavaScript sorti de `index.html` dans `fb-conv.js`. Aucun changement visible.
 - **v2.0.0** (2026-11-27) : passage au thème global (`theme.css`, mode clair / sombre, bouton de thème, widget des versions, pied de page), styles sortis dans `fb-conv.css`, noms de sites en pastilles aux couleurs des sites. Calcul inchangé.

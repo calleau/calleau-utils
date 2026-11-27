@@ -30,14 +30,17 @@ https://…/fb-conv/?s=<encoded>
 | `mx` | number | absent | Plafond max en mode « Freebets réels » (€). Absent = illimité. |
 | `mn` | array<string> | — | Noms des matchs, par index. `""` = nom par défaut (`Match i`). Noms vides finaux rognés, tronqués à 100 caractères. |
 | `t` | `"ranking"` \| `"all"` | `"plan"` | Onglet ouvert. |
-| `b` | array<Site> | 5 sites par défaut | Sites **dans l'ordre de priorité**. Omis si ordre par défaut et aucun site renseigné. |
+| `b` | array<Site> | 5 sites par défaut | Sites **dans l'ordre de priorité**. Omis si ce sont les 5 sites par défaut, dans l'ordre, sans rien de renseigné. `[]` = aucun site. |
 | `r` | Calc | absent | Dernier calcul. Absent = « Calculer » jamais lancé. |
 
 ### `b[i]` — un site
 
 | Clé | Type | Défaut | Description |
 |-----|------|--------|-------------|
-| `i` | number | — (obligatoire) | Identifiant : `1` PMU, `2` Betclic, `3` Unibet, `4` Winamax, `5` PSEL. Inconnu ou en double → ignoré ; un site absent est ajouté en fin de liste. |
+| `i` | number | — (obligatoire) | Identifiant (entier > 0, unique). Les ids `1` à `5` sont les sites par défaut : `1` PMU, `2` Betclic, `3` Unibet, `4` Winamax, `5` PSEL. En double → ignoré. |
+| `s` | string | site par défaut de l'id | Clé du site : `bet365`, `betclic`, `betify`, `betsson`, `bwin`, `daznbet`, `feelingbet`, `olybet`, `pmu`, `pokerstars`, `psel`, `unibet`, `vbet`, `winamax`. `""` (ou clé inconnue) = site personnalisé. Omis pour un id 1–5 qui garde son site par défaut ; sans `s`, un id hors 1–5 est ignoré. |
+| `nm` | string | `"Autre site"` | Nom d'un site personnalisé (`s: ""`), 40 caractères max. |
+| `pg` | `1` \| `0` | selon le site | Cotes déjà garanties (pas de 1G / 2G, cotes normales utilisées dans le plan avec garanties). Écrit seulement s'il diffère du défaut du site (`1` pour Winamax, `0` sinon). |
 | `a` | number | absent | Freebet disponible (€). |
 | `x` | `1` | absent | Site exclu. |
 | `o` | array<[n1, nN, n2] \| null> | absent | Cotes 1 / N / 2 par match. `null` = match vide, valeur `null` = cote vide. Matchs vides finaux rognés. |
@@ -61,6 +64,22 @@ Le plan n'est pas stocké : il est recalculé au chargement à partir de `r.in` 
 
 ```json
 { "v": 1 }
+```
+
+### Sites modifiés : Betclic, bet365 ajouté, un site personnalisé « Zebet »
+
+PMU, Unibet et PSEL retirés ; Winamax gardé mais sans « cotes déjà garanties ».
+
+```json
+{
+  "v": 1,
+  "b": [
+    { "i": 2 },
+    { "i": 6, "s": "bet365" },
+    { "i": 7, "s": "", "nm": "Zebet", "a": 10 },
+    { "i": 4, "pg": 0 }
+  ]
+}
 ```
 
 ### 2 matchs sur 2, cotes Betclic et Winamax, 50 € de mise standard

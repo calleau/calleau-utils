@@ -23,17 +23,37 @@
 	--fb-info: #7bafc2;
 }
 
-/* Couleur d'accent par bookmaker (bandeau, bordures) : lisible dans les deux thèmes */
-[data-site="pmu"]     { --bk-accent: var(--site-pmu-bg); }
-[data-site="betclic"] { --bk-accent: var(--site-betclic-bg); }
-[data-site="unibet"]  { --bk-accent: var(--site-unibet-bg); }
-[data-site="winamax"] { --bk-accent: var(--site-winamax-text); }
-[data-site="psel"]    { --bk-accent: var(--site-psel-bg); }
+/* Couleur d'accent par bookmaker (bandeau, bordures) : lisible dans les deux thèmes.
+   Défaut (site personnalisé, sans couleur de marque) déclaré avant les sites. */
+.fb-site, .fb-odds-row, .fb-plan-card { --bk-accent: var(--color-muted); }
 
-:root[data-theme="dark"] [data-site="pmu"]     { --bk-accent: var(--site-pmu-text); }
-:root[data-theme="dark"] [data-site="betclic"] { --bk-accent: #f04a50; }
-:root[data-theme="dark"] [data-site="unibet"]  { --bk-accent: #5cbf58; }
-:root[data-theme="dark"] [data-site="psel"]    { --bk-accent: #5b9be6; }
+[data-site="bet365"]     { --bk-accent: var(--site-bet365-bg); }
+[data-site="betclic"]    { --bk-accent: var(--site-betclic-bg); }
+[data-site="betify"]     { --bk-accent: #15a94a; }
+[data-site="betsson"]    { --bk-accent: var(--site-betsson-bg); }
+[data-site="bwin"]       { --bk-accent: #d9a900; }
+[data-site="daznbet"]    { --bk-accent: var(--site-daznbet-text); }
+[data-site="feelingbet"] { --bk-accent: var(--site-feelingbet-bg); }
+[data-site="olybet"]     { --bk-accent: var(--site-olybet-text); }
+[data-site="pmu"]        { --bk-accent: var(--site-pmu-bg); }
+[data-site="pokerstars"] { --bk-accent: var(--site-pokerstars-bg); }
+[data-site="psel"]       { --bk-accent: var(--site-psel-bg); }
+[data-site="unibet"]     { --bk-accent: var(--site-unibet-bg); }
+[data-site="vbet"]       { --bk-accent: var(--site-vbet-bg); }
+[data-site="winamax"]    { --bk-accent: var(--site-winamax-text); }
+
+:root[data-theme="dark"] [data-site="bet365"]     { --bk-accent: var(--site-bet365-text); }
+:root[data-theme="dark"] [data-site="betclic"]    { --bk-accent: #f04a50; }
+:root[data-theme="dark"] [data-site="betify"]     { --bk-accent: var(--site-betify-bg); }
+:root[data-theme="dark"] [data-site="betsson"]    { --bk-accent: var(--site-betsson-text); }
+:root[data-theme="dark"] [data-site="bwin"]       { --bk-accent: var(--site-bwin-bg); }
+:root[data-theme="dark"] [data-site="daznbet"]    { --bk-accent: var(--site-daznbet-bg); }
+:root[data-theme="dark"] [data-site="feelingbet"] { --bk-accent: var(--site-feelingbet-text); }
+:root[data-theme="dark"] [data-site="pmu"]        { --bk-accent: var(--site-pmu-text); }
+:root[data-theme="dark"] [data-site="pokerstars"] { --bk-accent: #f0455e; }
+:root[data-theme="dark"] [data-site="psel"]       { --bk-accent: #5b9be6; }
+:root[data-theme="dark"] [data-site="unibet"]     { --bk-accent: #5cbf58; }
+:root[data-theme="dark"] [data-site="vbet"]       { --bk-accent: #e866b0; }
 
 .o0 { --o: var(--fb-o0); }
 .o1 { --o: var(--fb-o1); }
@@ -69,6 +89,12 @@
 input::placeholder { color: var(--color-muted); opacity: 0.7; }
 
 .ff-site-pill.is-dim { opacity: 0.45; }
+
+/* Site personnalisé : pas de couleur de marque */
+.ff-site-pill:not([data-site]) {
+	color: var(--color-text);
+	box-shadow: inset 0 0 0 1px var(--color-divider);
+}
 
 .fb-outcome {
 	display: inline-block;
@@ -328,6 +354,59 @@ input::placeholder { color: var(--color-muted); opacity: 0.7; }
 }
 
 .fb-site.is-off::before { background: var(--color-divider); }
+
+.fb-site-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.4rem;
+	min-height: 1.6rem;
+}
+
+.fb-site-name {
+	min-width: 0;
+	flex: 1;
+	padding: 0.2rem 0.5rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+.fb-site-remove {
+	appearance: none;
+	flex-shrink: 0;
+	width: 1.5rem;
+	height: 1.5rem;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-muted);
+	font-size: 1.1rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.fb-site-remove:hover {
+	background: var(--color-danger-bg);
+	color: var(--color-neg);
+}
+
+.fb-site-opt {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.78rem;
+	color: var(--color-muted);
+	cursor: pointer;
+}
+
+.fb-site-opt .check { width: 16px; height: 16px; }
+
+.fb-site-add {
+	border-style: dashed;
+	justify-content: center;
+}
+
+.fb-site-add::before { display: none; }
 
 .fb-site .numinput input { width: 5rem; }
 .fb-site .numinput.is-disabled { opacity: 0.45; }
