@@ -53,6 +53,8 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 
 ### Bugs mineurs
 
+✅ **Tous corrigés en v7.2.5.**
+
 - **Apostrophe non échappée** : `esc()` ne la traite pas, donc un nom de site contenant `'` casse les `onclick`.
 - **Montant à 0 ou vide** : il est remplacé par 10 € sans prévenir.
 - **Plantage d'un worker** : l'écran de calcul se ferme sans aucun message d'erreur.

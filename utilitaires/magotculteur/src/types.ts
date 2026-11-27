@@ -168,10 +168,8 @@ export interface WorkerComputePayload {
 }
 
 export type WorkerInMessage =
-  | { type: 'compute'; payload: WorkerComputePayload }
-  | { type: 'cancel' };
+  | { type: 'compute'; payload: WorkerComputePayload };
 
 export type WorkerOutMessage =
   | { type: 'progress'; label: string; detail?: string; pct: number; done?: number; total?: number }
-  | { type: 'result'; results: AllResults }
-  | { type: 'cancelled' };
+  | { type: 'result'; results: AllResults };

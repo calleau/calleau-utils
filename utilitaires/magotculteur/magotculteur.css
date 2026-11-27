@@ -483,6 +483,16 @@
 	color: var(--color-neg);
 }
 
+/* Montant invalide (vide ou ≤ 0) */
+.numinput.numinput--error {
+	outline: 1.5px solid var(--color-neg);
+	border-radius: 6px;
+}
+
+.ff-sublabel.ff-sublabel--error {
+	color: var(--color-neg);
+}
+
 .ff-field--error .ff-label {
 	color: var(--color-neg);
 }

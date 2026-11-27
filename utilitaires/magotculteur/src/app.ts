@@ -107,7 +107,14 @@ function siteHasFb(name: string): boolean {
 }
 
 function esc(s: any): string {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Argument chaîne d'un handler inline (onclick="f(${jsArg(x)})") : littéral JS (JSON)
+// puis échappé pour l'attribut. esc() seul ne suffit pas : le navigateur décode
+// l'attribut avant d'exécuter le JS, une apostrophe y fermerait la chaîne.
+function jsArg(s: any): string {
+  return esc(JSON.stringify(String(s)));
 }
 
 function fmt(n: number, d = 2): string { return Number(n).toFixed(d).replace('.', ','); }
@@ -798,8 +805,18 @@ function setAmountMode(mode: 'mise_totale' | 'mise_min_par_pari' | 'profit_net_m
   savePrefs();
 }
 
+// Montant vide, nul ou négatif : signalé (champ en rouge, calcul bloqué en mode simple)
+// au lieu d'être remplacé par 10 € ; le dernier montant valide est conservé.
+function markAmountError(on: boolean) {
+  document.getElementById('ff-amount-wrap')?.classList.toggle('numinput--error', on);
+  document.getElementById('ff-amount-label')?.classList.toggle('ff-sublabel--error', on);
+}
+
 function onAmountInput(val: string) {
-  _simpleAmount = parseFloat(val) || 10;
+  const v = parseFloat(val);
+  const ok = v > 0;
+  markAmountError(!ok);
+  if (ok) _simpleAmount = v;
   resetResults();
   savePrefs();
 }
@@ -810,6 +827,7 @@ function stepAmount(delta: number) {
   const min = parseFloat(input.min) || 0.5;
   input.value = String(Math.max(min, (parseFloat(input.value) || 0) + delta));
   _simpleAmount = parseFloat(input.value);
+  markAmountError(false);
   resetResults();
   savePrefs();
 }
@@ -993,7 +1011,7 @@ function renderAdvancedSites(sites: string[]) {
           ${[1, 2, 3].map(p => `
             <button class="ff-adv-prio-btn ff-btn ff-btn--sm${cfg.freebetPriority === p ? ' ff-btn--active' : ''}"
               data-prio="${p}"
-              onclick="setAdvFbPriority('${esc(site)}', ${p})">${p === 1 ? '1 – Tout' : p === 2 ? '2 – Compl.' : '3 – Non'}</button>
+              onclick="setAdvFbPriority(${jsArg(site)}, ${p})">${p === 1 ? '1 – Tout' : p === 2 ? '2 – Compl.' : '3 – Non'}</button>
           `).join('')}
         </div>
       </div>
@@ -1002,7 +1020,7 @@ function renderAdvancedSites(sites: string[]) {
         <div class="numinput numinput--sm">
           <input type="number" id="ff-adv-fb-${esc(site)}" value="${cfg.freebetAmount}" min="0" step="5"
             onclick="this.select()"
-            oninput="setAdvFbAmount('${esc(site)}', this.value)" />
+            oninput="setAdvFbAmount(${jsArg(site)}, this.value)" />
           <span class="unit">€</span>
         </div>
       </div>` : '';
@@ -1011,16 +1029,16 @@ function renderAdvancedSites(sites: string[]) {
       <div class="ff-adv-mission" id="ff-adv-mission-${m.id}">
         <div class="ff-adv-mission-header">
           <span class="ff-sublabel">Mission ${esc(site)} #${m.number}</span>
-          <button class="ff-adv-mission-del" onclick="removeAdvMission('${esc(site)}', '${m.id}')" title="Supprimer">✕</button>
+          <button class="ff-adv-mission-del" onclick="removeAdvMission(${jsArg(site)}, ${jsArg(m.id)})" title="Supprimer">✕</button>
         </div>
         <div class="ff-adv-mission-fields">
           <div class="ff-adv-row">
             <span class="ff-sublabel">Importance</span>
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               <button class="ff-btn ff-btn--sm${m.importance === 'obligatoire' ? ' ff-btn--active' : ''}"
-                onclick="setAdvMissionField('${esc(site)}','${m.id}','importance','obligatoire'); rerenderAdvancedSites()">Obligatoire</button>
+                onclick="setAdvMissionField(${jsArg(site)},${jsArg(m.id)},'importance','obligatoire'); rerenderAdvancedSites()">Obligatoire</button>
               <button class="ff-btn ff-btn--sm${m.importance === 'optionnelle' ? ' ff-btn--active' : ''}"
-                onclick="setAdvMissionField('${esc(site)}','${m.id}','importance','optionnelle'); rerenderAdvancedSites()">Optionnelle</button>
+                onclick="setAdvMissionField(${jsArg(site)},${jsArg(m.id)},'importance','optionnelle'); rerenderAdvancedSites()">Optionnelle</button>
             </div>
           </div>
           <div class="ff-adv-row">
@@ -1028,7 +1046,7 @@ function renderAdvancedSites(sites: string[]) {
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               ${(['mise_min', 'profit_net_min', 'profit_brut'] as const).map(mode => `
                 <button class="ff-btn ff-btn--sm${m.montantMode === mode ? ' ff-btn--active' : ''}"
-                  onclick="setAdvMissionField('${esc(site)}','${m.id}','montantMode','${mode}'); rerenderAdvancedSites()">
+                  onclick="setAdvMissionField(${jsArg(site)},${jsArg(m.id)},'montantMode','${mode}'); rerenderAdvancedSites()">
                   ${mode === 'mise_min' ? 'Mise min.' : mode === 'profit_net_min' ? 'Profit net' : 'Profit brut'}
                 </button>`).join('')}
             </div>
@@ -1038,7 +1056,7 @@ function renderAdvancedSites(sites: string[]) {
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               ${(['gagner', 'miser', 'perdre'] as const).map(obj => `
                 <button class="ff-btn ff-btn--sm${m.objectif === obj ? ' ff-btn--active' : ''}"
-                  onclick="setAdvMissionField('${esc(site)}','${m.id}','objectif','${obj}'); rerenderAdvancedSites()">
+                  onclick="setAdvMissionField(${jsArg(site)},${jsArg(m.id)},'objectif','${obj}'); rerenderAdvancedSites()">
                   ${obj.charAt(0).toUpperCase() + obj.slice(1)}
                 </button>`).join('')}
             </div>
@@ -1047,7 +1065,7 @@ function renderAdvancedSites(sites: string[]) {
             <label class="ff-sublabel">Montant</label>
             <div class="numinput numinput--sm">
               <input type="number" value="${m.montant}" min="0" step="1" onclick="this.select()"
-                oninput="setAdvMissionField('${esc(site)}','${m.id}','montant',parseFloat(this.value)||0)" />
+                oninput="setAdvMissionField(${jsArg(site)},${jsArg(m.id)},'montant',parseFloat(this.value)||0)" />
               <span class="unit">€</span>
             </div>
           </div>
@@ -1055,14 +1073,14 @@ function renderAdvancedSites(sites: string[]) {
             <label class="ff-sublabel">Cote min.</label>
             <div class="numinput numinput--sm">
               <input type="number" value="${m.coteMin || ''}" min="1" step="0.05" placeholder="—" onclick="this.select()"
-                oninput="setAdvMissionField('${esc(site)}','${m.id}','coteMin',parseFloat(this.value)||0)" />
+                oninput="setAdvMissionField(${jsArg(site)},${jsArg(m.id)},'coteMin',parseFloat(this.value)||0)" />
             </div>
           </div>
           <div class="ff-adv-row">
             <label class="ff-sublabel">Cote min. / sél.</label>
             <div class="numinput numinput--sm">
               <input type="number" value="${m.coteMinParSelection || ''}" min="1" step="0.05" placeholder="—" onclick="this.select()"
-                oninput="setAdvMissionField('${esc(site)}','${m.id}','coteMinParSelection',parseFloat(this.value)||0)" />
+                oninput="setAdvMissionField(${jsArg(site)},${jsArg(m.id)},'coteMinParSelection',parseFloat(this.value)||0)" />
             </div>
           </div>
           <div class="ff-adv-row">
@@ -1070,7 +1088,7 @@ function renderAdvancedSites(sites: string[]) {
             <div class="ff-legs-toggle ff-legs-toggle--sm">
               ${[1,2,3,4,5].map(nb => `
                 <button class="ff-btn ff-btn--sm${m.nbCombinesMin === nb ? ' ff-btn--active' : ''}"
-                  onclick="setAdvMissionField('${esc(site)}','${m.id}','nbCombinesMin',${nb}); rerenderAdvancedSites()">${nb}</button>
+                  onclick="setAdvMissionField(${jsArg(site)},${jsArg(m.id)},'nbCombinesMin',${nb}); rerenderAdvancedSites()">${nb}</button>
               `).join('')}
             </div>
           </div>
@@ -1084,7 +1102,7 @@ function renderAdvancedSites(sites: string[]) {
         </div>
         ${prioHtml}
         ${missionsHtml}
-        <button class="ff-adv-add-mission" onclick="addAdvMission('${esc(site)}')">+ Mission</button>
+        <button class="ff-adv-add-mission" onclick="addAdvMission(${jsArg(site)})">+ Mission</button>
       </div>`;
   }).join('');
 }
@@ -1111,15 +1129,21 @@ function resetResults() {
 // ===== WORKER =====
 
 function cancelCalc() {
-  for (const w of _workers) {
-    try { w.postMessage({ type: 'cancel' }); } catch {}
-    w.terminate();
-  }
+  // Le calcul est synchrone dans le worker : il ne lirait un message d'annulation
+  // qu'une fois fini. On arrête donc les workers directement.
+  for (const w of _workers) w.terminate();
   _workers = [];
   const btn = document.getElementById('ff-calc-btn') as HTMLButtonElement;
   const overlay = document.getElementById('ff-calc-overlay')!;
   if (btn) btn.disabled = false;
   (overlay as any).hidden = true;
+}
+
+function showCalcError(message: string) {
+  const el = document.getElementById('ff-calc-error');
+  if (!el) return;
+  el.textContent = message;
+  (el as any).hidden = false;
 }
 
 async function tryRender() {
@@ -1130,9 +1154,18 @@ async function tryRender() {
   }
   document.getElementById('ff-nlegs-field')?.classList.remove('ff-field--error');
 
-  // Read current amount
+  const calcError = document.getElementById('ff-calc-error');
+  if (calcError) (calcError as any).hidden = true;
+
+  // Read current amount. Invalide : bloque en mode simple ; en mode avancé (champ caché),
+  // le dernier montant valide est utilisé.
   const amountInput = parseFloat((document.getElementById('ff-amount-input') as HTMLInputElement)?.value);
-  if (!isNaN(amountInput) && amountInput > 0) _simpleAmount = amountInput;
+  if (amountInput > 0) _simpleAmount = amountInput;
+  else if (!_advancedMode) {
+    markAmountError(true);
+    showCalcError('Montant invalide : saisissez un montant supérieur à 0.');
+    return;
+  }
 
   _results = [];
   _colFilters = {};
@@ -1163,7 +1196,6 @@ async function tryRender() {
     Array.from({ length: poolSize }, () => ({ done: 0, total: 0, detail: '' }));
   const aggregatedResults: any[][] = Array.from({ length: poolSize }, () => []);
   let finished = 0;
-  let anyCancelled = false;
 
   for (let i = 0; i < poolSize; i++) {
     const w = new EngineWorker();
@@ -1186,7 +1218,6 @@ async function tryRender() {
         aggregatedResults[i] = msg.results;
         finished++;
         if (finished === poolSize) {
-          if (anyCancelled) return;
           _results = aggregatedResults.flat().sort((a, b) => b.profit - a.profit);
           (overlayBar as HTMLElement).style.width = '100%';
           overlayLabel.textContent = 'Terminé';
@@ -1198,27 +1229,16 @@ async function tryRender() {
             renderResults(_results);
           }, 150);
         }
-      } else if (msg.type === 'cancelled') {
-        anyCancelled = true;
-        finished++;
-        if (finished === poolSize) {
-          (overlayBar as HTMLElement).style.width = '0%';
-          overlayLabel.textContent = 'Annulé';
-          setTimeout(() => {
-            (overlay as any).hidden = true;
-            btn.disabled = false;
-            for (const ww of _workers) ww.terminate();
-            _workers = [];
-          }, 150);
-        }
       }
     };
 
-    w.onerror = () => {
+    w.onerror = (e: ErrorEvent) => {
+      console.error('Worker de calcul :', e);
       (overlay as any).hidden = true;
       btn.disabled = false;
       for (const ww of _workers) ww.terminate();
       _workers = [];
+      showCalcError(`Erreur pendant le calcul${e.message ? ` : ${e.message}` : ''}. Aucun résultat n'a été produit.`);
     };
 
     w.postMessage({ type: 'compute', payload: { data: _data, opts, shard: { index: i, count: poolSize } } });
@@ -1336,7 +1356,7 @@ function updateSiteSelect(sites: string[]) {
   else if (!pool.includes(_simpleSite)) _simpleSite = pool[0] ?? '';
   wrap.innerHTML = pool.map(s => `
     <button class="ff-site-btn ff-btn${s === _simpleSite ? ' ff-btn--active' : ''}"
-      data-site="${esc(s)}" onclick="setSite('${esc(s)}')">${esc(s)}</button>`).join('');
+      data-site="${esc(s)}" onclick="setSite(${jsArg(s)})">${esc(s)}</button>`).join('');
 
   // Refresh advanced mode panel if active
   if (_advancedMode) renderAdvancedSites(sites);
@@ -1413,7 +1433,7 @@ function downloadDebugJson() {
   const payload = {
     _meta: {
       timestamp: new Date().toISOString(),
-      version: '6.0.0',
+      version: (window as any).CURRENT_VERSION ?? 'dev',
     },
     ui: {
       betType: _betType,
@@ -1454,7 +1474,7 @@ function downloadDebugStateJson() {
   const payload = {
     _meta: {
       timestamp: new Date().toISOString(),
-      version: '6.0.0',
+      version: (window as any).CURRENT_VERSION ?? 'dev',
     },
     ui: {
       betType: _betType,
@@ -1580,11 +1600,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (cb) cb.checked = _allowAsym;
   }
   updateMethodAvailability();
-
-  document.getElementById('ff-amount-input')?.addEventListener('change', () => {
-    _simpleAmount = parseFloat((document.getElementById('ff-amount-input') as HTMLInputElement).value) || 10;
-    savePrefs();
-  });
 
   // Load coverage rules and sites info in parallel
   try {

@@ -78,6 +78,7 @@ Contient tous les sites présents dans le JSON.
 ##### Montant misé
 Selecteur (radio-group boutons)
 Quatres options "Mise totale", "Mise minimale par pari", "Profit net minimum" ou "Profit brut"
+Un montant vide, nul ou négatif est signalé en rouge et bloque le calcul (le dernier montant valide est conservé).
 
 ###### Mise totale
 Si le type de mise est Freebet, l'option s'appelle alors "Mise fb totale" et corresponds au montant totale de tout les paris en Freebet qui doivent être placé, cela ne doit pas prendre en compte les mises en Cash.

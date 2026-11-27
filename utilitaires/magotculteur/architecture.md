@@ -85,7 +85,6 @@ Le fichier `../assets/coverage-rules.json` (à la racine du dépôt) est chargé
 │  • Reçoit { type:'compute', payload }                │
 │  • Poste { type:'progress', label, pct }             │
 │  • Poste { type:'result', allResults }               │
-│  • Poste { type:'cancelled' }                        │
 └──────────┬──────────────────────────────────────────┘
            │ importe
            ▼
@@ -132,9 +131,9 @@ interface EngineOpts {
 app.ts  ──► { type: 'compute', payload: WorkerComputePayload }  ──► worker.ts
 app.ts  ◄── { type: 'progress', label: string, pct: number }   ◄── worker.ts
 app.ts  ◄── { type: 'result',   allResults: AllResults }        ◄── worker.ts
-app.ts  ──► { type: 'cancel' }  (+ worker.terminate())          ──► worker.ts
-app.ts  ◄── { type: 'cancelled' }                               ◄── worker.ts
 ```
+
+Annulation : `worker.terminate()`, sans message (le calcul est synchrone, le worker ne lirait un message d'annulation qu'une fois fini). Erreur d'un worker : tous les workers sont arrêtés et un message s'affiche sous le bouton Calculer.
 
 ---
 
