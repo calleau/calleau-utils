@@ -238,7 +238,10 @@ où B = cote combinée Back, K = ∏ k_i, k_i = facteur de couverture du leg i
 Pour un Lay : `k = (lGross - c) / (1 - c)` (avec `c` = commission de l'exchange)  
 Pour un Back adverse : `k = odds / (odds - 1)`
 
-**Mode Cash :** variantes `miser` (retour égal), `gagner` (couvrir la perte), `perdre` (couvrir le gain).
+**Mode Cash :** variantes `miser` (retour égal), `gagner` (couvrir la perte), `perdre` (couvrir le gain). Les résultats suivent le **déroulement réel** (v7.12.0) : la couverture i n'est placée que si les sélections précédentes ont gagné ; si elle gagne, les couvertures suivantes ne sont jamais placées.
+
+- `gagner` : chaque couverture rembourse tout ce qui a été misé avant elle, `C_i = (S + Σ_{j<i} C_j) / (E_i − 1)`. Toute couverture gagnante donne 0 € ; le profit affiché (négatif) est celui du combiné gagnant, `S × (B − 1) − Σ C`.
+- `perdre` : `C_i = S × Π_{j<i} b_j × (b_i − 1)`, le combiné gagnant donne 0 €. Le profit affiché est la pire couverture gagnante, `C_i × (E_i − 1) − S − Σ_{j<i} C_j` (sans les couvertures suivantes, jamais placées).
 
 #### Méthode 2 — Couverture complète (`computeToutFB`)
 
@@ -256,7 +259,7 @@ rate = 1 / Σ(1 / odds_i)          (cash — retour égal)
 
 **Multi-matchs** : pour N matchs, le calcul parcourt toutes les combinaisons de N événements (top-30 par score), puis le produit cartésien des covering sets de chaque match.
 
-**Couvertures asymétriques** (option activable) : une issue du covering set est jouée en simple, les autres sont combinées avec les issues des autres matchs. Permet des configurations où les issues n'ont pas toutes le même nombre de sélections.
+**Couvertures asymétriques** (option activable, v7.11.0, `getAsymStructures`) : chaque issue du match ancre est jouée seule ou combinée avec son propre ensemble de couverture des autres matchs (au moins deux issues combinées avec des ensembles différents). L'ancien « asymétrique » (une issue seule, les autres combinées avec le même ensemble) était un cas de l'asym. léger et a été supprimé.
 
 #### Méthode 4 — Couverture multi-sites (`computeMultiSite`)
 
@@ -264,13 +267,19 @@ Identique à la méthode 2 en structure, mais chaque pari peut être placé sur 
 
 Si des montants freebets par site sont renseignés, seuls les sites avec un freebet actif (`> 0`) sont considérés pour la sélection des cotes.
 
-### 4.4 Déduplication multi-matchs
+### 4.4 Dédoublonnage : toutes les variantes sont gardées
 
-Pour les calculs multi-matchs (méthodes 2 et 4), un seul résultat est conservé par combinaison de matchs (`bestPerCombo`) : celui avec le meilleur taux. Cela évite que deux covering sets différents sur les mêmes matchs occupent deux lignes distinctes dans les résultats.
+Choix assumé (v7.11.0, F17) : le moteur renvoie **toutes les variantes** d'une même combinaison de matchs (autres issues, méthodes, placements, sites), une ligne chacune. Seuls les doublons exacts sont fusionnés :
 
-### 4.5 Cache des résultats
+- **Simultané** (`computeSimult`, `bestPerCombo`) : clé = combinaison de matchs + paris (marché et issue de chaque pari) + méthode (`sym`, `asym`, `asym-light` avec son match ancre) + placement (uni / multi) + sites des paris. Pour une même clé, le meilleur profit est gardé (les répartitions de sites essayées par `trySimult` peuvent donner deux fois la même).
+- **Plusieurs sites en priorité 1** (freebet) : un seul résultat par ensemble de couverture (programme linéaire, `makeMultiP1Result`).
+- **Séquentiel** (`computeSeq`) : un résultat par combiné (chaîne de sélections) et par site du combiné, sans fusion.
 
-Les résultats sont mis en cache dans `_allResults` (clé `"<method>_<nLegs>"`) pour éviter de recalculer lors d'un simple changement d'onglet. Le cache est invalidé dès qu'un paramètre de calcul change (type de mise, cote min, asymCov, etc.).
+Volume : plusieurs dizaines de milliers de résultats sont courants (environ 176 000 pour 94 matchs, combinés de 1 à 3, toutes méthodes). L'interface les trie et les affiche par pages de 50 (« Afficher plus »), avec un filtre par colonne (dont la méthode) ; l'API ne renvoie que les `limit` meilleurs. Cotorico filtre ensuite ces variantes (ex. un seul pari sur le bookmaker) : ne garder qu'un résultat par combinaison de matchs lui en ferait perdre.
+
+### 4.5 Pas de cache des résultats
+
+Chaque calcul repart de zéro (pool de workers, cf. protocole Worker). Les résultats affichés sont effacés dès qu'un paramètre change (`resetResults`) : il faut relancer « Calculer ».
 
 ### 4.6 Affichage et filtres
 

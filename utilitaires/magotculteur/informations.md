@@ -310,6 +310,8 @@ M1 X M2 1X
 M1 X M2 2
 M1 2
 
+Mise en œuvre (simultané) : un match « ancre » et un de ses ensembles de couverture ; chaque issue de l'ancre est jouée seule, ou combinée avec un ensemble de couverture des autres matchs choisi pour elle. Il faut au moins deux issues combinées avec des ensembles différents (sinon c'est un asymétrique léger ou un symétrique). Pour contenir la combinatoire : pour chaque autre match, ses meilleurs ensembles de couverture (4 à 2 matchs, 2 au-delà) ; pour chaque issue de l'ancre, ses 3 meilleures combinaisons et le simple ; puis les 20 structures les plus prometteuses (score rapide sur les meilleures cotes) par combinaison de matchs sont calculées. Il faut donc, pour les autres matchs, plusieurs façons de les couvrir en Back combinable (ex. 1X2 et double chance) : une couverture par Lay ne se combine pas.
+
 #### Covering set asymétrique léger
 Un cas intermédiaire entre symétrique et asymétrique. Pour chaque combiné, un event est considéré comme "ancre" (MF) : un sous-ensemble de ses issues est placé côté combiné (en produit cartésien symétrique avec les autres events), les issues restantes de l'ancre sont couvertes en simples. Le calculateur itère sur chaque event possible comme ancre, chaque market de l'ancre et chaque sous-ensemble K ∈ [1, k-1] de ses issues.
 

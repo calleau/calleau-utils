@@ -444,6 +444,94 @@ function buildAsymLightLegs(split: AsymLightSplit): LegRef[][] {
   return [...singleSides, ...combinedGroups];
 }
 
+// ===== ASYMÉTRIQUE (spécification) =====
+// Un match « ancre » et un de ses ensembles de couverture : chaque issue de l'ancre est jouée seule,
+// ou combinée avec un ensemble de couverture des autres matchs choisi pour elle. Exemple de la
+// spécification (1X2) : M1 1 × M2 {1, X, 2} ; M1 X × M2 {1X, 2} ; M1 2 seul.
+//  - asym. léger : le même ensemble pour toutes les issues combinées ;
+//  - symétrique : aucune issue seule, le même ensemble partout.
+// L'asymétrique exige donc au moins deux issues combinées avec des ensembles différents (sinon c'est
+// un doublon des deux autres méthodes).
+// Combinatoire : pour chaque autre match, ses ASYM_TOP_PER_EVENT meilleurs ensembles ; pour chaque
+// issue de l'ancre, ses ASYM_TOP_PER_BRANCH meilleures combinaisons + le simple ; score rapide
+// additif (meilleures cotes, comme scoreLegsArray).
+const ASYM_TOP_PER_BRANCH = 3;
+const MAX_ASYM = 20;
+
+interface AsymStructure { anchorIdx: number; legs: LegRef[][]; score: number }
+
+function getAsymStructures(data: any, eventKeys: string[], opts: EngineOpts): AsymStructure[] {
+  const n = eventKeys.length;
+  const csPer = eventKeys.map(ek => getComboCoverSets(data, ek, opts));
+  if (csPer.some(cs => !cs.length)) return [];
+  const sites = Object.keys(opts.sites).length > 0 ? Object.keys(opts.sites) : collectSites(data);
+  if (!sites.length) return [];
+  const fb = opts.betType === 'fb';
+  const topPerEvent = n === 2 ? 4 : 2;
+
+  // Part de mise d'un pari à sa meilleure cote, par unité de retour (dutching) ; null = pas coté.
+  const costCache = new Map<string, number | null>();
+  const groupCost = (legs: LegRef[]): number | null => {
+    const k = legs.map(l => `${l.eventKey}|${l.betType}:${l.marketName}:${l.outcomeName}`).join('+');
+    if (costCache.has(k)) return costCache.get(k)!;
+    let best = 0;
+    for (const site of sites) {
+      const o = legGroupOdds(data, legs, site, opts.coteMinParSelection);
+      if (o && o > best) best = o;
+    }
+    const c = best > 1 ? (fb ? 1 / (best - 1) : 1 / best) : null;
+    costCache.set(k, c);
+    return c;
+  };
+  const setCost = (groups: LegRef[][]): number => {
+    let c = 0;
+    for (const g of groups) { const x = groupCost(g); if (x == null) return Infinity; c += x; }
+    return c;
+  };
+  const csKey = (cs: LegRef[][]) => cs.map(g => g.map(l => `${l.betType}:${l.marketName}:${l.outcomeName}`).join('+')).sort().join('|');
+
+  const out: AsymStructure[] = [];
+  for (let a = 0; a < n; a++) {
+    const others = eventKeys.map((_, i) => i).filter(i => i !== a);
+    // Meilleurs ensembles de couverture de chaque autre match (joués en simples).
+    const topCs = others.map(i => csPer[i]
+      .map(cs => ({ cs, c: setCost(cs) }))
+      .filter(x => isFinite(x.c))
+      .sort((x, y) => x.c - y.c)
+      .slice(0, topPerEvent)
+      .map(x => x.cs));
+    if (topCs.some(l => !l.length)) continue;
+    // Options d'une issue combinée : un ensemble de couverture par autre match.
+    const options: LegRef[][][][] = [];
+    forEachCoverSetCombo(topCs, chosen => options.push(chosen));
+
+    for (const anchorCs of csPer[a]) {
+      if (anchorCs.length < 2) continue;
+      // Par issue de l'ancre : seule, ou combinée avec ses meilleures options.
+      const branches = anchorCs.map(side => {
+        const choices: { key: string; groups: LegRef[][]; cost: number }[] = [];
+        const single = groupCost(side);
+        if (single != null) choices.push({ key: '', groups: [side], cost: single });
+        const combined = options.map(opt => {
+          const groups = generateCoveringBets(opt).map(cross => [...side, ...cross]);
+          return { key: opt.map(csKey).join('#'), groups, cost: setCost(groups) };
+        }).filter(c => isFinite(c.cost)).sort((x, y) => x.cost - y.cost).slice(0, ASYM_TOP_PER_BRANCH);
+        return [...choices, ...combined];
+      });
+      if (branches.some(b => !b.length)) continue;
+      let partial: { keys: string[]; groups: LegRef[][]; cost: number }[] = [{ keys: [], groups: [], cost: 0 }];
+      for (const b of branches) {
+        partial = partial.flatMap(p => b.map(c => ({ keys: [...p.keys, c.key], groups: [...p.groups, ...c.groups], cost: p.cost + c.cost })));
+      }
+      for (const p of partial) {
+        if (new Set(p.keys.filter(k => k)).size < 2) continue; // asym. léger ou symétrique
+        out.push({ anchorIdx: a, legs: p.groups, score: 1 / p.cost });
+      }
+    }
+  }
+  return out;
+}
+
 // Cheap best-odds score for a legs array (uni-site approximation, dutching équilibré).
 // Higher = better; null = split unusable. In cash the score estimates profit/amount for
 // the active amountMode, so the pre-selection ranks splits like the final profit sort:
@@ -489,24 +577,6 @@ function scoreLegsArray(data: any, legsArray: LegRef[][], opts: EngineOpts): num
   // profit_net_min : gain net de chaque pari rate × (o − 1) / o, le plus petit (cote la plus basse) fixe l'échelle.
   if (opts.amountMode === 'profit_net_min') return (rate - 1) * minO / (rate * (minO - 1));
   return rate - 1; // mise_totale
-}
-
-function getAsymSplits(data: any, eventKey: string, opts: EngineOpts) {
-  const splits: Array<{ singleGroup: LegRef[]; combinedGroups: LegRef[][] }> = [];
-  const seen = new Set<string>();
-  // Use simple cover sets (no cross-products) to keep asymmetric computation tractable
-  for (const coverSet of getComboCoverSets(data, eventKey, opts)) {
-    for (let si = 0; si < coverSet.length; si++) {
-      const singleGroup = coverSet[si];
-      const combinedGroups = coverSet.filter((_, i) => i !== si);
-      const key = singleGroup.map(l => l.marketName + ':' + l.outcomeName).sort().join('+') + '→' +
-        combinedGroups.map(g => g.map(l => l.marketName + ':' + l.outcomeName).sort().join('+')).sort().join('|');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      splits.push({ singleGroup, combinedGroups });
-    }
-  }
-  return splits;
 }
 
 // ===== UTILITY COMBINATORICS =====
@@ -1576,43 +1646,21 @@ function computeSimult(data: any, opts: EngineOpts, topEvents: string[], progres
         }
       });
 
-      // Asymmetric (only for multi-match). Independent of the sym cover-set combo above:
-      // it enumerates its own splits, so it runs once per event combo.
+      // Asymétrique (spécification) : chaque issue du match ancre seule ou combinée avec son
+      // propre ensemble de couverture des autres matchs (cf. getAsymStructures). Les 20 structures
+      // les plus prometteuses (score rapide) sont calculées.
       if (opts.allowAsym && n > 1) {
-        for (let si = 0; si < combo.length; si++) {
-          const ekS = combo[si];
-          const ekCs = combo.filter((_, k) => k !== si);
-          const allSplits = getAsymSplits(data, ekS, opts);
-          // For n≥3: restrict to 2-sided splits to avoid generating impractically
-          // large asymLegsArrays (3-sided splits × 3-sided remaining events → up to 19 bets).
-          const splits = n >= 3
-            ? allSplits.filter(({ combinedGroups }) => combinedGroups.length <= 1)
-            : allSplits;
-          // For n≥3: also restrict remaining events' cover sets to 2-sided only.
-          const coverSetsCs = ekCs.map(ek => {
-            const css = getComboCoverSets(data, ek, opts);
-            return n >= 3 ? css.filter(cs => cs.length === 2) : css;
-          });
-          if (!splits.length || coverSetsCs.some(s => !s.length)) continue;
-
-          for (const { singleGroup, combinedGroups } of splits) {
-            forEachCoverSetCombo(coverSetsCs, chosenCs => {
-              const csLegs = generateCoveringBets(chosenCs);
-              const asymLegsArray = [
-                singleGroup,
-                ...combinedGroups.map(cg => csLegs.map(cl => [...cg, ...cl])).flat(),
-              ];
-              const asymCoverKey = asymLegsArray
-                .map(group => group.map(l => l.marketName + ':' + l.outcomeName).sort().join('+'))
-                .sort().join('||');
-              const asymResults = trySimultWithBoost(data, asymLegsArray, [ekS, ...ekCs], 'asym', opts);
-              for (const r of asymResults) {
-                const sitesKey = r.bets.map(b => b.site).join('+');
-                const key = comboKey + '|asym|' + si + '|' + asymCoverKey + '|' + r.placement + '|' + sitesKey;
-                const prev = bestPerCombo.get(key);
-                if (!prev || r.profit > prev.profit) bestPerCombo.set(key, r);
-              }
-            });
+        const structs = getAsymStructures(data, combo, opts).sort((x, y) => y.score - x.score).slice(0, MAX_ASYM);
+        for (const st of structs) {
+          const orderedKeys = [combo[st.anchorIdx], ...combo.filter((_, i) => i !== st.anchorIdx)];
+          const asymCoverKey = st.legs
+            .map(group => group.map(l => l.marketName + ':' + l.outcomeName).sort().join('+'))
+            .sort().join('||');
+          for (const r of trySimultWithBoost(data, st.legs, orderedKeys, 'asym', opts)) {
+            const sitesKey = r.bets.map(b => b.site).join('+');
+            const key = comboKey + '|asym|' + asymCoverKey + '|' + r.placement + '|' + sitesKey;
+            const prev = bestPerCombo.get(key);
+            if (!prev || r.profit > prev.profit) bestPerCombo.set(key, r);
           }
         }
       }
@@ -2024,9 +2072,12 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
         const boostActive = (opts.boostPct ?? 0) > 0 && !!opts.boostSite;
         if (boostActive && (site !== opts.boostSite || combos.length > 1)) return;
 
-        // Cash, par unité de mise totale S des combinés :
+        // Cash, par unité de mise totale S des combinés. Déroulement réel : la couverture i n'est
+        // placée que si les sélections précédentes ont gagné ; si elle gagne, le combiné est perdu et
+        // les couvertures suivantes ne sont jamais placées (C1, C2, v7.12.0).
         //  - 'miser' : couvertures composées par leg.bestK, profit égal partout (T = S × B / K) ;
-        //  - 'gagner' : une couverture gagnante rembourse ce qui est en jeu (résultat nul), la perte
+        //  - 'gagner' : une couverture gagnante rembourse tout ce qui a été misé jusque-là (combinés
+        //    + couvertures précédentes) : résultat nul, C_i = (S + Σ_{j<i} C_j) / (E_i − 1). La perte
         //    est sur les combinés gagnants ;
         //  - 'perdre' : les combinés gagnants remboursent tout, la perte est sur une couverture gagnante.
         // f : facteur de boost (1 = sans boost).
@@ -2038,15 +2089,16 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
           const Bf = 1 / invBf;
           const rate = Bf / K;
           const obj = opts.cashObjective;
-          // Engagement de la couverture i (mise Back, engagement Lay), par unité de S. Gagner /
-          // perdre composent les cotes des sélections : la dernière prend la cote qui ramène le
-          // produit à celle des combinés, Π b = Bf (cote arrondie du ticket, boost compris).
+          // Engagement de la couverture i (mise Back, engagement Lay), par unité de S. Perdre
+          // compose les cotes des sélections : la dernière prend la cote qui ramène le produit à
+          // celle des combinés, Π b = Bf (cote arrondie du ticket, boost compris). Gagner : kPrev1
+          // = total engagé avant la couverture i (combinés + couvertures précédentes).
           const coverUnit: number[] = [];
           let kPrev1 = 1;
           legList.forEach((leg, i) => {
-            const b = i === legList.length - 1 && obj !== 'miser' ? Bf / kPrev1 : leg.b;
+            const b = i === legList.length - 1 && obj === 'perdre' ? Bf / kPrev1 : leg.b;
             if (obj === 'miser') { coverUnit.push(rate * kPrev1 / (leg.E - 1)); kPrev1 *= leg.bestK; }
-            else if (obj === 'gagner') { coverUnit.push(kPrev1 / (leg.E - 1)); kPrev1 *= b; }
+            else if (obj === 'gagner') { const c = kPrev1 / (leg.E - 1); coverUnit.push(c); kPrev1 += c; }
             else { coverUnit.push(kPrev1 * (b - 1)); kPrev1 *= b; }
           });
           const comboUnit = cB.map(b => (1 / b) / invBf);
@@ -2078,12 +2130,14 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
           if (obj === 'miser') profit = S * rate - S;
           else if (obj === 'gagner') profit = S * (Bf - 1) - coversTotal; // perte si les combinés gagnent
           else {
-            // Pire cas d'une couverture gagnante (tout placé d'avance) : son gain net moins les
-            // combinés et les autres couvertures perdus.
+            // Pire cas d'une couverture gagnante : son gain net moins les combinés et les
+            // couvertures PRÉCÉDENTES perdus (les suivantes ne sont jamais placées).
             let worst = Infinity;
+            let before = 0;
             for (let i = 0; i < legList.length; i++) {
-              const net = coverCommitted[i] * (legList[i].E - 1) - S - (coversTotal - coverCommitted[i]);
+              const net = coverCommitted[i] * (legList[i].E - 1) - S - before;
               if (net < worst) worst = net;
+              before += coverCommitted[i];
             }
             profit = isFinite(worst) ? worst : 0;
           }

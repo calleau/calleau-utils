@@ -104,12 +104,12 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 
 | # | Problème |
 |---|---|
-| F15 | **Doublons** : l'asymétrique (une issue en simple, les autres en combiné) est un cas particulier de l'asym. léger. Sur les ensembles de couverture à 2 issues, les deux méthodes sont identiques. Les mêmes combinaisons sortent donc deux fois, sous deux étiquettes. |
-| F16 | **Le vrai asymétrique de la spécification n'est pas produit** : un ensemble de couverture différent pour le 2e match selon la branche du 1er. Le code réutilise le même ensemble pour toutes les branches. |
+| F15 | ✅ **Corrigé en v7.11.0** : ancien « asymétrique » supprimé (100 % de ses résultats étaient des doublons de l'asym. léger). **Doublons** : l'asymétrique (une issue en simple, les autres en combiné) est un cas particulier de l'asym. léger. Sur les ensembles de couverture à 2 issues, les deux méthodes sont identiques. Les mêmes combinaisons sortent donc deux fois, sous deux étiquettes. |
+| F16 | ✅ **Corrigé en v7.11.0** : asymétrique de la spécification (ensemble de couverture propre à chaque issue de l'ancre). **Le vrai asymétrique de la spécification n'est pas produit** : un ensemble de couverture différent pour le 2e match selon la branche du 1er. Le code réutilise le même ensemble pour toutes les branches. |
 
 ### Dédoublonnage
 
-**F17** :
+**F17** : ✅ **Tranché en v7.11.0** : toutes les variantes sont gardées (choix assumé, notamment pour les filtres de Cotorico) ; c'est la documentation qui était fausse (architecture.md, section 4.4 réécrite, et 4.5 sur un cache qui n'existe plus).
 - **Ce qu'annonce la documentation** : un résultat par combinaison de matchs.
 - **Ce que fait le code** : un résultat par structure, méthode et site ([engine.ts:1227](src/engine.ts#L1227)).
 - **Conséquence** : des volumes énormes, par exemple environ 176 000 résultats pour 94 matchs.
@@ -120,8 +120,8 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 
 | # | Point |
 |---|---|
-| C1 | **Séquentiel Cash « Gagner »** : le commentaire promet un résultat nul quand une couverture gagne. Ce n'est vrai que pour la 1re couverture ([engine.ts:1600](src/engine.ts#L1600)). |
-| C2 | **Séquentiel Cash « Perdre »** : le pire cas retire aussi les couvertures suivantes, qui ne sont pourtant jamais placées si une couverture précédente gagne ([engine.ts:1676](src/engine.ts#L1676)). La perte affichée est donc trop pessimiste. |
+| C1 | ✅ **Corrigé en v7.12.0** : chaque couverture rembourse les combinés et les couvertures précédentes, `C_i = (S + Σ_{j<i} C_j) / (E_i − 1)` ; toute couverture gagnante donne 0 €, la seule perte est sur le combiné gagnant (plus grande en moyenne : −9,08 € → −13,19 € sur le fichier du 13/11, car les couvertures 2+ ne sous-remboursent plus). **Séquentiel Cash « Gagner »** : le commentaire promet un résultat nul quand une couverture gagne. Ce n'est vrai que pour la 1re couverture ([engine.ts:1600](src/engine.ts#L1600)). |
+| C2 | ✅ **Corrigé en v7.12.0** : le pire cas ne retire plus que les couvertures précédentes (profit affiché moyen −242,36 € → −193,45 € sur les 6 897 résultats du fichier du 13/11). **Séquentiel Cash « Perdre »** : le pire cas retire aussi les couvertures suivantes, qui ne sont pourtant jamais placées si une couverture précédente gagne ([engine.ts:1676](src/engine.ts#L1676)). La perte affichée est donc trop pessimiste. |
 | C3 | **Cote min. sur un Lay** : elle est comparée à la cote Lay brute. Le filtre a-t-il un sens pour un Lay ? |
 | C4 | **Bases de comparaison différentes** : la cote min. par sélection des missions utilise la cote nette, la cote min. utilise la cote brute. |
 | C5 | **Mission « Mise min. » sur un Lay** : la référence est la mise Lay, et non la liability. |
@@ -150,9 +150,9 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 3. **Plusieurs sites en priorité 1** (F5) : faut-il répartir les freebets site par site, pour viser 98 à 100 % de chaque freebet ?
 4. **Priorité 2** (F4, B11) : comment la jouer quand un site est déjà en priorité 1 ? Faut-il plafonner chaque site à son freebet disponible ?
 5. ~~**Séquentiel** (F11, F12)~~ fait en v7.8.0 et v7.9.0 : veux-tu les couvertures sur marchés à 3 issues, les couvertures combinées et les combinés de 4 ou 5 sélections ?
-6. **Séquentiel Gagner / Perdre** (C1, C2) : le profit affiché doit-il supposer toutes les couvertures placées d'avance, ou suivre le déroulement réel ?
-7. **Asymétrique / Asym. léger** (F15, F16) : faut-il les fusionner, ou implémenter le vrai asymétrique de la spécification ?
-8. **Dédoublonnage** (F17) : un seul résultat par combinaison de matchs, ou toutes les variantes ?
+6. ~~**Séquentiel Gagner / Perdre** (C1, C2)~~ tranché en v7.12.0 : déroulement réel : le profit affiché doit-il supposer toutes les couvertures placées d'avance, ou suivre le déroulement réel ?
+7. ~~**Asymétrique / Asym. léger** (F15, F16)~~ fait en v7.11.0 (vrai asymétrique, doublons supprimés) : faut-il les fusionner, ou implémenter le vrai asymétrique de la spécification ?
+8. ~~**Dédoublonnage** (F17)~~ tranché : toutes les variantes : un seul résultat par combinaison de matchs, ou toutes les variantes ?
 9. ~~**Écart de 90 min entre deux matchs** (F14)~~ fait en v7.10.0 (table par sport, personnalisable) : réglable, ou adapté au sport ?
 10. **Missions en Freebet** (F6, F7) : un pari freebet peut-il valider une mission ?
 
