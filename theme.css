@@ -46,6 +46,9 @@
     --site-pmu-text: #ffdc82;
     --site-pmu-bg: #005049;
 
+    --site-psel-text: #ffffff;
+    --site-psel-bg: #003f8a;
+
     --site-pokerstars-text: #000000;
     --site-pokerstars-bg: #d70022;
 
@@ -871,6 +874,7 @@ input[type="number"] { -moz-appearance: textfield; }
 .ff-site-pill[data-site="piwix"] { background: var(--site-piwix-bg); color: var(--site-piwix-text); }
 .ff-site-pill[data-site="piwix"].ff-site-pill--lay { color: var(--site-piwix-lay); }
 .ff-site-pill[data-site="pmu"] { background: var(--site-pmu-bg); color: var(--site-pmu-text); }
+.ff-site-pill[data-site="psel"] { background: var(--site-psel-bg); color: var(--site-psel-text); }
 .ff-site-pill[data-site="pokerstars"] { background: var(--site-pokerstars-bg); color: var(--site-pokerstars-text); }
 .ff-site-pill[data-site="unibet"] { background: var(--site-unibet-bg); color: var(--site-unibet-text); }
 .ff-site-pill[data-site="vbet"] { background: var(--site-vbet-bg); color: var(--site-vbet-text); }

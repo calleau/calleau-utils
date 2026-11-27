@@ -1,0 +1,996 @@
+/* =========================================================
+   Freebets combinés couverts — styles propres à l'outil
+   S'appuie sur ../../theme.css (variables, .card, .btn, .numinput…)
+   ========================================================= */
+
+/* ── Couleurs propres à l'outil (clair / sombre) ───────── */
+
+:root[data-theme="light"] {
+	--fb-o0: #3f7489;      /* issue 1 */
+	--fb-o1: #a07b1f;      /* issue N */
+	--fb-o2: #7a5cae;      /* issue 2 */
+	--fb-guar: #b5622c;    /* cotes garanties */
+	--fb-warn: #9a7300;    /* plafond, montant non utilisé */
+	--fb-info: var(--c-primary-dark);
+}
+
+:root[data-theme="dark"] {
+	--fb-o0: #7bafc2;
+	--fb-o1: #d8b866;
+	--fb-o2: #b49ad8;
+	--fb-guar: #e39563;
+	--fb-warn: #f0c030;
+	--fb-info: #7bafc2;
+}
+
+/* Couleur d'accent par bookmaker (bandeau, bordures) : lisible dans les deux thèmes */
+[data-site="pmu"]     { --bk-accent: var(--site-pmu-bg); }
+[data-site="betclic"] { --bk-accent: var(--site-betclic-bg); }
+[data-site="unibet"]  { --bk-accent: var(--site-unibet-bg); }
+[data-site="winamax"] { --bk-accent: var(--site-winamax-text); }
+[data-site="psel"]    { --bk-accent: var(--site-psel-bg); }
+
+:root[data-theme="dark"] [data-site="pmu"]     { --bk-accent: var(--site-pmu-text); }
+:root[data-theme="dark"] [data-site="betclic"] { --bk-accent: #f04a50; }
+:root[data-theme="dark"] [data-site="unibet"]  { --bk-accent: #5cbf58; }
+:root[data-theme="dark"] [data-site="psel"]    { --bk-accent: #5b9be6; }
+
+.o0 { --o: var(--fb-o0); }
+.o1 { --o: var(--fb-o1); }
+.o2 { --o: var(--fb-o2); }
+
+/* ── Généralités ───────────────────────────────────────── */
+
+.subtitle {
+	margin: 0;
+	color: var(--color-muted);
+	font-size: 0.95rem;
+}
+
+.fb-label {
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+}
+
+.fb-section-title {
+	margin: 0 0 0.9rem;
+	font-family: 'Bebas Neue', sans-serif;
+	font-weight: 400;
+	font-size: 1.6rem;
+	letter-spacing: 0.04em;
+	line-height: 1;
+}
+
+.fb-mono { font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums; }
+
+input::placeholder { color: var(--color-muted); opacity: 0.7; }
+
+.ff-site-pill.is-dim { opacity: 0.45; }
+
+.fb-outcome {
+	display: inline-block;
+	min-width: 1.6rem;
+	text-align: center;
+	padding: 1px 6px;
+	border-radius: 4px;
+	font-family: 'DM Mono', monospace;
+	font-weight: 600;
+	font-size: 0.78rem;
+	color: var(--o);
+	background: color-mix(in srgb, var(--o) 14%, transparent);
+}
+
+.fb-outcome.is-dim { opacity: 0.5; }
+
+/* Statuts de montant : exact / manquant / non utilisé */
+.st-ok   { --st: var(--color-pos); }
+.st-miss { --st: var(--color-neg); }
+.st-over { --st: var(--fb-warn); }
+.st-none { --st: var(--color-muted); }
+
+/* ── Contrôles segmentés ──────────────────────────────── */
+
+.fb-seg {
+	display: inline-flex;
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--color-surface);
+}
+
+.fb-seg-btn {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	color: var(--color-muted);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	padding: 0.45rem 0.85rem;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+
+.fb-seg-btn + .fb-seg-btn { border-left: 1px solid var(--color-divider); }
+.fb-seg-btn:hover { background: var(--color-surface-2); color: var(--color-text); }
+.fb-seg-btn.is-active { background: var(--c-primary); color: #fff; }
+.fb-seg-btn.is-active.tone-pos { background: var(--color-pos); }
+.fb-seg-btn.is-active.tone-guar { background: var(--fb-guar); }
+
+.fb-seg-btn .fb-seg-sub {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 400;
+	opacity: 0.85;
+}
+
+.fb-seg-rate {
+	margin-left: 0.5rem;
+	font-family: 'DM Mono', monospace;
+	font-weight: 400;
+	font-size: 0.8rem;
+	opacity: 0.85;
+}
+
+.fb-toggle {
+	appearance: none;
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	background: transparent;
+	color: var(--color-muted);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 600;
+	padding: 0.45rem 0.85rem;
+	cursor: pointer;
+}
+
+.fb-toggle:hover { background: var(--color-surface-2); }
+
+.fb-toggle.is-on {
+	border-color: var(--fb-guar);
+	color: var(--fb-guar);
+	background: color-mix(in srgb, var(--fb-guar) 12%, transparent);
+}
+
+/* ── Configuration ────────────────────────────────────── */
+
+.fb-config {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1.25rem 1.75rem;
+	align-items: flex-end;
+}
+
+.fb-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.fb-arrow {
+	align-self: center;
+	color: var(--color-muted);
+	font-size: 1.2rem;
+	padding-top: 1rem;
+}
+
+.fb-stats {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 0.82rem;
+	color: var(--color-muted);
+}
+
+.fb-stats strong { font-family: 'DM Mono', monospace; color: var(--color-text); }
+.fb-stats strong.pos { color: var(--color-pos); }
+.fb-stats strong.neg { color: var(--color-neg); }
+
+.fb-config-sep {
+	align-self: stretch;
+	width: 1px;
+	background: var(--color-divider);
+}
+
+/* ── Freebets par site ────────────────────────────────── */
+
+.fb-stake-head {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	margin-bottom: 1rem;
+}
+
+.fb-stake-head .fb-section-title { margin: 0; }
+
+.fb-stake-controls {
+	display: flex;
+	align-items: flex-end;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.fb-seg-btn.fb-stake-btn {
+	text-align: left;
+	padding: 0.5rem 1rem;
+}
+
+.fb-total-badge {
+	font-family: 'DM Mono', monospace;
+	font-weight: 600;
+	font-size: 0.95rem;
+	padding: 0.35rem 0.7rem;
+	border-radius: 8px;
+	border: 1px solid var(--color-pos);
+	color: var(--color-pos);
+	background: color-mix(in srgb, var(--color-pos) 10%, transparent);
+	height: 36px;
+	display: inline-flex;
+	align-items: center;
+}
+
+.fb-total-badge.is-capped {
+	border-color: var(--fb-warn);
+	color: var(--fb-warn);
+	background: color-mix(in srgb, var(--fb-warn) 10%, transparent);
+}
+
+.fb-total-badge small { font-weight: 400; font-size: 0.75rem; opacity: 0.8; }
+
+.numinput.is-capped { border-color: var(--fb-warn); }
+
+/* Ordre de priorité */
+
+.fb-priority {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem;
+	margin: 0.4rem 0 1rem;
+}
+
+.fb-prio-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.2rem 0.3rem 0.2rem 0.55rem;
+	border: 1px solid var(--color-divider);
+	border-radius: 8px;
+	background: var(--color-surface-2);
+}
+
+.fb-prio-item.is-off { opacity: 0.45; }
+
+.fb-prio-rank {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.72rem;
+	color: var(--color-muted);
+}
+
+.fb-prio-arrows {
+	display: flex;
+	flex-direction: column;
+}
+
+.fb-prio-arrows button {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	color: var(--color-muted);
+	font-size: 0.6rem;
+	line-height: 1;
+	padding: 1px 3px;
+	cursor: pointer;
+}
+
+.fb-prio-arrows button:hover:not(:disabled) { color: var(--c-primary); }
+.fb-prio-arrows button:disabled { opacity: 0.25; cursor: default; }
+
+.fb-prio-hint { font-size: 0.75rem; color: var(--color-muted); margin-left: 0.25rem; }
+
+/* Cartes de site */
+
+.fb-sites {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+	gap: 0.75rem;
+}
+
+.fb-site {
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	padding: 0.9rem 1rem;
+	border: 1px solid color-mix(in srgb, var(--bk-accent) 35%, var(--color-divider));
+	border-radius: 10px;
+	background: var(--color-surface);
+}
+
+.fb-site::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto 0;
+	height: 3px;
+	background: var(--bk-accent);
+}
+
+.fb-site.is-off {
+	opacity: 0.5;
+	border-color: var(--color-divider);
+}
+
+.fb-site.is-off::before { background: var(--color-divider); }
+
+.fb-site .numinput input { width: 5rem; }
+.fb-site .numinput.is-disabled { opacity: 0.45; }
+
+.fb-note {
+	font-size: 0.75rem;
+	color: var(--st);
+	padding: 2px 8px;
+	border-radius: 4px;
+	border: 1px solid color-mix(in srgb, var(--st) 30%, transparent);
+	background: color-mix(in srgb, var(--st) 9%, transparent);
+}
+
+.fb-include {
+	appearance: none;
+	width: 100%;
+	padding: 0.35rem 0;
+	border-radius: 6px;
+	border: 1px solid var(--color-divider);
+	background: transparent;
+	color: var(--color-muted);
+	font: inherit;
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+
+.fb-include.is-on {
+	border-color: var(--bk-accent);
+	color: var(--color-text);
+	background: color-mix(in srgb, var(--bk-accent) 14%, transparent);
+}
+
+/* Barre de synthèse */
+
+.fb-summary {
+	margin-top: 1rem;
+	padding: 0.75rem 1rem;
+	border-radius: 10px;
+	background: var(--color-surface-2);
+	display: flex;
+	gap: 1.25rem;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.fb-summary-sites {
+	display: flex;
+	gap: 0.35rem;
+	align-items: center;
+	flex-wrap: wrap;
+	font-size: 0.82rem;
+	color: var(--color-muted);
+}
+
+.fb-summary-figures {
+	margin-left: auto;
+	display: flex;
+	gap: 1.25rem;
+	align-items: center;
+}
+
+.fb-figure {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 1px;
+}
+
+.fb-figure .fb-label { font-size: 0.62rem; }
+
+.fb-figure-value {
+	font-family: 'DM Mono', monospace;
+	font-size: 1.05rem;
+	font-weight: 600;
+}
+
+.fb-figure-value small { font-size: 0.75rem; font-weight: 400; color: var(--color-muted); }
+.fb-figure-value.pos { color: var(--color-pos); }
+.fb-figure-value.warn { color: var(--fb-warn); }
+.fb-figure-value.empty { color: var(--color-muted); }
+
+/* ── Meilleur résultat ────────────────────────────────── */
+
+.fb-best-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.fb-best {
+	--accent: var(--color-pos);
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 6%, var(--color-surface));
+	display: flex;
+	align-items: center;
+	gap: 1.5rem 2rem;
+	flex-wrap: wrap;
+}
+
+.fb-best.is-guar { --accent: var(--fb-guar); }
+
+.fb-best-title {
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--accent);
+	margin-bottom: 0.5rem;
+}
+
+.fb-chips {
+	display: flex;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+.fb-chip {
+	border-radius: 8px;
+	padding: 0.25rem 0.8rem;
+	font-size: 0.88rem;
+	font-weight: 600;
+	border: 1px solid var(--accent);
+	color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.fb-chip.is-out {
+	border-color: var(--color-divider);
+	color: var(--color-muted);
+	background: transparent;
+	font-weight: 400;
+	text-decoration: line-through;
+}
+
+.fb-best-metrics {
+	display: flex;
+	gap: 2rem;
+	margin-left: auto;
+	flex-wrap: wrap;
+}
+
+.fb-best-metrics .metric-value.accent { color: var(--accent); }
+.fb-best-metrics .metric-value.primary { color: var(--c-primary); }
+
+.fb-empty {
+	border-style: dashed;
+	text-align: center;
+	color: var(--color-muted);
+	font-size: 0.92rem;
+	padding: 1.75rem;
+}
+
+.fb-empty-icon { font-size: 1.5rem; margin-bottom: 0.4rem; }
+
+.fb-gain-hint {
+	padding: 0 0.75rem;
+	display: flex;
+	align-items: center;
+	border-left: 1px solid var(--color-divider);
+	font-size: 0.78rem;
+	color: var(--fb-guar);
+}
+
+/* ── Grille des cotes ─────────────────────────────────── */
+
+.fb-match-names {
+	display: flex;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	margin-bottom: 0.9rem;
+}
+
+.fb-match-name {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	--mc: var(--color-muted);
+}
+
+.fb-match-name span {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.72rem;
+	color: var(--mc);
+}
+
+.fb-match-name input {
+	width: 8rem;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.82rem;
+	color: var(--mc);
+	border-color: color-mix(in srgb, var(--mc) 40%, var(--color-divider));
+}
+
+.fb-match-name.has-data { --mc: var(--color-text); }
+.fb-match-name.is-std   { --mc: var(--color-pos); }
+.fb-match-name.is-guar  { --mc: var(--fb-guar); }
+.fb-match-name.is-both  { --mc: var(--fb-warn); }
+.fb-match-name.is-std input,
+.fb-match-name.is-guar input,
+.fb-match-name.is-both input {
+	font-weight: 700;
+	background: color-mix(in srgb, var(--mc) 8%, var(--color-surface));
+}
+
+.fb-scroll { overflow-x: auto; }
+
+.fb-odds-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	min-width: max-content;
+}
+
+.fb-odds-head,
+.fb-odds-row {
+	display: grid;
+	align-items: center;
+	gap: 4px;
+}
+
+.fb-odds-head { padding: 0 1rem 0.2rem; }
+
+.fb-col-head {
+	text-align: center;
+	font-size: 0.68rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	opacity: 0.6;
+	white-space: nowrap;
+}
+
+.fb-col-head.has-data { opacity: 1; }
+.fb-col-head.is-std  { color: var(--color-pos); font-weight: 700; opacity: 1; }
+.fb-col-head.is-guar { color: var(--fb-guar); font-weight: 700; opacity: 1; }
+.fb-col-head.is-both { color: var(--fb-warn); font-weight: 700; opacity: 1; }
+.fb-col-head .badge  { margin-left: 4px; font-size: 0.62rem; }
+
+.fb-odds-row {
+	position: relative;
+	padding: 0.6rem 1rem;
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	background: var(--color-surface);
+	overflow: hidden;
+}
+
+.fb-odds-row::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 3px;
+	background: var(--bk-accent);
+}
+
+.fb-odds-row.is-off { opacity: 0.45; }
+.fb-odds-row.is-off::before { background: var(--color-divider); }
+
+.fb-odds-site {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 3px;
+	padding-left: 0.4rem;
+}
+
+.fb-odds-site-meta {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.7rem;
+	color: var(--st, var(--color-muted));
+}
+
+.fb-odds-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.fb-odds-group {
+	display: flex;
+	gap: 4px;
+	justify-content: center;
+	padding: 4px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+}
+
+.fb-odds-group.is-sel {
+	border-color: color-mix(in srgb, var(--color-pos) 55%, transparent);
+	background: color-mix(in srgb, var(--color-pos) 8%, transparent);
+}
+
+.fb-odds-group.is-guar.is-sel {
+	border-color: color-mix(in srgb, var(--fb-guar) 55%, transparent);
+	background: color-mix(in srgb, var(--fb-guar) 8%, transparent);
+}
+
+.fb-odd {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	width: 50px;
+}
+
+.fb-odd > span {
+	font-family: 'DM Mono', monospace;
+	font-size: 0.62rem;
+	letter-spacing: 0.05em;
+	color: var(--o);
+}
+
+.fb-odd input {
+	width: 50px;
+	padding: 3px 2px;
+	border-radius: 5px;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.8rem;
+	text-align: center;
+	border-color: color-mix(in srgb, var(--o) 55%, var(--color-divider));
+}
+
+.fb-odd input.is-empty {
+	border-color: color-mix(in srgb, var(--o) 25%, var(--color-divider));
+	background: var(--color-surface-2);
+}
+
+.fb-odd input.is-sel { border-color: var(--o); }
+.fb-odd input:disabled { opacity: 0.5; }
+
+.fb-odd.is-g { --o: var(--fb-guar); }
+.fb-odd.is-g > span.is-empty { opacity: 0.5; }
+.fb-odd.is-spacer > span { visibility: hidden; }
+.fb-odd.is-spacer > div { height: 26px; }
+
+.fb-legend {
+	margin-top: 0.6rem;
+	display: flex;
+	gap: 1rem;
+	flex-wrap: wrap;
+	font-size: 0.75rem;
+	color: var(--color-muted);
+}
+
+.fb-legend .pos  { color: var(--color-pos); }
+.fb-legend .guar { color: var(--fb-guar); }
+
+/* ── Boutons de calcul ────────────────────────────────── */
+
+.fb-calc {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.fb-calc-row {
+	display: flex;
+	gap: 0.75rem;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.fb-calc .btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+	filter: none;
+	transform: none;
+}
+
+.fb-calc-status { font-size: 0.85rem; color: var(--color-muted); }
+.fb-calc-status.warn { color: var(--fb-warn); }
+.fb-calc-status.ok   { color: var(--color-pos); }
+
+.btn-danger-outline {
+	background: transparent;
+	color: var(--color-neg);
+	border-color: var(--color-neg);
+}
+
+.btn-danger-outline:hover,
+.btn-danger-outline.is-open { background: var(--color-danger-bg); }
+
+.btn-danger-solid {
+	background: var(--color-neg);
+	color: #fff;
+	border-color: var(--color-neg);
+}
+
+.btn-danger-solid:hover { filter: brightness(1.08); }
+
+.fb-confirm {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.fb-confirm-actions { display: flex; gap: 0.5rem; margin-left: auto; }
+
+/* ── Onglets ──────────────────────────────────────────── */
+
+.fb-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	border-bottom: 1px solid var(--color-divider);
+}
+
+.fb-tab {
+	appearance: none;
+	background: transparent;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+	padding: 0.6rem 1.2rem;
+	font: inherit;
+	font-size: 0.9rem;
+	color: var(--color-muted);
+	cursor: pointer;
+}
+
+.fb-tab:hover { color: var(--color-text); }
+
+.fb-tab.is-active {
+	color: var(--c-primary);
+	border-bottom-color: var(--c-primary);
+	font-weight: 700;
+}
+
+.fb-tab-empty { color: var(--color-muted); font-size: 0.92rem; padding: 0.5rem 0; }
+
+/* Plan par site */
+
+.fb-plan {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 0.9rem;
+}
+
+.fb-plan-card {
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	background: var(--color-surface);
+	overflow: hidden;
+}
+
+.fb-plan-head {
+	padding: 0.7rem 1rem;
+	border-bottom: 1px solid var(--color-divider);
+	background: color-mix(in srgb, var(--bk-accent) 9%, var(--color-surface));
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.fb-plan-head-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 0.8rem;
+	color: var(--color-muted);
+}
+
+.fb-plan-progress {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+
+.fb-bar {
+	flex: 1;
+	height: 5px;
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--color-surface-3);
+}
+
+.fb-bar > div {
+	height: 100%;
+	border-radius: 4px;
+	background: var(--st);
+	width: var(--w);
+}
+
+.fb-plan-amount {
+	margin-left: auto;
+	font-family: 'DM Mono', monospace;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--st);
+	white-space: nowrap;
+}
+
+.fb-plan-amount small { color: var(--color-muted); font-weight: 400; }
+
+.fb-plan-warn { font-size: 0.75rem; color: var(--st); }
+
+.fb-plan-list {
+	padding: 0.6rem 0.8rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	max-height: 380px;
+	overflow-y: auto;
+}
+
+.fb-plan-line {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.3rem 0.6rem;
+	border-radius: 8px;
+	background: var(--color-surface-2);
+	font-size: 0.85rem;
+}
+
+.fb-plan-line .combo { display: flex; gap: 4px; }
+.fb-plan-line .nums  { display: flex; gap: 0.75rem; font-family: 'DM Mono', monospace; }
+.fb-plan-line .odds  { color: var(--color-muted); }
+.fb-plan-line .stake { font-weight: 600; }
+
+/* Tableaux (classement, tableau complet) */
+
+.fb-table {
+	border: 1px solid var(--color-divider);
+	border-radius: 12px;
+	background: var(--color-surface);
+	overflow: hidden;
+	min-width: max-content;
+}
+
+.fb-table-row {
+	display: grid;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	font-size: 0.85rem;
+	border-bottom: 1px solid var(--color-divider);
+}
+
+.fb-table-row:last-child { border-bottom: none; }
+.fb-table-row:nth-child(odd):not(.is-head) { background: color-mix(in srgb, var(--color-surface-2) 50%, transparent); }
+
+.fb-table-row.is-head {
+	background: var(--color-surface-2);
+	font-size: 0.65rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	border-bottom-width: 2px;
+}
+
+.fb-table-row.is-head .guar { color: var(--fb-guar); }
+
+.fb-table-row.is-best { background: color-mix(in srgb, var(--color-pos) 9%, var(--color-surface)); }
+.fb-table-row.is-best .hl { color: var(--color-pos); font-weight: 700; }
+.fb-table-row.is-placed { background: color-mix(in srgb, var(--color-pos) 7%, var(--color-surface)); }
+.fb-table-row.is-jackpot { background: color-mix(in srgb, var(--fb-guar) 7%, var(--color-surface)); }
+
+.fb-table-row .num { font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums; }
+.fb-table-row .muted { color: var(--color-muted); }
+.fb-table-row .neg { color: var(--color-neg); font-size: 0.8rem; }
+.fb-table-row .pos { color: var(--color-pos); font-weight: 600; }
+.fb-table-row .rank { font-family: 'DM Mono', monospace; color: var(--color-muted); }
+.fb-table-row.is-placed .rank { color: var(--color-pos); }
+.fb-table-row.is-jackpot .rank { color: var(--fb-guar); }
+
+.fb-match-tag {
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 6px;
+	font-size: 0.78rem;
+	background: var(--color-surface-2);
+	color: var(--color-text);
+}
+
+.fb-table-row.is-best .fb-match-tag {
+	background: color-mix(in srgb, var(--color-pos) 18%, transparent);
+	color: var(--color-pos);
+	font-weight: 700;
+}
+
+.fb-is-placed .strike { text-decoration: line-through; color: var(--color-muted); }
+
+.fb-diff { font-size: 0.65rem; font-family: 'DM Mono', monospace; }
+.fb-diff.up   { color: var(--fb-guar); }
+.fb-diff.down { color: var(--fb-info); }
+
+.fb-jackpot { font-size: 0.72rem; color: var(--fb-guar); font-weight: 700; }
+
+.fb-status-btn {
+	appearance: none;
+	padding: 0.25rem 0.6rem;
+	border-radius: 6px;
+	border: 1px solid var(--color-divider);
+	background: transparent;
+	color: var(--color-muted);
+	font: inherit;
+	font-size: 0.72rem;
+	font-weight: 700;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.fb-status-btn:hover { background: var(--color-surface-2); }
+
+.fb-status-btn.is-placed {
+	border-color: var(--color-pos);
+	background: var(--color-pos);
+	color: #fff;
+}
+
+/* Bandeau de progression (tableau complet) */
+
+.fb-progress {
+	--pc: var(--color-muted);
+	border-color: color-mix(in srgb, var(--pc) 45%, var(--color-divider));
+	display: flex;
+	gap: 1.5rem;
+	align-items: center;
+	flex-wrap: wrap;
+	margin-bottom: 0.9rem;
+}
+
+.fb-progress.is-partial { --pc: var(--fb-info); }
+.fb-progress.is-done    { --pc: var(--color-pos); background: color-mix(in srgb, var(--color-pos) 6%, var(--color-surface)); }
+
+.fb-progress-title {
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--pc);
+	margin-bottom: 0.4rem;
+}
+
+.fb-progress-figures {
+	display: flex;
+	gap: 1.25rem;
+	align-items: baseline;
+	flex-wrap: wrap;
+	font-size: 0.82rem;
+	color: var(--color-muted);
+}
+
+.fb-progress-figures strong { font-family: 'DM Mono', monospace; color: var(--color-text); font-size: 1rem; }
+.fb-progress-figures strong.pos  { color: var(--color-pos); font-size: 1.2rem; }
+.fb-progress-figures strong.info { color: var(--fb-info); }
+
+/* ── Bas de page ──────────────────────────────────────── */
+
+.fb-method {
+	font-size: 0.85rem;
+	color: var(--color-muted);
+	line-height: 1.7;
+	margin: 0;
+}
+
+.fb-method strong { color: var(--color-text); }
+.fb-method code { font-family: 'DM Mono', monospace; color: var(--color-text); }
+
+.fb-test { display: flex; justify-content: center; }
+.fb-test .btn { border-style: dashed; color: var(--color-muted); }
