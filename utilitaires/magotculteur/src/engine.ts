@@ -1,6 +1,6 @@
 import type {
   BetSpec, CoverageRule, EngineOpts, Cover, Leg, LegRef, LayInfo,
-  BetDetail, CoveringSetResult, AllResults, BetType, SiteConfig, AmountConstraint
+  BetDetail, CoveringSetResult, AllResults, BetType, SiteConfig, AmountConstraint, SeqTiming
 } from './types';
 
 export const MIN_GAP_MS = 90 * 60 * 1000;
@@ -1653,6 +1653,23 @@ function computeSimult(data: any, opts: EngineOpts, topEvents: string[], progres
 
 // ===== SÉQUENTIEL : SÉLECTIONS =====
 
+// Marché dont le résultat tombe à la mi-temps (1re mi-temps) : « 1X2 MT1 »…
+const FIRST_HALF_MARKET = /\bMT1\b|\b1(?:re|ère|er)?\s*mi-?temps\b|\bfirst half\b|\b1st half\b/i;
+
+const normSport = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+// Délai (ms) entre le coup d'envoi d'un match et le moment où le match suivant d'un combiné
+// séquentiel peut commencer : résultat des marchés joués (durée du sport, 1re mi-temps si tous
+// sont des marchés de 1re mi-temps) + marge. Sans seqTiming : MIN_GAP_MS.
+function seqResultDelayMs(timing: SeqTiming | undefined, sport: string | undefined, marketNames: string[]): number {
+  if (!timing) return MIN_GAP_MS;
+  const key = normSport(sport ?? '');
+  const d = (key && timing.sports.find(s => normSport(s.name) === key || s.aliases.some(a => normSport(a) === key))) || timing.default;
+  const half = marketNames.length > 0 && marketNames.every(m => FIRST_HALF_MARKET.test(m));
+  const minutes = (half && d.half != null ? d.half : d.full) + (timing.marginMinutes || 0);
+  return minutes * 60 * 1000;
+}
+
 // Issue couverte d'une sélection séquentielle, sur son meilleur site.
 interface SeqCoverSide {
   legRef: LegRef;          // betType Back ou Lay
@@ -1677,13 +1694,14 @@ interface SeqLeg {
   cover: SeqCoverSide[];
   E: number;
   bestK: number;           // E / (E − 1) : coût de la couverture
+  resultAfterMs: number;   // délai avant le match suivant (cf. seqResultDelayMs)
 }
 
 // Au plus 2 issues jouées par sélection (au-delà, trop de combinés).
 const MAX_SEQ_PRINCIPAL_ISSUES = 2;
 
 // Sélection à une issue jouée et une issue couverte (règles à 2 issues, findCoversForOutcome).
-function seqLegFromLeg(l: Leg): SeqLeg {
+function seqLegFromLeg(l: Leg, data: any, opts: EngineOpts): SeqLeg {
   const c = l.bestCover;
   const lay = c.type === 'lay';
   const e = lay ? (c.lGross! - c.c!) / (c.lGross! - 1) : c.odds;
@@ -1698,6 +1716,7 @@ function seqLegFromLeg(l: Leg): SeqLeg {
     }],
     E: e,
     bestK: c.k,
+    resultAfterMs: seqResultDelayMs(opts.seqTiming, data[l.eventKey]?.sport, [l.marketName]),
   };
 }
 
@@ -1770,11 +1789,14 @@ function multiIssueSeqLegs(data: any, eventKey: string, sets: LegRef[][][], site
       if (cover.length !== m - pIdx.length) continue;
       const invE = cover.reduce((s, c) => s + 1 / c.e, 0);
       if (!(invE < 1)) continue; // couverture plus chère que ce qu'elle rapporte
+      // Issues jouées à cote équivalente ≤ 1 (ex. « 1 ou 2 » à 1,3 et 4) : rien à gagner, et des
+      // couvertures négatives en « Perdre ».
+      const b = 1 / principal.reduce((s, p) => s + 1 / p.b, 0);
+      if (!(b > 1)) continue;
       const E = 1 / invE;
       out.push({
-        eventKey, dateTime, principal,
-        b: 1 / principal.reduce((s, p) => s + 1 / p.b, 0),
-        cover, E, bestK: E / (E - 1),
+        eventKey, dateTime, principal, b, cover, E, bestK: E / (E - 1),
+        resultAfterMs: seqResultDelayMs(opts.seqTiming, event?.sport, principal.map(p => p.marketName)),
       });
     }
   }
@@ -1790,7 +1812,7 @@ function collectSeqLegs(data: any, site: string, opts: EngineOpts, multiSets: Ma
     const cur = best.get(k);
     if (!cur || l.bestK < cur.bestK) best.set(k, l);
   };
-  for (const l of collectLegsForSite(data, site, opts)) add(seqLegFromLeg(l));
+  for (const l of collectLegsForSite(data, site, opts)) add(seqLegFromLeg(l, data, opts));
   for (const [ek, sets] of multiSets) for (const l of multiIssueSeqLegs(data, ek, sets, site, opts)) add(l);
   return [...best.values()];
 }
@@ -1848,9 +1870,10 @@ function seqPool(legs: SeqLeg[], opts: EngineOpts): SeqLeg[] {
     .slice(0, TOP_SEQ);
 }
 
-// Combinés séquentiels de n sélections : matchs distincts, chacun commençant au moins
-// MIN_GAP_MS après le précédent. Même ordre de parcours que les anciennes boucles i/j/m.
-function forEachSeqChain<T extends { dateTime: number | null; eventKey: string }>(pool: T[], n: number, fn: (legs: T[]) => void) {
+// Combinés séquentiels de n sélections : matchs distincts, chacun commençant une fois le résultat
+// du précédent connu (resultAfterMs après son coup d'envoi). Même ordre de parcours que les
+// anciennes boucles i/j/m.
+function forEachSeqChain<T extends { dateTime: number | null; eventKey: string; resultAfterMs: number }>(pool: T[], n: number, fn: (legs: T[]) => void) {
   const chain: T[] = [];
   const rec = () => {
     if (chain.length === n) { fn(chain.slice()); return; }
@@ -1858,7 +1881,7 @@ function forEachSeqChain<T extends { dateTime: number | null; eventKey: string }
     for (const l of pool) {
       if (prev) {
         if (!l.dateTime || !prev.dateTime || l.dateTime <= prev.dateTime) continue;
-        if (l.dateTime - prev.dateTime < MIN_GAP_MS) continue;
+        if (l.dateTime - prev.dateTime < prev.resultAfterMs) continue;
         if (chain.some(c => c === l || c.eventKey === l.eventKey)) continue;
       }
       chain.push(l); rec(); chain.pop();
@@ -1958,7 +1981,9 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
             };
           });
         };
-        const pushResult = (bets: BetDetail[], profit: number, rate: number, totalCash: number) => {
+        const pushResult = (bets: BetDetail[], profit: number, rate: number, totalCash: number,
+          noBoost?: { profitNoBoost: number; rateNoBoost: number }) => {
+          if (bets.some(b => !(b.stake > 0))) return; // mise nulle ou négative : pas de résultat
           const { satisfiedMissions, obligatoryOk } = checkAllMissions(data, bets, opts);
           if (!obligatoryOk) return;
           const uniqueSites = new Set(bets.map(b => b.site));
@@ -1966,6 +1991,7 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
             timing: 'seq', placement: uniqueSites.size === 1 ? 'uni' : 'multi', symmetry,
             bets, eventKeys: [...new Set(legList.map(l => l.eventKey))], nMatches: legList.length,
             profit, rate, totalCash, satisfiedMissions,
+            ...(noBoost ?? {}),
           });
         };
 
@@ -1992,59 +2018,84 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
           return;
         }
 
+        // Boost (Cash) : comme en simultané, seulement des résultats boostés, avec UNE issue boostée
+        // sur le site du boost : ici le combiné, s'il est seul et placé sur ce site. Cote boostée
+        // 1 + (B − 1) × (1 + boost %) ; couvertures dimensionnées sur cette cote.
+        const boostActive = (opts.boostPct ?? 0) > 0 && !!opts.boostSite;
+        if (boostActive && (site !== opts.boostSite || combos.length > 1)) return;
+
         // Cash, par unité de mise totale S des combinés :
         //  - 'miser' : couvertures composées par leg.bestK, profit égal partout (T = S × B / K) ;
         //  - 'gagner' : une couverture gagnante rembourse ce qui est en jeu (résultat nul), la perte
         //    est sur les combinés gagnants ;
         //  - 'perdre' : les combinés gagnants remboursent tout, la perte est sur une couverture gagnante.
-        // Engagement de la couverture i (mise Back, engagement Lay), par unité de S.
-        const rate = B / K;
-        const obj = opts.cashObjective;
-        const coverUnit: number[] = [];
-        let kPrev1 = 1;
-        for (const leg of legList) {
-          if (obj === 'miser') { coverUnit.push(rate * kPrev1 / (leg.E - 1)); kPrev1 *= leg.bestK; }
-          else if (obj === 'gagner') { coverUnit.push(kPrev1 / (leg.E - 1)); kPrev1 *= leg.b; }
-          else { coverUnit.push(kPrev1 * (leg.b - 1)); kPrev1 *= leg.b; }
-        }
-        const comboUnit = combos.map(c => (1 / c.B) / invB);
-        const units: SeqUnit[] = [
-          ...combos.map((c, ci) => ({
-            site, principal: true, stake: comboUnit[ci], committed: comboUnit[ci],
-            net: comboUnit[ci] * (c.B - 1), gross: comboUnit[ci] * c.B,
-          })),
-          ...legList.flatMap((leg, i) => leg.cover.map(cs => {
-            const part = coverUnit[i] * leg.E / cs.e;
-            const stake = cs.legRef.betType === 'Lay' ? part / (cs.lGross! - 1) : part;
-            return { site: cs.site, principal: false, stake, committed: part, net: part * (cs.e - 1), gross: stake * cs.oddsGross };
-          })),
-        ];
-        const S = seqUnitsScale(units, site, opts);
-        if (!isFinite(S) || S <= 0) return;
+        // f : facteur de boost (1 = sans boost).
+        const cashResult = (f: number) => {
+          const boost = (o: number) => f === 1 ? o : 1 + (o - 1) * f;
+          const cB = combos.map(c => boost(c.B));                  // cotes nettes (boostée si f > 1)
+          const cBGross = combos.map(c => boost(c.BGross));
+          const invBf = cB.reduce((x, b) => x + 1 / b, 0);
+          const Bf = 1 / invBf;
+          const rate = Bf / K;
+          const obj = opts.cashObjective;
+          // Engagement de la couverture i (mise Back, engagement Lay), par unité de S. Gagner /
+          // perdre composent les cotes des sélections : la dernière prend la cote qui ramène le
+          // produit à celle des combinés, Π b = Bf (cote arrondie du ticket, boost compris).
+          const coverUnit: number[] = [];
+          let kPrev1 = 1;
+          legList.forEach((leg, i) => {
+            const b = i === legList.length - 1 && obj !== 'miser' ? Bf / kPrev1 : leg.b;
+            if (obj === 'miser') { coverUnit.push(rate * kPrev1 / (leg.E - 1)); kPrev1 *= leg.bestK; }
+            else if (obj === 'gagner') { coverUnit.push(kPrev1 / (leg.E - 1)); kPrev1 *= b; }
+            else { coverUnit.push(kPrev1 * (b - 1)); kPrev1 *= b; }
+          });
+          const comboUnit = cB.map(b => (1 / b) / invBf);
+          const units: SeqUnit[] = [
+            ...combos.map((_, ci) => ({
+              site, principal: true, stake: comboUnit[ci], committed: comboUnit[ci],
+              net: comboUnit[ci] * (cB[ci] - 1), gross: comboUnit[ci] * cB[ci],
+            })),
+            ...legList.flatMap((leg, i) => leg.cover.map(cs => {
+              const part = coverUnit[i] * leg.E / cs.e;
+              const stake = cs.legRef.betType === 'Lay' ? part / (cs.lGross! - 1) : part;
+              return { site: cs.site, principal: false, stake, committed: part, net: part * (cs.e - 1), gross: stake * cs.oddsGross };
+            })),
+          ];
+          const S = seqUnitsScale(units, site, opts);
+          if (!isFinite(S) || S <= 0) return null;
 
-        const bets: BetDetail[] = combos.map((c, ci) => ({
-          legs: c.legs, site, odds: c.BGross, stake: comboUnit[ci] * S, betType: 'cash' as const, role: 'principal' as const, seqStep: 0,
-        }));
-        const coverCommitted: number[] = [];
-        for (let i = 0; i < legList.length; i++) {
-          coverCommitted.push(coverUnit[i] * S);
-          bets.push(...coverBets(i, coverUnit[i] * S));
-        }
-        const coversTotal = coverCommitted.reduce((s, x) => s + x, 0);
-        let profit: number;
-        if (obj === 'miser') profit = S * rate - S;
-        else if (obj === 'gagner') profit = S * (B - 1) - coversTotal; // perte si les combinés gagnent
-        else {
-          // Pire cas d'une couverture gagnante (tout placé d'avance) : son gain net moins les
-          // combinés et les autres couvertures perdus.
-          let worst = Infinity;
+          const bets: BetDetail[] = combos.map((c, ci) => ({
+            legs: c.legs, site, odds: cBGross[ci], stake: comboUnit[ci] * S, betType: 'cash' as const, role: 'principal' as const, seqStep: 0,
+            ...(f > 1 ? { boosted: true, oddsBase: c.BGross } : {}),
+          }));
+          const coverCommitted: number[] = [];
           for (let i = 0; i < legList.length; i++) {
-            const net = coverCommitted[i] * (legList[i].E - 1) - S - (coversTotal - coverCommitted[i]);
-            if (net < worst) worst = net;
+            coverCommitted.push(coverUnit[i] * S);
+            bets.push(...coverBets(i, coverUnit[i] * S));
           }
-          profit = isFinite(worst) ? worst : 0;
-        }
-        pushResult(bets, profit, rate, S + coversTotal);
+          const coversTotal = coverCommitted.reduce((x, c) => x + c, 0);
+          let profit: number;
+          if (obj === 'miser') profit = S * rate - S;
+          else if (obj === 'gagner') profit = S * (Bf - 1) - coversTotal; // perte si les combinés gagnent
+          else {
+            // Pire cas d'une couverture gagnante (tout placé d'avance) : son gain net moins les
+            // combinés et les autres couvertures perdus.
+            let worst = Infinity;
+            for (let i = 0; i < legList.length; i++) {
+              const net = coverCommitted[i] * (legList[i].E - 1) - S - (coversTotal - coverCommitted[i]);
+              if (net < worst) worst = net;
+            }
+            profit = isFinite(worst) ? worst : 0;
+          }
+          return { bets, profit, rate, totalCash: S + coversTotal };
+        };
+
+        const main = cashResult(boostActive ? 1 + opts.boostPct! / 100 : 1);
+        if (!main) return;
+        // Boost : profit et taux du même résultat sans boost, pour comparer (comme en simultané).
+        const ref = boostActive ? cashResult(1) : null;
+        pushResult(main.bets, main.profit, main.rate, main.totalCash,
+          ref ? { profitNoBoost: ref.profit, rateNoBoost: ref.rate } : undefined);
       };
 
       forEachSeqChain(pool, n, legList => {

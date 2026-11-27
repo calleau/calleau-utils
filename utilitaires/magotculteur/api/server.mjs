@@ -39,6 +39,9 @@ function startServer() {
   const readJson = name => JSON.parse(readFileSync(resolve(ASSETS_DIR, name), 'utf8'));
   const repoRules = readJson('coverage-rules.json');
   const sitesInfo = readJson('sites-informations.json');
+  // Durées des matchs (séquentiel) : utilisées si la requête n'envoie pas engineOpts.seqTiming.
+  let repoSeqTiming = null;
+  try { const { _doc, ...t } = readJson('sport-durations.json'); repoSeqTiming = t; } catch { /* ancien écart fixe de 90 min */ }
 
   // Un calcul à la fois : chacun occupe déjà tous les cœurs.
   let queue = Promise.resolve();
@@ -62,7 +65,8 @@ function startServer() {
     // Règles : celles de la requête, sinon celles d'engineOpts (fichier de debug rejoué),
     // sinon celles du dépôt.
     const coverageRules = body.coverageRules ?? engineOpts.coverageRules ?? repoRules;
-    const opts = { ...engineOpts, coverageRules };
+    const seqTiming = engineOpts.seqTiming ?? repoSeqTiming;
+    const opts = { ...engineOpts, coverageRules, ...(seqTiming ? { seqTiming } : {}) };
 
     const t0 = Date.now();
     const results = (await enqueue(() => runShards(data, opts))).flat().sort((a, b) => b.profit - a.profit);

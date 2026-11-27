@@ -3,7 +3,7 @@ import { collectSites, eventDisplayName, formatDate, getBackOdds, getLayInfo } f
 import bugOffUrl from '../../../assets/icons/bug-off.svg?url';
 import bugUrl from '../../../assets/icons/bug.svg?url';
 import * as Links from './links';
-import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission, AmountMode, AmountConstraint, CashObjective } from './types';
+import type { AllResults, CoveringSetResult, BetDetail, LegRef, WorkerOutMessage, EngineOpts, CoverageRule, SiteConfig, Mission, AmountMode, AmountConstraint, CashObjective, SeqTiming } from './types';
 
 // ===== STATE =====
 let _data: any = null;
@@ -11,6 +11,11 @@ let _results: AllResults = [];
 let _filteredResults: AllResults = [];
 let _coverageRules: CoverageRule[] = [];
 let _sitesInfo: any = null;
+// Séquentiel : durées des matchs par sport (assets/sport-durations.json) et version personnalisée
+// (roue crantée de « Méthodes de placement », sauvegardée dans les préférences).
+let _seqTimingDefault: SeqTiming | null = null;
+let _seqTimingCustom: SeqTiming | null = null;
+const seqTiming = (): SeqTiming | null => _seqTimingCustom ?? _seqTimingDefault;
 let _workers: Worker[] = [];
 let _visibleCount = 50;
 let _colFilters: Record<string, any> = {};
@@ -77,6 +82,7 @@ function savePrefs() {
       // Mode avancé : config de tous les sites déjà configurés, y compris ceux absents
       // du JSON courant (retrouvée quand le site revient).
       advSites: _advSites,
+      seqTiming: _seqTimingCustom,
     }));
   } catch {}
 }
@@ -316,7 +322,111 @@ function buildEngineOpts(): EngineOpts {
     allowSym: _allowSym,
     allowAsymLight: _allowAsymLight,
     allowAsym: _allowAsym,
+    ...(seqTiming() ? { seqTiming: seqTiming()! } : {}),
   };
+}
+
+// ===== DURÉES DES MATCHS (séquentiel) =====
+
+function openSeqTiming() {
+  const dlg = document.getElementById('ff-seq-timing-dialog') as HTMLDialogElement | null;
+  if (!dlg) return;
+  renderSeqTiming();
+  dlg.showModal();
+}
+
+function closeSeqTiming() {
+  (document.getElementById('ff-seq-timing-dialog') as HTMLDialogElement | null)?.close();
+}
+
+// Modifie la table effective (copie personnalisée créée au premier changement).
+function editSeqTiming(fn: (t: SeqTiming) => void, rerender = false) {
+  const base = seqTiming();
+  if (!base) return;
+  const t: SeqTiming = _seqTimingCustom ?? JSON.parse(JSON.stringify(base));
+  fn(t);
+  _seqTimingCustom = t;
+  resetResults();
+  savePrefs();
+  if (rerender) renderSeqTiming();
+  else updateSeqTimingStatus();
+}
+
+const minutesOrNull = (v: string): number | null => {
+  const n = parseFloat(v);
+  return isFinite(n) && n > 0 ? n : null;
+};
+
+function setSeqSportField(idx: number, field: 'name' | 'full' | 'half', val: string) {
+  editSeqTiming(t => {
+    const row = idx < 0 ? t.default : t.sports[idx];
+    if (!row) return;
+    if (field === 'name' && idx >= 0) (row as SeqTiming['sports'][number]).name = val.trim();
+    else if (field === 'full') { const m = minutesOrNull(val); if (m != null) row.full = m; }
+    else if (field === 'half') row.half = minutesOrNull(val);
+  });
+}
+
+function setSeqMargin(val: string) {
+  editSeqTiming(t => { const n = parseFloat(val); t.marginMinutes = isFinite(n) && n >= 0 ? n : 0; });
+}
+
+function addSeqSport() {
+  editSeqTiming(t => { t.sports.push({ name: '', aliases: [], full: 120, half: null }); }, true);
+}
+
+function removeSeqSport(idx: number) {
+  editSeqTiming(t => { t.sports.splice(idx, 1); }, true);
+}
+
+function resetSeqTiming() {
+  _seqTimingCustom = null;
+  resetResults();
+  savePrefs();
+  renderSeqTiming();
+}
+
+function updateSeqTimingStatus() {
+  const el = document.getElementById('ff-seq-timing-status');
+  if (el) el.textContent = _seqTimingCustom ? 'Valeurs personnalisées.' : 'Valeurs par défaut.';
+  document.getElementById('ff-seq-timing-btn')?.classList.toggle('ff-gear-btn--custom', !!_seqTimingCustom);
+}
+
+function renderSeqTiming() {
+  const body = document.getElementById('ff-seq-timing-body');
+  const t = seqTiming();
+  if (!body) return;
+  if (!t) { body.innerHTML = '<p class="ff-no-sites">Durées indisponibles (assets/sport-durations.json).</p>'; return; }
+  const num = (v: number | null, oninput: string, ph = '') =>
+    `<input type="number" min="1" step="5" value="${v ?? ''}" placeholder="${ph}" oninput="${oninput}" />`;
+  const rows = t.sports.map((s, i) => `
+    <tr>
+      <td><input type="text" value="${esc(s.name)}" placeholder="Sport" oninput="setSeqSportField(${i}, 'name', this.value)" title="Nom du sport (tel qu'écrit dans les données${s.aliases.length ? ', ou : ' + esc(s.aliases.join(', ')) : ''})" /></td>
+      <td>${num(s.full, `setSeqSportField(${i}, 'full', this.value)`)}</td>
+      <td>${num(s.half, `setSeqSportField(${i}, 'half', this.value)`, '—')}</td>
+      <td><button class="ff-adv-mission-del" onclick="removeSeqSport(${i})" title="Supprimer">✕</button></td>
+    </tr>`).join('');
+  body.innerHTML = `
+    <p class="ff-seq-timing-help">En séquentiel, le match suivant d'un combiné doit commencer une fois le résultat du précédent connu : durée ci-dessous après son coup d'envoi (« 1re mi-temps » pour les marchés de 1re mi-temps, ex. 1X2 MT1), plus la marge.</p>
+    <table class="ff-seq-timing-table">
+      <thead><tr><th>Sport</th><th>Fin du match (min)</th><th>1re mi-temps (min)</th><th></th></tr></thead>
+      <tbody>
+        ${rows}
+        <tr class="ff-seq-timing-default">
+          <td>Autres sports</td>
+          <td>${num(t.default.full, `setSeqSportField(-1, 'full', this.value)`)}</td>
+          <td>${num(t.default.half, `setSeqSportField(-1, 'half', this.value)`, '—')}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <button class="ff-adv-add-mission" onclick="addSeqSport()">+ Sport</button>
+    <div class="ff-seq-timing-margin">
+      <label for="ff-seq-margin">Marge (min)</label>
+      <input type="number" id="ff-seq-margin" min="0" step="5" value="${t.marginMinutes}" oninput="setSeqMargin(this.value)" />
+    </div>
+    <p id="ff-seq-timing-status" class="ff-seq-timing-help"></p>`;
+  updateSeqTimingStatus();
 }
 
 // ===== RESULT TABLE HELPERS =====
@@ -1249,11 +1359,18 @@ async function tryRender() {
     return;
   }
 
+  const notes: string[] = [];
   if (_advancedMode) {
     const { error, note } = deriveAdvancedParams(buildEngineOpts().sites);
     if (error) { showCalcError(error); return; }
-    if (note) showCalcNote(note);
+    if (note) notes.push(note);
   }
+  // Séquentiel : les matchs sans date (ordre et écart inconnus) en sont écartés.
+  if (_allowSeq && _data && [..._allowedNLegs].some(n => n >= 2)) {
+    const undated = Object.values(_data).filter((ev: any) => !ev?.dateTime).length;
+    if (undated) notes.push(`${undated} match${undated > 1 ? 's' : ''} sans date écarté${undated > 1 ? 's' : ''} du séquentiel.`);
+  }
+  showCalcNote(notes.join(' '));
 
   _results = [];
   _colFilters = {};
@@ -1481,6 +1598,13 @@ window.setMinOddsPerSelection = setMinOddsPerSelection;
 window.setBoostPct = setBoostPct;
 window.toggleNLegs = toggleNLegs;
 window.setMethodToggle = setMethodToggle;
+window.openSeqTiming = openSeqTiming;
+window.closeSeqTiming = closeSeqTiming;
+window.setSeqSportField = setSeqSportField;
+window.setSeqMargin = setSeqMargin;
+window.addSeqSport = addSeqSport;
+window.removeSeqSport = removeSeqSport;
+window.resetSeqTiming = resetSeqTiming;
 window.setAdvancedMode = setAdvancedMode;
 window.setSite = setSite;
 window.stepAmount = stepAmount;
@@ -1617,6 +1741,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Avant tout set*() : ils appellent savePrefs(), qui écrirait une config vide.
   if (typeof prefs.simpleSite === 'string') _preferredSimpleSite = prefs.simpleSite;
   restoreAdvSites(prefs.advSites);
+  if (prefs.seqTiming && Array.isArray(prefs.seqTiming.sports) && prefs.seqTiming.default) _seqTimingCustom = prefs.seqTiming;
   if (prefs.betType) setBetType(prefs.betType);
   if (prefs.simpleCashObjective) setObjective(prefs.simpleCashObjective);
 
@@ -1694,13 +1819,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load coverage rules and sites info in parallel
   try {
-    const [rulesRes, sitesRes] = await Promise.all([
+    const [rulesRes, sitesRes, durationsRes] = await Promise.all([
       fetch('../../assets/coverage-rules.json'),
       fetch('../../assets/sites-informations.json'),
+      fetch('../../assets/sport-durations.json'),
     ]);
     if (!rulesRes.ok) throw new Error(`coverage-rules.json HTTP ${rulesRes.status}`);
     _coverageRules = await rulesRes.json();
     if (sitesRes.ok) _sitesInfo = await sitesRes.json();
+    if (durationsRes.ok) {
+      const { _doc, ...t } = await durationsRes.json();
+      _seqTimingDefault = t as SeqTiming;
+    }
+    updateSeqTimingStatus();
   } catch (e: any) {
     const errEl = document.getElementById('ff-json-error')!;
     errEl.textContent = `Erreur : impossible de charger les fichiers de config (${e.message}). Ouvrez la page via un serveur local.`;

@@ -97,8 +97,8 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 | F10 | ✅ **Corrigé en v7.4.1** : cote min. sur la cote du combiné en séquentiel ; v7.8.0 : aussi sur les couvertures placées sur le site du combiné, comme en simultané. **Cote min. appliquée à chaque sélection** et non à la cote combinée ([engine.ts:241](src/engine.ts#L241)), contrairement au simultané. |
 | F11 | ✅ **Corrigé en v7.8.0** : combinés séquentiels de 2 à 5 sélections ; branche « 1 sélection » supprimée (un simple est du simultané). **2 ou 3 sélections seulement** : 4 et 5 sont ignorées, et la branche « 1 sélection » ne s'exécute jamais. |
 | F12 | ✅ **Corrigé en v7.9.0** : couverture répartie sur plusieurs issues et plusieurs combinés (1 ou 2 issues jouées par match). **Couvertures limitées aux règles à 2 issues** : les exemples 1 à 3 de la spécification ne sont pas gérés (M1 B et M1 C couverts séparément, couverture combinée). |
-| F13 | **Boost non géré** : quand un boost est actif, le séquentiel sort quand même des résultats non boostés. |
-| F14 | **Écart minimum de 90 min entre deux matchs, en dur** : pensé pour le foot. Les matchs sans date sont écartés sans message. |
+| F13 | ✅ **Corrigé en v7.9.1** : en séquentiel, le combiné est le pari boosté (seulement des résultats boostés, profit sans boost pour comparer). Corrigé aussi : mises négatives en « Perdre » avec deux issues jouées (v7.9.0), et écart d'arrondi en « Perdre » (combiné gagnant ≠ 0 de quelques centimes). **Boost non géré** : quand un boost est actif, le séquentiel sort quand même des résultats non boostés. |
+| F14 | ✅ **Corrigé en v7.10.0** : écart = durée jusqu'au résultat du match précédent (sport, 1re mi-temps) + marge, table `assets/sport-durations.json` personnalisable (roue crantée) ; matchs sans date signalés. **Écart minimum de 90 min entre deux matchs, en dur** : pensé pour le foot. Les matchs sans date sont écartés sans message. |
 
 ### Asymétrique et Asym. léger
 
@@ -153,7 +153,7 @@ Analyse du code complet (v7.2.0) : `src/` (engine, app, links, worker, types), `
 6. **Séquentiel Gagner / Perdre** (C1, C2) : le profit affiché doit-il supposer toutes les couvertures placées d'avance, ou suivre le déroulement réel ?
 7. **Asymétrique / Asym. léger** (F15, F16) : faut-il les fusionner, ou implémenter le vrai asymétrique de la spécification ?
 8. **Dédoublonnage** (F17) : un seul résultat par combinaison de matchs, ou toutes les variantes ?
-9. **Écart de 90 min entre deux matchs** (F14) : réglable, ou adapté au sport ?
+9. ~~**Écart de 90 min entre deux matchs** (F14)~~ fait en v7.10.0 (table par sport, personnalisable) : réglable, ou adapté au sport ?
 10. **Missions en Freebet** (F6, F7) : un pari freebet peut-il valider une mission ?
 
 ---

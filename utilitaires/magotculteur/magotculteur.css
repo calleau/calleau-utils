@@ -483,6 +483,122 @@
 	color: var(--color-neg);
 }
 
+/* Roue crantée (durées des matchs, séquentiel) */
+.ff-label-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.ff-gear-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-muted);
+	cursor: pointer;
+}
+
+.ff-gear-btn:hover,
+.ff-gear-btn:focus-visible {
+	color: var(--c-primary);
+	background: var(--color-surface-2);
+}
+
+.ff-gear-btn--custom {
+	color: var(--c-primary);
+}
+
+.ff-dialog {
+	max-width: min(560px, calc(100vw - 32px));
+	border: 1px solid var(--color-divider);
+	border-radius: 10px;
+	background: var(--color-surface);
+	color: var(--color-text);
+	padding: 18px 20px;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.ff-dialog::backdrop {
+	background: rgba(0, 0, 0, 0.35);
+}
+
+.ff-dialog-title {
+	font-size: 1rem;
+	margin: 0 0 8px;
+}
+
+.ff-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+.ff-seq-timing-help {
+	font-size: 0.8rem;
+	color: var(--color-muted);
+	margin: 0 0 10px;
+}
+
+.ff-seq-timing-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.85rem;
+	margin-bottom: 8px;
+}
+
+.ff-seq-timing-table th {
+	text-align: left;
+	font-weight: 600;
+	font-size: 0.75rem;
+	color: var(--color-muted);
+	padding: 4px 6px;
+}
+
+.ff-seq-timing-table td {
+	padding: 3px 6px;
+}
+
+.ff-seq-timing-table input {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+	padding: 4px 6px;
+	border: 1px solid var(--color-divider);
+	border-radius: 6px;
+	background: var(--color-bg);
+	color: var(--color-text);
+	font: inherit;
+}
+
+.ff-seq-timing-default td:first-child {
+	color: var(--color-muted);
+	font-style: italic;
+}
+
+.ff-seq-timing-margin {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 10px 0 6px;
+	font-size: 0.85rem;
+}
+
+.ff-seq-timing-margin input {
+	width: 90px;
+	padding: 4px 6px;
+	border: 1px solid var(--color-divider);
+	border-radius: 6px;
+	background: var(--color-bg);
+	color: var(--color-text);
+	font: inherit;
+}
+
 /* Remarque sous le bouton Calculer (mode avancé) */
 .ff-calc-note {
 	font-size: 0.8rem;

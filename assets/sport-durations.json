@@ -1,0 +1,13 @@
+{
+  "_doc": "Magotculteur, séquentiel : durée (minutes) entre le coup d'envoi d'un match et son résultat, par sport et par période (fin du match, 1re mi-temps). Le match suivant d'un combiné séquentiel doit commencer au moins cette durée + marginMinutes après le précédent, pour placer sa couverture une fois le résultat connu. half null = pas de 1re mi-temps (la durée du match entier s'applique). Sport reconnu par ses alias (minuscules, sans accents). Personnalisable dans l'interface (roue crantée de « Méthodes de placement »).",
+  "marginMinutes": 10,
+  "default": { "full": 180, "half": null },
+  "sports": [
+    { "name": "Football", "aliases": ["foot", "football", "soccer"], "full": 115, "half": 50 },
+    { "name": "Basket", "aliases": ["basket", "basketball", "basket-ball"], "full": 135, "half": 70 },
+    { "name": "Tennis", "aliases": ["tennis"], "full": 180, "half": null },
+    { "name": "Rugby", "aliases": ["rugby", "rugby a xv", "rugby union", "rugby a xiii", "rugby league"], "full": 110, "half": 50 },
+    { "name": "Hockey", "aliases": ["hockey", "hockey sur glace", "ice hockey"], "full": 150, "half": null },
+    { "name": "Handball", "aliases": ["handball", "hand"], "full": 95, "half": 45 }
+  ]
+}

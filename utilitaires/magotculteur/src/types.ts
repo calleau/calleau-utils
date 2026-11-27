@@ -45,6 +45,15 @@ export type AmountMode = 'mise_totale' | 'mise_min_par_pari' | 'profit_net_min' 
 export type CashObjective = 'gagner' | 'miser' | 'perdre';
 export type BetType = 'fb' | 'cash';
 
+// Séquentiel : durée (minutes) entre le coup d'envoi d'un match et son résultat, par sport et par
+// période (assets/sport-durations.json, personnalisable dans l'interface).
+export interface SportDuration { full: number; half: number | null }
+export interface SeqTiming {
+  marginMinutes: number;
+  default: SportDuration;
+  sports: (SportDuration & { name: string; aliases: string[] })[];
+}
+
 // Contrainte de montant (Cash) : mode + montant, éventuellement limitée aux paris d'un site.
 export interface AmountConstraint {
   mode: AmountMode;
@@ -69,6 +78,9 @@ export interface EngineOpts {
   // Filtres globaux (mode simple)
   coteMin: number;
   coteMinParSelection: number;
+  // Séquentiel : écart entre deux matchs d'un combiné = durée jusqu'au résultat du précédent (sport,
+  // période de son marché) + marge. Absent : 90 min entre coups d'envoi (ancien comportement).
+  seqTiming?: SeqTiming;
   // Cote maximale des paris placés sur les sites obligatoires (cote combinée pour un
   // combiné ; couvertures libres). Absente ou 0 = pas de limite. Pas d'équivalent dans
   // l'interface : utilisée par l'API (Cotorico).

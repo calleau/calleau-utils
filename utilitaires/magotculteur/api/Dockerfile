@@ -8,7 +8,7 @@ COPY utilitaires/magotculteur/package.json utilitaires/magotculteur/package-lock
 RUN cd utilitaires/magotculteur && npm ci --no-audit --no-fund
 COPY scripts/build-coverage-rules.mjs scripts/
 COPY assets/coverage-rules-src assets/coverage-rules-src
-COPY assets/sites-informations.json assets/
+COPY assets/sites-informations.json assets/sport-durations.json assets/
 COPY utilitaires/magotculteur utilitaires/magotculteur
 RUN node scripts/build-coverage-rules.mjs \
 	&& cd utilitaires/magotculteur && npm run build:api
@@ -17,7 +17,7 @@ FROM node:20-slim
 WORKDIR /app
 ENV NODE_ENV=production PORT=8080 ASSETS_DIR=/app/assets
 COPY --from=build /src/utilitaires/magotculteur/api/dist/server.mjs ./server.mjs
-COPY --from=build /src/assets/coverage-rules.json /src/assets/sites-informations.json ./assets/
+COPY --from=build /src/assets/coverage-rules.json /src/assets/sites-informations.json /src/assets/sport-durations.json ./assets/
 USER node
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \

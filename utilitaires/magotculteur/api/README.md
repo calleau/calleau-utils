@@ -20,7 +20,7 @@ Corps JSON. **Un fichier de debug de l'interface (bouton « bug ») peut être e
 
 | Champ | Requis | Description |
 |---|---|---|
-| `engineOpts` | oui | Réglages du moteur, comme dans un fichier de debug : `sites` (missions, freebets), `betType`, `allowedNLegs`, `amountMode`, `amount`, méthodes… Facultatif en Cash : `amountConstraints` (`[{ mode, amount, site? }]`), plusieurs contraintes de montant toutes respectées, la plus exigeante fixe les mises (mode avancé de l'interface) ; absent, `amountMode` / `amount` s'appliquent. `coteMin` / `coteMax` : cotes minimale et maximale des paris placés sur le site principal (site du freebet en priorité 1 ou de la mission obligatoire ; cote combinée pour un combiné ; couvertures libres ; en simultané comme en séquentiel), absente ou `0` = pas de limite (`coteMax` est facultative). |
+| `engineOpts` | oui | Réglages du moteur, comme dans un fichier de debug : `sites` (missions, freebets), `betType`, `allowedNLegs`, `amountMode`, `amount`, méthodes… Facultatif en Cash : `amountConstraints` (`[{ mode, amount, site? }]`), plusieurs contraintes de montant toutes respectées, la plus exigeante fixe les mises (mode avancé de l'interface) ; absent, `amountMode` / `amount` s'appliquent. Facultatif : `seqTiming`, durées des matchs pour le séquentiel (format de `assets/sport-durations.json`) ; absent, celles du dépôt. `coteMin` / `coteMax` : cotes minimale et maximale des paris placés sur le site principal (site du freebet en priorité 1 ou de la mission obligatoire ; cote combinée pour un combiné ; couvertures libres ; en simultané comme en séquentiel), absente ou `0` = pas de limite (`coteMax` est facultative). |
 | `data` | oui | Cotes au format Betxtractor (export de l'extension collé dans l'interface). |
 | `coverageRules` | non | Règles de couverture. Voir l'ordre ci-dessous. |
 | `limit` | non | Nombre de résultats renvoyés, les meilleurs d'abord. Défaut : `50`. |
@@ -69,7 +69,7 @@ Erreurs : `{ "error": "…" }` avec le code 400 (requête invalide), 401 (jeton)
 | `API_TOKEN` | vide | Si défini, `/compute` exige `Authorization: Bearer <jeton>`. `/health` reste libre. |
 | `LINKS_BASE_URL` | `https://utils.calleau.org/` | Racine des utilitaires dans les liens. |
 | `MAX_BODY_MB` | `50` | Taille maximale du corps. |
-| `ASSETS_DIR` | `assets/` du dépôt (`/app/assets` dans l'image) | `coverage-rules.json` et `sites-informations.json`. |
+| `ASSETS_DIR` | `assets/` du dépôt (`/app/assets` dans l'image) | `coverage-rules.json`, `sites-informations.json` et `sport-durations.json`. |
 
 Un seul calcul à la fois : les appels suivants attendent leur tour (chaque calcul occupe déjà tous les workers).
 
@@ -119,6 +119,7 @@ Nouvelle application, dans le même projet que `utils.calleau.org`, environnemen
    utilitaires/magotculteur/public/versions.js
    assets/coverage-rules-src/**
    assets/sites-informations.json
+   assets/sport-durations.json
    scripts/build-coverage-rules.mjs
    ```
 6. Variables : aucune obligatoire. `API_TOKEN` en défense supplémentaire (à donner aussi à Cotorico).

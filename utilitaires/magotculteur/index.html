@@ -161,7 +161,12 @@
 				</div>
 
 				<div class="ff-field">
-					<label class="ff-label">Méthodes de placement</label>
+					<div class="ff-label-row">
+						<label class="ff-label">Méthodes de placement</label>
+						<button id="ff-seq-timing-btn" class="ff-gear-btn" onclick="openSeqTiming()" title="Durées des matchs (séquentiel)" aria-label="Durées des matchs (séquentiel)">
+							<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+						</button>
+					</div>
 					<div class="ff-methods-grid">
 						<label class="ff-toggle-label">
 							<input type="checkbox" id="ff-cb-seq" checked onchange="setMethodToggle('seq', this.checked)" />
@@ -245,6 +250,16 @@
 
 	<!-- Popover filtre colonne -->
 	<div id="ff-col-filter-popover" hidden></div>
+
+	<!-- Durées des matchs (séquentiel), roue crantée de « Méthodes de placement » -->
+	<dialog id="ff-seq-timing-dialog" class="ff-dialog" aria-labelledby="ff-seq-timing-title">
+		<h2 id="ff-seq-timing-title" class="ff-dialog-title">Durées des matchs (séquentiel)</h2>
+		<div id="ff-seq-timing-body"></div>
+		<div class="ff-dialog-actions">
+			<button class="ff-btn ff-btn--sm" onclick="resetSeqTiming()">Valeurs par défaut</button>
+			<button class="ff-btn ff-btn--sm ff-btn--active" onclick="closeSeqTiming()">Fermer</button>
+		</div>
+	</dialog>
 
 	<!-- Overlay de calcul -->
 	<div id="ff-calc-overlay" hidden aria-live="polite">
