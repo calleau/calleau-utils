@@ -10,6 +10,11 @@ const TOP_SEQ = 50;
 // le montant peut retomber juste en dessous par arrondi flottant (10 → 9,999999999999998).
 const AMOUNT_EPS = 1e-6;
 
+// Cote affichée au-dessus de la cote max (EngineOpts.coteMax), si elle est renseignée.
+function aboveCoteMax(odds: number, opts: EngineOpts): boolean {
+  return (opts.coteMax ?? 0) > 0 && odds > opts.coteMax!;
+}
+
 // Contraintes de montant Cash (cf. EngineOpts.amountConstraints).
 function amountConstraints(opts: EngineOpts): AmountConstraint[] {
   const list = (opts.amountConstraints ?? []).filter(c => c.amount > 0);
@@ -221,6 +226,8 @@ function findCoversForOutcome(event: any, mainMarketName: string, mainOutcomeNam
               const o = getBackOdds(val);
               if (!o || o <= 1) continue;
               const oGross = getBackOddsGross(val) ?? o;
+              // Cote max : comme en simultané, aussi pour une couverture sur le site du principal.
+              if (s === site && aboveCoteMax(oGross, opts)) continue;
               const key = `B:${mName}:${oName}:${s}`;
               if (seen.has(key)) continue; seen.add(key);
               covers.push({ type: 'bk', site: s, marketName: mName, outcomeName: oName,
@@ -829,14 +836,14 @@ function makeSimultResult(
     if (groupInfos[boostedIdx].isLay) return null;
   }
 
-  // Apply coteMin to obligatory sites' bets
+  // Apply coteMin / coteMax to obligatory sites' bets
   const obligSites = new Set(getObligatorySites(opts));
   for (let i = 0; i < n; i++) {
-    if (opts.coteMin > 0) {
-      const isOblig = obligSites.size === 0 || obligSites.has(sitePerGroup[i]);
-      // Compare against displayOdds (the user-visible odds). For Lay this is lNet.
-      if (isOblig && groupInfos[i].displayOdds < opts.coteMin) return null;
-    }
+    const isOblig = obligSites.size === 0 || obligSites.has(sitePerGroup[i]);
+    if (!isOblig) continue;
+    // Compare against displayOdds (the user-visible odds). For Lay this is lNet.
+    if (opts.coteMin > 0 && groupInfos[i].displayOdds < opts.coteMin) return null;
+    if (aboveCoteMax(groupInfos[i].displayOdds, opts)) return null;
   }
 
   // Lay groups cannot be on freebet (P1) sites — fb on exchange Lay is nonsense.
@@ -1113,6 +1120,12 @@ function trySimult(
     for (const site of sites) {
       const o = legGroupOdds(data, legRefs, site, opts.coteMinParSelection);
       if (!o) continue;
+      // Cote max : un site obligatoire trop coté laisse ce pari à un autre site (couverture)
+      // au lieu de faire rejeter la combinaison.
+      if ((opts.coteMax ?? 0) > 0 && (obligSites.length === 0 || obligSites.includes(site))) {
+        const info = legGroupInfo(data, legRefs, site, opts.coteMinParSelection);
+        if (!info || aboveCoteMax(info.displayOdds, opts)) continue;
+      }
       if (!best || o > best.odds) best = { site, odds: o };
     }
     return best;
@@ -1368,6 +1381,8 @@ function seqPool(legs: Leg[], opts: EngineOpts): Leg[] {
     // legs over high-odds ones — leaving few or no combos where all legs satisfy
     // the per-selection minimum.
     .filter(l => opts.coteMinParSelection <= 0 || l.b >= opts.coteMinParSelection)
+    // Cote max : une sélection au-dessus donnerait un combiné au-dessus (cotes > 1).
+    .filter(l => !aboveCoteMax(l.bGross, opts))
     .sort((a, b) => (opts.betType === 'fb'
       ? (b.b - 1) / b.bestK - (a.b - 1) / a.bestK
       : b.b / b.bestK - a.b / a.bestK
@@ -1600,6 +1615,7 @@ function computeSeq(data: any, opts: EngineOpts, prep: SeqPrep, progress: Progre
           // bookmaker : la cote affichée sur le ticket est la base des gains réels).
           const B = roundCombo(legList.reduce((p, l) => p * l.b, 1));
           const BGross = roundCombo(legList.reduce((p, l) => p * l.bGross, 1));
+          if (aboveCoteMax(BGross, opts)) return;
           const K = legList.reduce((p, l) => p * l.bestK, 1);
 
           if (opts.betType === 'fb') {

@@ -69,6 +69,10 @@ export interface EngineOpts {
   // Filtres globaux (mode simple)
   coteMin: number;
   coteMinParSelection: number;
+  // Cote maximale des paris placés sur les sites obligatoires (cote combinée pour un
+  // combiné ; couvertures libres). Absente ou 0 = pas de limite. Pas d'équivalent dans
+  // l'interface : utilisée par l'API (Cotorico).
+  coteMax?: number;
   // Toggles de méthodes
   allowSeq: boolean;
   allowSimult: boolean;
